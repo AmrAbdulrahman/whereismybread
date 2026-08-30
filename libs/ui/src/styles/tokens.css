@@ -1,0 +1,96 @@
+/*
+ * "Command Deck" design system — the approved direction.
+ * Dark-first: the app renders <html class="dark"> by default.
+ *
+ * Raw, theme-swappable values live on :root / .dark as --wmm-* custom
+ * properties; @theme inline maps them onto Tailwind's --color-* / --font-*
+ * so utilities like `bg-surface` and `font-display` resolve per theme.
+ *
+ * Font family vars (--font-space-grotesk, --font-plex-sans, --font-plex-mono)
+ * are provided by next/font in apps/web.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --wmm-ground: #f7f6f3;
+  --wmm-surface: #ffffff;
+  --wmm-surface-2: #f0efe9;
+  --wmm-surface-3: #e6e5dd;
+  --wmm-ink: #1b1e24;
+  --wmm-ink-soft: #464d5a;
+  --wmm-muted: #6b7280;
+  --wmm-line: #e3e1d9;
+  --wmm-line-strong: #cfccc1;
+
+  --wmm-accent: #4b57cf;
+  --wmm-accent-fg: #ffffff;
+  --wmm-teal: #0e8074;
+
+  --wmm-good: #147a4b;
+  --wmm-warn: #8a6410;
+  --wmm-danger: #b3261e;
+
+  --wmm-tag-essentials: #4b57cf;
+  --wmm-tag-subscriptions: #0e8074;
+  --wmm-tag-health: #a8641a;
+  --wmm-tag-car: #a83f77;
+  --wmm-tag-work: #5c6b3f;
+}
+
+.dark {
+  --wmm-ground: #14171d;
+  --wmm-surface: #171b22;
+  --wmm-surface-2: #1c2029;
+  --wmm-surface-3: #23272f;
+  --wmm-ink: #e7e9ee;
+  --wmm-ink-soft: #bcc1cc;
+  --wmm-muted: #8b929e;
+  --wmm-line: #23272f;
+  --wmm-line-strong: #333a44;
+
+  --wmm-accent: #7c8cff;
+  --wmm-accent-fg: #10131a;
+  --wmm-teal: #4bd6c6;
+
+  --wmm-good: #6fcf97;
+  --wmm-warn: #e0b06a;
+  --wmm-danger: #f08a8a;
+
+  --wmm-tag-essentials: #b9c2ff;
+  --wmm-tag-subscriptions: #8fe7db;
+  --wmm-tag-health: #ecc496;
+  --wmm-tag-car: #e6a9c8;
+  --wmm-tag-work: #bcd69f;
+}
+
+@theme inline {
+  --color-ground: var(--wmm-ground);
+  --color-surface: var(--wmm-surface);
+  --color-surface-2: var(--wmm-surface-2);
+  --color-surface-3: var(--wmm-surface-3);
+  --color-ink: var(--wmm-ink);
+  --color-ink-soft: var(--wmm-ink-soft);
+  --color-muted: var(--wmm-muted);
+  --color-line: var(--wmm-line);
+  --color-line-strong: var(--wmm-line-strong);
+  --color-accent: var(--wmm-accent);
+  --color-accent-fg: var(--wmm-accent-fg);
+  --color-teal: var(--wmm-teal);
+  --color-good: var(--wmm-good);
+  --color-warn: var(--wmm-warn);
+  --color-danger: var(--wmm-danger);
+
+  --font-display:
+    var(--font-space-grotesk), 'Space Grotesk', ui-sans-serif, system-ui,
+    sans-serif;
+  --font-sans:
+    var(--font-plex-sans), 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    var(--font-plex-mono), 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo,
+    monospace;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.875rem;
+}

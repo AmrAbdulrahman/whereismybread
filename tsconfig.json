@@ -1,0 +1,56 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/web-e2e"
+    },
+    {
+      "path": "./apps/web"
+    },
+    {
+      "path": "./libs/config"
+    },
+    {
+      "path": "./libs/domain"
+    },
+    {
+      "path": "./libs/db"
+    },
+    {
+      "path": "./libs/auth"
+    },
+    {
+      "path": "./libs/ui"
+    },
+    {
+      "path": "./libs/updates"
+    },
+    {
+      "path": "./libs/testing"
+    },
+    {
+      "path": "./libs/feature-payments"
+    },
+    {
+      "path": "./libs/feature-subscriptions"
+    },
+    {
+      "path": "./libs/feature-installments"
+    },
+    {
+      "path": "./libs/feature-checklist"
+    },
+    {
+      "path": "./libs/feature-debts"
+    },
+    {
+      "path": "./libs/feature-payment-methods"
+    },
+    {
+      "path": "./libs/feature-tags"
+    }
+  ],
+  "compilerOptions": {}
+}

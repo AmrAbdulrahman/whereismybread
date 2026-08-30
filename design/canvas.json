@@ -1,0 +1,112 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1200,
+      "title": "Calendar"
+    },
+    {
+      "file": "Heatmap.dc.html",
+      "x": 1600,
+      "y": 0,
+      "w": 1440,
+      "h": 1200,
+      "title": "Year heatmap"
+    },
+    {
+      "file": "Subscriptions.dc.html",
+      "x": 3200,
+      "y": 0,
+      "w": 1200,
+      "h": 1300,
+      "title": "Subscriptions"
+    },
+    {
+      "file": "Installments.dc.html",
+      "x": 4560,
+      "y": 0,
+      "w": 1200,
+      "h": 1420,
+      "title": "Installments"
+    },
+    {
+      "file": "Checklist.dc.html",
+      "x": 5920,
+      "y": 0,
+      "w": 1200,
+      "h": 1440,
+      "title": "Manual transfers checklist"
+    },
+    {
+      "file": "Debts.dc.html",
+      "x": 7280,
+      "y": 0,
+      "w": 1200,
+      "h": 1380,
+      "title": "Debts"
+    },
+    {
+      "file": "Methods.dc.html",
+      "x": 8640,
+      "y": 0,
+      "w": 1200,
+      "h": 1240,
+      "title": "Payment methods"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-calendar",
+      "x": 0,
+      "y": -150,
+      "w": 1440,
+      "text": "CALENDAR — the approved Command Deck direction. Payment pills carry the payment-method icon (custom colour = left border); dashed = one-time. View toggle is List / Calendar / Year. The payment-method legend was removed from the sidebar — Methods is a normal menu item."
+    },
+    {
+      "id": "note-heatmap",
+      "x": 1600,
+      "y": -150,
+      "w": 1440,
+      "text": "YEAR HEATMAP — a third way to view payments (toggle: List / Calendar / Year). One square per day, shaded by how much money left your accounts that day; monthly totals as bars below (Oct–Dec projected). Right rail: year-to-date total, busiest day, day tooltip."
+    },
+    {
+      "id": "note-subs",
+      "x": 3200,
+      "y": -150,
+      "w": 1200,
+      "text": "SUBSCRIPTIONS — own sidebar entry. A subscription is a recurring payment plus a renewal date (card countdown + labelled field in the edit state — Adobe shown mid-edit — plus 'started on' and an optional renew reminder)."
+    },
+    {
+      "id": "note-installments",
+      "x": 4560,
+      "y": -150,
+      "w": 1200,
+      "text": "INSTALLMENTS — new module. A plan has a name, installment amount, frequency (monthly / quarterly), day of the month, and finishes either on an end date OR when a total amount is reached (MacBook expanded: form shows the two-way 'Finish when' toggle set to total amount, with the computed payment count). Cards show paid-of-total progress and outstanding balance."
+    },
+    {
+      "id": "note-checklist",
+      "x": 5920,
+      "y": -150,
+      "w": 1200,
+      "text": "MANUAL TRANSFERS CHECKLIST — a month selector (pill with prev/next + open month-picker showing which months have unfinished transfers). List auto-built from every payment paid by manual transfer, plus any you add; editable inline; ticking never touches the schedule."
+    },
+    {
+      "id": "note-debts",
+      "x": 7280,
+      "y": -150,
+      "w": 1200,
+      "text": "DEBTS — track money you owe and money owed to you; each debt shows a remaining balance and a settlement progress bar. Log settlements as they happen, partial or full (Alex expanded: two partial settlements + a 'Record a settlement' form with a 'clears the debt in full' option). Dad shown fully settled."
+    },
+    {
+      "id": "note-methods",
+      "x": 8640,
+      "y": -150,
+      "w": 1200,
+      "text": "PAYMENT METHODS — direct debit, credit card, cash, manual transfer (add your own). Each has a customisable icon + colour: the Credit card row is expanded to show the icon grid, colour swatches, an optional reference field, and a live preview of the calendar pill."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

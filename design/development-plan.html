@@ -1,0 +1,1869 @@
+<title>Where's My Money Build Plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+/>
+
+<style>
+  :root {
+    --ground: #f6f5f2;
+    --surface: #ffffff;
+    --surface-2: #efeee9;
+    --ink: #1c1f26;
+    --ink-soft: #464d5a;
+    --muted: #767d8b;
+    --line: #e4e2db;
+    --line-strong: #d2cfc6;
+    --accent: #4b57cf;
+    --accent-soft: #eceafb;
+    --teal: #0e8074;
+    --warn: #8f6410;
+    --warn-soft: #f5edda;
+    --shadow:
+      0 1px 2px rgba(20, 20, 30, 0.04), 0 10px 26px rgba(20, 20, 30, 0.05);
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --ground: #14171d;
+      --surface: #191d24;
+      --surface-2: #1f242c;
+      --ink: #e7e9ee;
+      --ink-soft: #bcc1cc;
+      --muted: #8b929e;
+      --line: #262b33;
+      --line-strong: #343b45;
+      --accent: #9aa6ff;
+      --accent-soft: #1e222c;
+      --teal: #4bd6c6;
+      --warn: #e0b06a;
+      --warn-soft: #221d14;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.38);
+    }
+  }
+  :root[data-theme='dark'] {
+    --ground: #14171d;
+    --surface: #191d24;
+    --surface-2: #1f242c;
+    --ink: #e7e9ee;
+    --ink-soft: #bcc1cc;
+    --muted: #8b929e;
+    --line: #262b33;
+    --line-strong: #343b45;
+    --accent: #9aa6ff;
+    --accent-soft: #1e222c;
+    --teal: #4bd6c6;
+    --warn: #e0b06a;
+    --warn-soft: #221d14;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.38);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family:
+      'IBM Plex Sans',
+      system-ui,
+      -apple-system,
+      sans-serif;
+    font-size: 15.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 48px) 120px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+  @media (min-width: 1000px) {
+    .wrap {
+      grid-template-columns: 216px minmax(0, 1fr);
+      gap: 56px;
+    }
+  }
+
+  /* ---- side nav ---- */
+  .toc {
+    font-size: 13px;
+  }
+  .toc-inner {
+    position: static;
+  }
+  @media (min-width: 1000px) {
+    .toc-inner {
+      position: sticky;
+      top: 40px;
+    }
+  }
+  .toc .kicker {
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .toc a {
+    display: flex;
+    gap: 10px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    line-height: 1.35;
+  }
+  .toc a:hover {
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .toc a .n {
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color: var(--muted);
+    font-size: 11.5px;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+
+  /* ---- content ---- */
+  .doc {
+    min-width: 0;
+  }
+
+  header.masthead {
+    margin-bottom: 8px;
+  }
+  .eyebrow {
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(30px, 5.2vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  section {
+    margin-top: 60px;
+    scroll-margin-top: 28px;
+  }
+  h2 {
+    font-family: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 23px;
+    letter-spacing: -0.015em;
+    margin: 0 0 6px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    text-wrap: balance;
+  }
+  h2 .h2n {
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0;
+  }
+  h3 {
+    font-family: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 15.5px;
+    letter-spacing: -0.005em;
+    margin: 30px 0 8px;
+    color: var(--ink);
+  }
+  .section-intro {
+    color: var(--ink-soft);
+    margin: 10px 0 0;
+    max-width: 64ch;
+  }
+
+  p {
+    margin: 14px 0;
+    max-width: 68ch;
+  }
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  strong {
+    font-weight: 600;
+  }
+  ul,
+  ol {
+    margin: 14px 0;
+    padding-left: 22px;
+    max-width: 68ch;
+  }
+  li {
+    margin: 6px 0;
+  }
+  li::marker {
+    color: var(--muted);
+  }
+
+  code,
+  .mono {
+    font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.86em;
+  }
+  p code,
+  li code,
+  td code {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+    border-radius: 5px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  pre {
+    font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: var(--surface);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin: 18px 0;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  pre b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  pre .c {
+    color: var(--muted);
+  }
+
+  .scroll {
+    overflow-x: auto;
+    margin: 18px 0;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13.5px;
+    background: var(--surface);
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  td .mono {
+    color: var(--ink);
+    font-size: 12px;
+  }
+  td:first-child {
+    white-space: nowrap;
+  }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin: 20px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout h3 {
+    margin-top: 0;
+  }
+  .callout.warn {
+    border-left-color: var(--warn);
+  }
+  .callout dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 18px;
+    font-size: 14px;
+  }
+  .callout dt {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .callout dd {
+    margin: 0;
+    color: var(--ink-soft);
+  }
+  @media (max-width: 560px) {
+    .callout dl {
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
+    .callout dd {
+      margin-bottom: 8px;
+    }
+  }
+
+  .chip {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--muted);
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .chip.size {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  /* ---- phase rail ---- */
+  .phases {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .phase {
+    position: relative;
+    padding: 22px 0 22px 56px;
+    border-top: 1px solid var(--line);
+  }
+  .phase:first-child {
+    border-top: none;
+  }
+  .phase::before {
+    content: attr(data-n);
+    position: absolute;
+    left: 0;
+    top: 22px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--line-strong);
+  }
+  .phase::after {
+    content: '';
+    position: absolute;
+    left: 17px;
+    top: 56px;
+    bottom: -1px;
+    width: 1px;
+    background: var(--line);
+  }
+  .phase:last-child::after {
+    display: none;
+  }
+  .phase-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px 12px;
+    margin-bottom: 4px;
+  }
+  .phase-head h3 {
+    margin: 0;
+    font-size: 16.5px;
+  }
+  .phase .goal {
+    color: var(--ink-soft);
+    margin: 4px 0 10px;
+    font-size: 14.5px;
+  }
+  .phase ul {
+    margin: 8px 0;
+    font-size: 14px;
+  }
+  .exit {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 10px;
+    padding: 9px 12px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .exit b {
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal);
+    font-weight: 500;
+    margin-right: 8px;
+  }
+  @media (max-width: 560px) {
+    .phase {
+      padding-left: 44px;
+    }
+    .phase::before {
+      width: 30px;
+      height: 30px;
+      font-size: 13px;
+    }
+    .phase::after {
+      left: 15px;
+      top: 52px;
+    }
+  }
+
+  .risk {
+    list-style: none;
+    padding: 0;
+    margin: 18px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .risk li {
+    background: var(--warn-soft);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--warn);
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-size: 14px;
+    margin: 0;
+    max-width: none;
+  }
+  .risk li b {
+    color: var(--ink);
+  }
+
+  .foot {
+    margin-top: 72px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+</style>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Contents">
+    <div class="toc-inner">
+      <div class="kicker">Contents</div>
+      <ol>
+        <li>
+          <a href="#decisions"><span class="n">01</span> Decisions locked</a>
+        </li>
+        <li>
+          <a href="#architecture"
+            ><span class="n">02</span> Workspace architecture</a
+          >
+        </li>
+        <li>
+          <a href="#stack"><span class="n">03</span> Stack</a>
+        </li>
+        <li>
+          <a href="#data"><span class="n">04</span> Data model</a>
+        </li>
+        <li>
+          <a href="#auth"><span class="n">05</span> Authentication</a>
+        </li>
+        <li>
+          <a href="#infra"><span class="n">06</span> Infra &amp; deployment</a>
+        </li>
+        <li>
+          <a href="#updates"><span class="n">07</span> Update mechanism</a>
+        </li>
+        <li>
+          <a href="#responsive"><span class="n">08</span> Mobile-first</a>
+        </li>
+        <li>
+          <a href="#delivery"><span class="n">09</span> Delivery plan</a>
+        </li>
+        <li>
+          <a href="#testing"><span class="n">10</span> Testing</a>
+        </li>
+        <li>
+          <a href="#risks"><span class="n">11</span> Risks</a>
+        </li>
+      </ol>
+    </div>
+  </nav>
+
+  <main class="doc">
+    <header class="masthead">
+      <p class="eyebrow">Where's My Money &middot; Engineering</p>
+      <h1>Build plan: a personal money-planning app</h1>
+      <p class="lede">
+        A feasible, sequenced path from empty repo to a polished 1.0 &mdash; Nx
+        workspace, Next.js App Router, self-owned authentication, Supabase
+        Postgres, and a one-click "get the latest build" flow. Seven build
+        phases, each with a concrete exit criterion.
+      </p>
+    </header>
+
+    <section id="decisions">
+      <h2><span class="h2n">01</span> Decisions locked</h2>
+      <p class="section-intro">
+        Three questions were settled before planning; the rest are sensible
+        defaults that can be revisited but shouldn't block the start.
+      </p>
+
+      <div class="callout">
+        <h3>Confirmed choices</h3>
+        <dl>
+          <dt>Authentication</dt>
+          <dd>
+            Auth.js (NextAuth v5), <strong>Credentials</strong> provider. We own
+            the <code>users</code> table, password hashing, and the reset-token
+            flow &mdash; no third-party identity provider.
+          </dd>
+          <dt>Data layer</dt>
+          <dd>
+            <strong>Drizzle ORM</strong> against Supabase Postgres. Schema and
+            migrations live in an Nx lib; queries are fully typed.
+            <code>supabase-js</code> is not used &mdash; Auth.js owns sessions.
+          </dd>
+          <dt>UI</dt>
+          <dd>
+            <strong>Tailwind CSS + Radix primitives</strong>, shadcn-style:
+            components are copied into a shared UI lib and fully owned, matching
+            the bespoke "Command Deck" dark design.
+          </dd>
+        </dl>
+      </div>
+
+      <div class="callout">
+        <h3>Defaults adopted</h3>
+        <dl>
+          <dt>Package manager</dt>
+          <dd><code>pnpm</code> (Nx + Vercel first-class).</dd>
+          <dt>Transactional email</dt>
+          <dd>
+            Resend, with React Email templates (verification + password reset).
+          </dd>
+          <dt>Client data cache</dt>
+          <dd>
+            TanStack Query over Server Actions; optimistic updates for ticks and
+            edits.
+          </dd>
+          <dt>Validation</dt>
+          <dd>
+            Zod at every trust boundary (server actions, env, API routes).
+          </dd>
+          <dt>Testing</dt>
+          <dd>
+            Vitest + Testing Library (unit/component), Playwright (e2e), axe
+            (a11y).
+          </dd>
+          <dt>Observability</dt>
+          <dd>Sentry (<code>@sentry/nextjs</code>) + Vercel Analytics.</dd>
+          <dt>Rate limiting</dt>
+          <dd>Vercel KV (Upstash) sliding-window on auth endpoints.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2><span class="h2n">02</span> Workspace architecture</h2>
+      <p class="section-intro">
+        One thin Next.js app. Every business feature is its
+        <strong>own</strong> standalone Nx library named
+        <code>feature-&lt;name&gt;</code> &mdash; there is no umbrella "feature"
+        project. Shared concerns are separate libs too. Import rules are
+        enforced by lint, not convention.
+      </p>
+
+      <h3>Directory layout</h3>
+      <pre><span class="c"># pnpm + Nx integrated monorepo — every lib below is its own Nx project</span>
+<b>apps/</b>
+  <b>web/</b>                       Next.js App Router app &mdash; routing, layouts, page composition only
+  <b>web-e2e/</b>                   Playwright suite
+
+<b>libs/</b>
+  <b>feature-payments/</b>          upcoming payments, list + calendar + year views, create/edit
+  <b>feature-subscriptions/</b>     recurring payments + renewal date
+  <b>feature-installments/</b>      fixed-amount plans, schedule computation
+  <b>feature-checklist/</b>         monthly manual-transfer to-do list
+  <b>feature-debts/</b>             debts + partial/full settlements
+  <b>feature-payment-methods/</b>   methods + customisable icon &amp; colour
+  <b>feature-tags/</b>              tag management
+
+  <b>auth/</b>                      Auth.js config, session helpers, password + reset-token logic, guards
+  <b>db/</b>                        Drizzle schema, migrations, client factory, seed, repository base
+
+  <b>ui/</b>                        design system: Radix + Tailwind primitives, tokens, AppShell, icon registry
+  <b>domain/</b>                    cross-domain types + Zod schemas + money/recurrence/date utilities
+  <b>config/</b>                    Zod-validated env (server + client), constants
+  <b>updates/</b>                   build-version check hook + UI
+  <b>testing/</b>                   factories, render helpers, DB harness</pre>
+      <p>
+        Each <code>feature-&lt;name&gt;</code> is a full Nx project: its own
+        <code>project.json</code>, its own lint / test / build targets, its own
+        <code>tsconfig</code> path alias
+        (<code>@wmm/feature-payments</code>&hellip;), and its own tags. Adding a
+        feature is <code>nx g @nx/react:lib feature-&lt;name&gt;</code>, never a
+        folder inside an existing lib.
+      </p>
+
+      <h3>Library taxonomy &amp; boundaries</h3>
+      <p>
+        Each lib is tagged; <code>@nx/enforce-module-boundaries</code> rejects
+        imports that cross a boundary the wrong way. The
+        <code>feature-*</code> libs never import each other &mdash; they compose
+        only in <code>apps/web</code>.
+      </p>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Lib</th>
+              <th>tags</th>
+              <th>May depend on</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">apps/web</span></td>
+              <td><span class="mono">type:app</span></td>
+              <td>any lib</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="mono">feature-payments</span>,
+                <span class="mono">feature-debts</span>, &hellip; (7)
+              </td>
+              <td>
+                <span class="mono">type:feature</span>,
+                <span class="mono">scope:&lt;domain&gt;</span>
+              </td>
+              <td>
+                <span class="mono">type:data</span>,
+                <span class="mono">type:ui</span>,
+                <span class="mono">type:util</span>,
+                <span class="mono">type:auth</span> &mdash; never another
+                <span class="mono">type:feature</span>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">auth</span></td>
+              <td><span class="mono">type:auth</span></td>
+              <td>
+                <span class="mono">type:data</span>,
+                <span class="mono">type:util</span>,
+                <span class="mono">type:config</span>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">db</span></td>
+              <td><span class="mono">type:data</span></td>
+              <td>
+                <span class="mono">type:util</span>,
+                <span class="mono">type:config</span>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">ui</span></td>
+              <td><span class="mono">type:ui</span></td>
+              <td><span class="mono">type:util</span> only</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="mono">domain</span>,
+                <span class="mono">updates</span>,
+                <span class="mono">testing</span>
+              </td>
+              <td><span class="mono">type:util</span></td>
+              <td>
+                <span class="mono">type:util</span>,
+                <span class="mono">type:config</span>
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">config</span></td>
+              <td><span class="mono">type:config</span></td>
+              <td>nothing</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Each <code>feature-&lt;name&gt;</code> starts as a single project with
+        an <code>index.ts</code> barrel. Split one into
+        <code>feature-&lt;name&gt;</code> +
+        <code>data-access-&lt;name&gt;</code> +
+        <code>ui-&lt;name&gt;</code> only once it visibly outgrows that &mdash;
+        premature fragmentation costs more DX than it saves.
+      </p>
+
+      <h3>App Router structure</h3>
+      <pre><b>apps/web/src/app/</b>
+  <b>(auth)/</b>
+    login/  signup/  forgot-password/  reset-password/[token]/
+  <b>(app)/</b>
+    layout.tsx            <span class="c">// AppShell + server-side auth guard</span>
+    page.tsx             <span class="c">// redirect &rarr; /calendar</span>
+    calendar/            <span class="c">// list | calendar | year toggle</span>
+    subscriptions/  installments/  checklist/  debts/
+    tags/  methods/  settings/
+  <b>api/</b>
+    auth/[...nextauth]/route.ts
+    version/route.ts     <span class="c">// deploy identity, no-store</span>
+    blob/upload/route.ts <span class="c">// signed client-upload handler</span>
+  layout.tsx   globals.css</pre>
+      <p>
+        Route groups keep the authenticated shell (<code>(app)</code>) and the
+        public auth screens (<code>(auth)</code>) on separate layouts.
+        Middleware guards the <code>(app)</code> group; server components read
+        the session through <code>libs/auth</code>&rsquo;s
+        <code>getCurrentUser()</code>.
+      </p>
+    </section>
+
+    <section id="stack">
+      <h2><span class="h2n">03</span> Stack</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Concern</th>
+              <th>Choice</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Framework</td>
+              <td>Next.js 15, App Router, RSC</td>
+              <td>
+                Server Actions for mutations; route handlers only for auth,
+                version, blob.
+              </td>
+            </tr>
+            <tr>
+              <td>Language</td>
+              <td>TypeScript, <span class="mono">strict</span></td>
+              <td>
+                <span class="mono">noUncheckedIndexedAccess</span> on; shared
+                <span class="mono">tsconfig.base.json</span>.
+              </td>
+            </tr>
+            <tr>
+              <td>Monorepo</td>
+              <td>Nx + pnpm</td>
+              <td>
+                <span class="mono">nx affected</span> in CI, Nx Cloud remote
+                cache, module-boundary lint.
+              </td>
+            </tr>
+            <tr>
+              <td>DB</td>
+              <td>Supabase Postgres</td>
+              <td>
+                Provisioned via the Vercel&nbsp;&times;&nbsp;Supabase
+                marketplace integration.
+              </td>
+            </tr>
+            <tr>
+              <td>ORM</td>
+              <td>
+                Drizzle + <span class="mono">postgres</span> (postgres.js)
+              </td>
+              <td>
+                Pooled URL at runtime with
+                <span class="mono">prepare:&nbsp;false</span>; direct URL for
+                migrations.
+              </td>
+            </tr>
+            <tr>
+              <td>Auth</td>
+              <td>Auth.js v5, Credentials, JWT sessions</td>
+              <td>
+                Credentials provider mandates JWT strategy; wrapped behind
+                <span class="mono">libs/auth</span>.
+              </td>
+            </tr>
+            <tr>
+              <td>Hashing</td>
+              <td><span class="mono">@node-rs/argon2</span> (argon2id)</td>
+              <td>
+                Native, fast, runs in the Node runtime used by the auth route.
+              </td>
+            </tr>
+            <tr>
+              <td>Styling</td>
+              <td>Tailwind + Radix primitives</td>
+              <td>
+                Design tokens ported from the mockups; components owned in
+                <span class="mono">libs/ui</span>.
+              </td>
+            </tr>
+            <tr>
+              <td>Fonts</td>
+              <td>Space Grotesk, IBM Plex Sans / Mono</td>
+              <td>
+                Self-hosted via <span class="mono">next/font</span> &mdash; no
+                layout shift, no external request.
+              </td>
+            </tr>
+            <tr>
+              <td>Files</td>
+              <td>Vercel Blob</td>
+              <td>
+                Avatars + optional receipt attachments; client-upload flow.
+              </td>
+            </tr>
+            <tr>
+              <td>Email</td>
+              <td>Resend + React Email</td>
+              <td>
+                Dev on the
+                <span class="mono">onboarding@resend.dev</span> sandbox sender;
+                verified domain required before preview/prod.
+              </td>
+            </tr>
+            <tr>
+              <td>Hosting</td>
+              <td>Vercel</td>
+              <td>Preview deploy per PR; Skew Protection enabled.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="data">
+      <h2><span class="h2n">04</span> Data model</h2>
+      <p class="section-intro">
+        All tables carry <code>user_id</code>, <code>created_at</code>,
+        <code>updated_at</code>. Money is stored as integer minor units plus an
+        ISO currency code &mdash; never floats. Due dates are <code>date</code>;
+        audit stamps are <code>timestamptz</code>. Recurrence math runs in
+        <code>users.timezone</code>.
+      </p>
+
+      <h3>Identity &amp; auth</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>Purpose &amp; notable columns</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">users</span></td>
+              <td>
+                <span class="mono">email</span> (unique, citext),
+                <span class="mono">password_hash</span>,
+                <span class="mono">email_verified_at</span>,
+                <span class="mono">name</span>,
+                <span class="mono">timezone</span>,
+                <span class="mono">default_currency</span>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">password_reset_tokens</span></td>
+              <td>
+                <span class="mono">user_id</span>,
+                <span class="mono">token_hash</span> (SHA-256 of a 32-byte
+                secret), <span class="mono">expires_at</span> (30&nbsp;min),
+                <span class="mono">used_at</span>. Single-use.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">email_verification_tokens</span></td>
+              <td>Same shape; 24&nbsp;h TTL.</td>
+            </tr>
+            <tr>
+              <td><span class="mono">auth_attempts</span></td>
+              <td>
+                Optional. <span class="mono">identifier</span>,
+                <span class="mono">kind</span>, <span class="mono">ip</span>,
+                <span class="mono">created_at</span> &mdash; backs lockout +
+                audit if KV is unavailable.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        No <code>sessions</code> or <code>accounts</code> table &mdash; JWT
+        sessions are stateless and there is no OAuth linkage.
+      </p>
+
+      <h3>Money movements</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>Purpose &amp; notable columns</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">tags</span></td>
+              <td>
+                <span class="mono">name</span>, <span class="mono">color</span>.
+                Unique per <span class="mono">(user_id, name)</span>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">payment_methods</span></td>
+              <td>
+                <span class="mono">name</span>,
+                <span class="mono">kind</span> enum
+                <span class="mono"
+                  >direct_debit&nbsp;|&nbsp;credit_card&nbsp;|&nbsp;cash&nbsp;|&nbsp;manual_transfer</span
+                >, <span class="mono">icon_key</span>,
+                <span class="mono">color</span>,
+                <span class="mono">reference</span>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">payments</span></td>
+              <td>
+                <span class="mono">name</span>,
+                <span class="mono">amount_minor</span>,
+                <span class="mono">currency</span>,
+                <span class="mono">method_id</span>,
+                <span class="mono">recurrence</span> enum
+                <span class="mono"
+                  >one_time&nbsp;|&nbsp;monthly&nbsp;|&nbsp;quarterly&nbsp;|&nbsp;annual</span
+                >, <span class="mono">anchor_date</span>,
+                <span class="mono">day_of_month</span>,
+                <span class="mono">ends_on</span>,
+                <span class="mono">notes</span>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">payment_tags</span></td>
+              <td>Join: <span class="mono">(payment_id, tag_id)</span>.</td>
+            </tr>
+            <tr>
+              <td><span class="mono">payment_events</span></td>
+              <td>
+                Actuals only. <span class="mono">payment_id</span>,
+                <span class="mono">due_date</span>,
+                <span class="mono">status</span> enum
+                <span class="mono"
+                  >scheduled&nbsp;|&nbsp;paid&nbsp;|&nbsp;skipped</span
+                >, <span class="mono">paid_at</span>,
+                <span class="mono">amount_minor</span>. Upcoming occurrences are
+                computed on read, not materialised.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Subscriptions &amp; installments</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>Purpose &amp; notable columns</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">subscription_details</span></td>
+              <td>
+                1:1 with <span class="mono">payments</span>.
+                <span class="mono">renewal_date</span>,
+                <span class="mono">started_on</span>,
+                <span class="mono">reminder_days_before</span>. A subscription
+                is a recurring <span class="mono">payment</span> with this row
+                attached.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">installment_plans</span></td>
+              <td>
+                <span class="mono">name</span>,
+                <span class="mono">installment_minor</span>,
+                <span class="mono">frequency</span> enum
+                <span class="mono">monthly&nbsp;|&nbsp;quarterly</span>,
+                <span class="mono">day_of_month</span>,
+                <span class="mono">basis</span> enum
+                <span class="mono">end_date&nbsp;|&nbsp;total_amount</span>,
+                <span class="mono">ends_on</span>,
+                <span class="mono">total_minor</span>,
+                <span class="mono">start_date</span>,
+                <span class="mono">method_id</span>. The unused bound is null;
+                the other is derived.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">installment_payments</span></td>
+              <td>
+                <span class="mono">plan_id</span>,
+                <span class="mono">sequence_no</span>,
+                <span class="mono">due_date</span>,
+                <span class="mono">status</span>,
+                <span class="mono">paid_at</span>,
+                <span class="mono">amount_minor</span>. Generated from the plan;
+                regenerated on edit while preserving paid rows.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Checklist &amp; debts</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>Purpose &amp; notable columns</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">manual_transfer_checklists</span></td>
+              <td>
+                <span class="mono">month</span> (first-of-month
+                <span class="mono">date</span>),
+                <span class="mono">created_at</span>,
+                <span class="mono">regenerated_at</span>. Unique per
+                <span class="mono">(user_id, month)</span>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">manual_transfer_items</span></td>
+              <td>
+                <span class="mono">checklist_id</span>,
+                <span class="mono">source_payment_id</span> (nullable),
+                <span class="mono">name</span>,
+                <span class="mono">amount_minor</span>,
+                <span class="mono">due_date</span>,
+                <span class="mono">status</span> enum
+                <span class="mono">open&nbsp;|&nbsp;done</span>,
+                <span class="mono">done_at</span>,
+                <span class="mono">sort_order</span>. A snapshot &mdash;
+                editable without touching the schedule.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">debts</span></td>
+              <td>
+                <span class="mono">counterparty</span>,
+                <span class="mono">reason</span>,
+                <span class="mono">direction</span> enum
+                <span class="mono">i_owe&nbsp;|&nbsp;owed_to_me</span>,
+                <span class="mono">original_minor</span>,
+                <span class="mono">opened_on</span>,
+                <span class="mono">status</span> enum
+                <span class="mono">open&nbsp;|&nbsp;settled</span>,
+                <span class="mono">settled_on</span>.
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">debt_settlements</span></td>
+              <td>
+                <span class="mono">debt_id</span>,
+                <span class="mono">amount_minor</span>,
+                <span class="mono">settled_on</span>,
+                <span class="mono">method_id</span>,
+                <span class="mono">kind</span> enum
+                <span class="mono">partial&nbsp;|&nbsp;final</span>,
+                <span class="mono">note</span>. Remaining balance = original
+                &minus; &Sigma; settlements.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The year heatmap and monthly totals are derived at query time from
+        <code>payment_events</code>, <code>installment_payments</code>, and
+        scheduled occurrences &mdash; no dedicated table.
+      </p>
+
+      <h3>Ownership &amp; access</h3>
+      <p>
+        All DB access is server-side through a repository layer in
+        <code>libs/db</code>; every function takes <code>userId</code> and
+        scopes its query. Row-Level Security is added as defense-in-depth in
+        Phase 2 &mdash; a per-transaction
+        <code>SET LOCAL app.user_id</code> plus
+        <code>USING (user_id = current_setting('app.user_id')::uuid)</code>
+        policies &mdash; so a missing <code>WHERE</code> clause fails closed
+        rather than leaking.
+      </p>
+    </section>
+
+    <section id="auth">
+      <h2><span class="h2n">05</span> Authentication</h2>
+      <p class="section-intro">
+        Self-owned email + password. Auth.js handles the session cookie, CSRF,
+        and callback plumbing; everything user-facing is ours.
+      </p>
+
+      <h3>Flows</h3>
+      <ul>
+        <li>
+          <strong>Sign up</strong> &mdash; Zod-validated server action &rarr;
+          check breached-password (HIBP k-anonymity range API) &rarr;
+          <code>argon2id</code> hash &rarr; create <code>users</code> row &rarr;
+          send verification email. Login is allowed immediately; unverified
+          accounts are gated out of email-bearing actions (reminders).
+        </li>
+        <li>
+          <strong>Log in</strong> &mdash; Credentials
+          <code>authorize()</code> looks up the user, verifies the hash, returns
+          the session subject. Rate-limited per <code>IP + email</code> (sliding
+          window, KV). Generic "Email or password is incorrect" on every
+          failure.
+        </li>
+        <li>
+          <strong>Forgot password</strong> &mdash; always responds 200 ("If that
+          email exists, a link is on its way"). If the account exists, mint a
+          32-byte token, store only its SHA-256, email the link. Request
+          endpoint is rate-limited.
+        </li>
+        <li>
+          <strong>Reset password</strong> &mdash; validate token hash +
+          <code>expires_at</code> + <code>used_at is null</code> &rarr; set new
+          hash &rarr; mark token used &rarr; bump a
+          <code>password_changed_at</code> claim so existing JWTs stop
+          validating.
+        </li>
+        <li>
+          <strong>Account</strong> &mdash; change password (re-enter current),
+          change email (re-verify), sign out.
+        </li>
+      </ul>
+
+      <h3>Hardening checklist</h3>
+      <ul>
+        <li>
+          Email enumeration closed on signup and forgot-password (uniform
+          responses + timing).
+        </li>
+        <li>
+          Token entropy &ge; 256 bits; tokens stored hashed; single-use; short
+          TTL.
+        </li>
+        <li>
+          <code>AUTH_SECRET</code> rotated capability; <code>__Secure-</code> /
+          <code>__Host-</code> cookies, <code>SameSite=Lax</code>,
+          <code>Secure</code> in prod.
+        </li>
+        <li>Argon2id params tuned to ~100&nbsp;ms on the deploy runtime.</li>
+        <li>
+          Login + reset-request rate limits; progressive lockout on repeated
+          failures.
+        </li>
+        <li>
+          Auth.js pinned to an exact version and fully wrapped by
+          <code>libs/auth</code> so a breaking upgrade is a one-file change.
+        </li>
+      </ul>
+    </section>
+
+    <section id="infra">
+      <h2><span class="h2n">06</span> Infra &amp; deployment</h2>
+
+      <h3>Environments</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Scope</th>
+              <th>Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="mono">POSTGRES_URL</span></td>
+              <td>server runtime</td>
+              <td>
+                Supabase integration &mdash; pooled (PgBouncer, :6543,
+                transaction mode)
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">POSTGRES_URL_NON_POOLING</span></td>
+              <td>CI / migrations</td>
+              <td>Supabase integration &mdash; direct (:5432)</td>
+            </tr>
+            <tr>
+              <td><span class="mono">AUTH_SECRET</span></td>
+              <td>server runtime</td>
+              <td>generated; per-environment</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="mono">RESEND_API_KEY</span> /
+                <span class="mono">EMAIL_FROM</span>
+              </td>
+              <td>server runtime</td>
+              <td>
+                Resend. Dev uses the sandbox sender
+                <span class="mono">onboarding@resend.dev</span> (delivers only
+                to the account owner); preview/prod need a verified domain
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span class="mono">KV_REST_API_URL</span> /
+                <span class="mono">KV_REST_API_TOKEN</span>
+              </td>
+              <td>server runtime</td>
+              <td>Vercel KV</td>
+            </tr>
+            <tr>
+              <td><span class="mono">BLOB_READ_WRITE_TOKEN</span></td>
+              <td>server runtime</td>
+              <td>Vercel Blob (auto-injected)</td>
+            </tr>
+            <tr>
+              <td><span class="mono">NEXT_PUBLIC_BUILD_ID</span></td>
+              <td>client bundle</td>
+              <td>
+                build step:
+                <span class="mono"
+                  >VERCEL_GIT_COMMIT_SHA ?? VERCEL_DEPLOYMENT_ID</span
+                >
+              </td>
+            </tr>
+            <tr>
+              <td><span class="mono">SENTRY_*</span></td>
+              <td>build + runtime</td>
+              <td>Sentry project</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <code>libs/config</code> parses these through Zod at module load; a
+        missing or malformed variable fails the build, not a request.
+      </p>
+
+      <h3>Database connection</h3>
+      <p>
+        Runtime uses the <strong>pooled</strong> URL with
+        <code>postgres(url, { prepare: false })</code> &mdash; the
+        transaction-mode pooler cannot hold prepared statements, and forgetting
+        this flag produces intermittent
+        <code>prepared statement "s0" already exists</code> errors under load.
+        Migrations use the <strong>direct</strong> URL.
+      </p>
+
+      <h3>Migrations</h3>
+      <p>
+        <code>drizzle-kit generate</code> in development;
+        <code>drizzle-kit migrate</code> runs as an
+        <strong>explicit CI job on merge to <code>main</code></strong
+        >, against <code>POSTGRES_URL_NON_POOLING</code>, behind a Postgres
+        advisory lock, <em>before</em> the Vercel production alias is promoted.
+        Never in <code>next build</code> &mdash; build runs on every preview and
+        in parallel.
+      </p>
+
+      <h3>CI/CD</h3>
+      <ul>
+        <li>
+          GitHub Actions: <code>nx affected -t lint test build</code> with
+          <code>nx-set-shas</code> + Nx Cloud distributed cache.
+        </li>
+        <li>
+          Vercel preview deploy per PR; Playwright e2e runs against the preview
+          URL.
+        </li>
+        <li>
+          Merge to <code>main</code> &rarr; migrate job &rarr; Vercel production
+          promote.
+        </li>
+        <li>
+          Preview data: a shared Supabase dev project (or Supabase branching),
+          seeded by <code>libs/db</code>&rsquo;s seed script.
+        </li>
+      </ul>
+
+      <h3>File storage</h3>
+      <p>
+        Vercel Blob, wired in Phase 0 and first used in Phase 6. Uploads go
+        through a signed <code>handleUpload</code> route so files bypass the
+        Server Action body limit; the returned URL is stored on the owning row
+        (<code>users.avatar_url</code>, <code>payment_events.receipt_url</code>,
+        <code>debt_settlements.receipt_url</code>).
+      </p>
+    </section>
+
+    <section id="updates">
+      <h2><span class="h2n">07</span> Update mechanism</h2>
+      <p class="section-intro">
+        Goal: a user can pull the newest deployment on demand and never operate
+        a stale bundle &mdash; an explicit "Check for updates" action, plus a
+        quiet nudge when a new build lands mid-session.
+      </p>
+
+      <ol>
+        <li>
+          <strong>Stamp the bundle.</strong> The build injects
+          <code>NEXT_PUBLIC_BUILD_ID</code> (commit SHA, falling back to
+          deployment ID). It travels inside the JS, so the running client always
+          knows which build it is.
+        </li>
+        <li>
+          <strong>Report the live version.</strong>
+          <code>GET /api/version</code> returns
+          <code>{ buildId, commit, builtAt }</code> with
+          <code>Cache-Control: no-store</code>. It executes on whichever
+          deployment is currently live, so its answer is by definition the
+          latest.
+        </li>
+        <li>
+          <strong>Compare.</strong> <code>libs/updates</code> exposes
+          <code>useUpdateCheck()</code>, which fetches
+          <code>/api/version</code> (<code>cache: 'no-store'</code>) on: the
+          manual trigger, <code>visibilitychange &rarr; visible</code>, a
+          15-minute interval, and each client navigation. A mismatch against
+          <code>NEXT_PUBLIC_BUILD_ID</code> sets <code>updateAvailable</code>.
+        </li>
+        <li>
+          <strong>Surface it.</strong> A <em>Check for updates</em> item in the
+          app menu (spinner &rarr; "You're on the latest version" or "Update
+          available"), plus a non-blocking toast when the passive check flips
+          the flag.
+        </li>
+        <li>
+          <strong>Apply.</strong> On confirm,
+          <code>window.location.reload()</code>. Vercel revalidates the document
+          and asset manifest, so the reload boots the new hashed bundles. Users
+          who don't reload keep working &mdash; prior deployments' assets stay
+          addressable.
+        </li>
+        <li>
+          <strong>Bridge the gap.</strong> Vercel
+          <strong>Skew Protection</strong> is enabled, so requests from a
+          not-yet-reloaded client are pinned by <code>x-deployment-id</code> to
+          a backend that still matches their code.
+        </li>
+      </ol>
+      <p>
+        No service worker in 1.0: immutable hashed assets plus HTML revalidation
+        make a plain reload sufficient. A service worker is only worth adding if
+        offline support is later scoped &mdash; and then it must
+        <code>skipWaiting()</code> and drive the same
+        <code>updateAvailable</code> signal.
+      </p>
+    </section>
+
+    <section id="responsive">
+      <h2><span class="h2n">08</span> Mobile-first</h2>
+      <p class="section-intro">
+        The design baseline is a 375&nbsp;px phone; everything is built there
+        first and enhanced upward. Tailwind's mobile-first breakpoints, plus
+        container queries on lib components so a card is correct regardless of
+        the column it lands in.
+      </p>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Surface</th>
+              <th>&lt; md (phone)</th>
+              <th>&ge; lg (desktop)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Navigation</td>
+              <td>
+                bottom tab bar (Calendar, Subscriptions, Installments,
+                Checklist, Debts) + "More" sheet
+              </td>
+              <td>persistent left sidebar</td>
+            </tr>
+            <tr>
+              <td>Calendar</td>
+              <td>agenda list (the List view) is the default</td>
+              <td>month grid + day detail panel</td>
+            </tr>
+            <tr>
+              <td>Methods / Debts / Installments</td>
+              <td>stacked cards</td>
+              <td>row layout with inline detail</td>
+            </tr>
+            <tr>
+              <td>Create / edit forms</td>
+              <td>bottom sheet</td>
+              <td>side panel or inline</td>
+            </tr>
+            <tr>
+              <td>Year heatmap</td>
+              <td>horizontal-scroll container with month ticks</td>
+              <td>full 53-week grid</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>
+          <code>100dvh</code> and <code>env(safe-area-inset-*)</code>; real
+          inputs only &mdash; no painted status bar or keyboard.
+        </li>
+        <li>
+          Hit targets &ge; 44&nbsp;px; the design tokens already enforce this.
+        </li>
+        <li>
+          QA matrix every phase: 375 / 414 / 768 / 1024 / 1440, plus an axe pass
+          per primary screen.
+        </li>
+      </ul>
+    </section>
+
+    <section id="delivery">
+      <h2><span class="h2n">09</span> Delivery plan</h2>
+      <p class="section-intro">
+        Seven phases. The order is a real dependency chain &mdash; the
+        recurrence engine and UI primitives in Phase&nbsp;2 unblock everything
+        after it. Sizes are indicative for one experienced full-stack engineer.
+      </p>
+
+      <div class="phases">
+        <div class="phase" data-n="0">
+          <div class="phase-head">
+            <h3>Foundations</h3>
+            <span class="chip size">S &middot; ~1 wk</span>
+          </div>
+          <p class="goal">
+            An empty app that deploys, connects to the database, and refuses
+            cross-boundary imports.
+          </p>
+          <ul>
+            <li>
+              Scaffold Nx (pnpm); generate <code>web</code> +
+              <code>web-e2e</code>, the seven <code>feature-*</code> libs as
+              standalone projects, and <code>ui</code>, <code>domain</code>,
+              <code>config</code>, <code>updates</code>, <code>testing</code>,
+              <code>db</code>, <code>auth</code>.
+            </li>
+            <li>
+              Tailwind + design tokens ported from the mockups; fonts via
+              <code>next/font</code>. Base primitives: Button, Input, Select,
+              Dialog, Sheet, Tabs, Toast, Chip, Progress, Card, plus the
+              responsive AppShell and SVG icon registry.
+            </li>
+            <li>
+              Module-boundary lint rules; shared <code>tsconfig</code>; Vitest +
+              Playwright wired.
+            </li>
+            <li>
+              Provision Vercel project, Supabase (marketplace integration),
+              Vercel KV, Blob store; Zod env schema.
+            </li>
+            <li>
+              CI: <code>nx affected</code> lint/test/build + Nx Cloud. Drizzle
+              client factory + <code>drizzle.config.ts</code> + first migration
+              (<code>users</code>).
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> Preview + production deploy green; a smoke query hits
+            Postgres; an intentional bad import fails lint.
+          </p>
+        </div>
+
+        <div class="phase" data-n="1">
+          <div class="phase-head">
+            <h3>Authentication</h3>
+            <span class="chip size">M &middot; ~1&ndash;1.5 wk</span>
+          </div>
+          <p class="goal">
+            Self-owned email + password with signup, login, verification, and
+            reset.
+          </p>
+          <ul>
+            <li>
+              Auth.js v5 Credentials + JWT; <code>users</code>,
+              <code>password_reset_tokens</code>,
+              <code>email_verification_tokens</code>; <code>argon2id</code>.
+            </li>
+            <li>
+              Screens: <code>/signup</code>, <code>/login</code>,
+              <code>/forgot-password</code>,
+              <code>/reset-password/[token]</code>, minimal
+              <code>/account</code> &mdash; mobile-first.
+            </li>
+            <li>
+              Zod server actions; KV rate limiting; Resend + React Email
+              templates; HIBP breached-password check.
+            </li>
+            <li>
+              Middleware guard on <code>(app)</code>;
+              <code>getCurrentUser()</code> helper consumed by all later
+              features.
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> signup &rarr; verify &rarr; login &rarr; logout and
+            forgot &rarr; reset &rarr; login pass end-to-end; expired/used
+            tokens rejected.
+          </p>
+        </div>
+
+        <div class="phase" data-n="2">
+          <div class="phase-head">
+            <h3>Payments, tags &amp; methods</h3>
+            <span class="chip size">L &middot; ~2 wk</span>
+          </div>
+          <p class="goal">
+            The Calendar screen, fully functional &mdash; the core of the
+            product.
+          </p>
+          <ul>
+            <li>
+              Tables <code>tags</code>, <code>payment_methods</code>,
+              <code>payments</code>, <code>payment_tags</code>,
+              <code>payment_events</code>; RLS policies + repository layer.
+            </li>
+            <li>
+              <strong>Recurrence engine</strong> in <code>libs/domain</code>:
+              expand a payment into occurrences over a window (monthly /
+              quarterly / annual, day-of-month, end conditions, timezone).
+              Heavily unit-tested before any UI.
+            </li>
+            <li>
+              Methods CRUD with the customisable icon + colour picker; tags
+              CRUD.
+            </li>
+            <li>
+              Payments create/edit (one-time + recurring), method + multi-tag;
+              List view (grouped by date) + Calendar view + toggle;
+              mark-occurrence-paid.
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> Calendar screen works on phone and desktop; occurrences
+            render correctly across a DST boundary.
+          </p>
+        </div>
+
+        <div class="phase" data-n="3">
+          <div class="phase-head">
+            <h3>Subscriptions &amp; installments</h3>
+            <span class="chip size">M &middot; ~1.5&ndash;2 wk</span>
+          </div>
+          <p class="goal">
+            Two recurring-payment variants with their own screens.
+          </p>
+          <ul>
+            <li>
+              Subscriptions: <code>subscription_details</code> (renewal date,
+              started-on, reminder); list + monthly/yearly summary + renewal
+              countdown; edit form.
+            </li>
+            <li>
+              Installments: <code>installment_plans</code> +
+              <code>installment_payments</code>; schedule computation for both
+              bases (end-date vs total-amount &rarr; derive count / final date);
+              screen with progress bars, mark-period-paid, and the two-way
+              "finish when" toggle.
+            </li>
+            <li>
+              A "money-out" aggregator in <code>libs/domain</code> (payments +
+              installments + subscription occurrences) feeds the calendar and
+              heatmap &mdash; so no <code>feature-*</code> lib ever imports
+              another.
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> Subscriptions and Installments screens match the
+            mockups; editing a plan preserves already-paid periods.
+          </p>
+        </div>
+
+        <div class="phase" data-n="4">
+          <div class="phase-head">
+            <h3>Checklist &amp; year heatmap</h3>
+            <span class="chip size">M &middot; ~1.5 wk</span>
+          </div>
+          <p class="goal">
+            The monthly manual-transfer to-do list and the year view.
+          </p>
+          <ul>
+            <li>
+              <code>manual_transfer_checklists</code> +
+              <code>manual_transfer_items</code>; generate from payments paid by
+              manual transfer; "Regenerate" merges the schedule in while keeping
+              manual edits and ticks; inline edit; month selector.
+            </li>
+            <li>
+              Heatmap aggregation across payments + installments; the
+              calendar-cell component + monthly totals bars; "Year" added to the
+              view toggle.
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> Checklist and Heatmap screens functional; Regenerate
+            never drops a completed item.
+          </p>
+        </div>
+
+        <div class="phase" data-n="5">
+          <div class="phase-head">
+            <h3>Debts &amp; settlements</h3>
+            <span class="chip size">S&ndash;M &middot; ~1 wk</span>
+          </div>
+          <p class="goal">
+            Track money owed both directions, with partial and full settlement.
+          </p>
+          <ul>
+            <li>
+              <code>debts</code> + <code>debt_settlements</code>; net-position
+              summary; per-debt remaining balance and progress bar.
+            </li>
+            <li>
+              Record settlement (partial / full), settle-in-full shortcut,
+              direction filters, settled state.
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> Debts screen matches the mockup; balances and net
+            position reconcile against the settlement log.
+          </p>
+        </div>
+
+        <div class="phase" data-n="6">
+          <div class="phase-head">
+            <h3>Update flow, files &amp; hardening</h3>
+            <span class="chip size">M &middot; ~1.5 wk</span>
+          </div>
+          <p class="goal">Ship 1.0.</p>
+          <ul>
+            <li>
+              <code>/api/version</code> + build-ID injection +
+              <code>useUpdateCheck</code> + menu item + passive toast + reload;
+              enable Vercel Skew Protection.
+            </li>
+            <li>
+              Vercel Blob: avatar upload + receipt attachments on payments and
+              settlements.
+            </li>
+            <li>
+              Responsive + a11y + performance pass; empty and error states;
+              optimistic updates; Sentry + Analytics.
+            </li>
+          </ul>
+          <p class="exit">
+            <b>Exit</b> "Check for updates" reloads onto a fresh deploy; axe
+            clean on every primary screen; Lighthouse mobile &ge; 90.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <h3>Indicative timeline</h3>
+        <p style="margin: 0">
+          <strong>~10&ndash;12 weeks</strong> solo to a polished 1.0.
+          <strong>~6&ndash;8 weeks</strong> with two engineers &mdash; Phases
+          2&ndash;5 parallelise across the domain libs once the recurrence
+          engine and UI primitives exist. Phases 0&ndash;1 are on the critical
+          path and don't split.
+        </p>
+      </div>
+    </section>
+
+    <section id="testing">
+      <h2><span class="h2n">10</span> Testing</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>Tools</th>
+              <th>Covers</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Unit</td>
+              <td>Vitest</td>
+              <td>
+                Recurrence &amp; installment-schedule math, money helpers,
+                reset-token logic, the money-out aggregator.
+              </td>
+            </tr>
+            <tr>
+              <td>Component</td>
+              <td>Vitest + Testing Library + jsdom</td>
+              <td>Primitives, forms, view toggles, the icon/colour picker.</td>
+            </tr>
+            <tr>
+              <td>Integration</td>
+              <td>
+                Vitest + ephemeral Postgres (Supabase local or Testcontainers) +
+                migrations + factories
+              </td>
+              <td>
+                Repository layer, RLS / ownership scoping, Regenerate merge
+                behaviour.
+              </td>
+            </tr>
+            <tr>
+              <td>End-to-end</td>
+              <td>Playwright (<span class="mono">web-e2e</span>)</td>
+              <td>
+                Auth flows, create payment, view toggle, checklist tick, record
+                settlement, update prompt.
+              </td>
+            </tr>
+            <tr>
+              <td>Accessibility</td>
+              <td><span class="mono">@axe-core/playwright</span></td>
+              <td>Every primary screen, both themes.</td>
+            </tr>
+            <tr>
+              <td>CI gate</td>
+              <td>
+                <span class="mono">nx affected -t lint test build e2e</span>
+              </td>
+              <td>Every PR, against its preview deploy.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2><span class="h2n">11</span> Risks</h2>
+      <ul class="risk">
+        <li>
+          <b>Auth.js v5 is pre-stable.</b> Pin the exact version, keep every
+          call behind <code>libs/auth</code>, and budget one upgrade pass before
+          1.0.
+        </li>
+        <li>
+          <b
+            >Recurrence / occurrence modelling is the deepest logic in the
+            app.</b
+          >
+          Build and test the engine in Phase 2 before any screen consumes it.
+          Compute-on-read is the chosen approach; revisit materialisation only
+          if the heatmap query gets slow.
+        </li>
+        <li>
+          <b>Supabase transaction pooler vs. Drizzle.</b>
+          <code>prepare: false</code> on the runtime connection; migrations only
+          through the non-pooling URL; never migrate inside
+          <code>next build</code>.
+        </li>
+        <li>
+          <b>Timezone &amp; DST on day-of-month math.</b> Store due dates as
+          <code>date</code>, not <code>timestamptz</code>; do all arithmetic in
+          <code>users.timezone</code>; add explicit fixture tests around
+          March/November.
+        </li>
+        <li>
+          <b>Nx library over-fragmentation.</b> One
+          <code>feature-&lt;name&gt;</code> project per domain and no more.
+          Split a feature into <code>feature-</code> /
+          <code>data-access-</code> / <code>ui-</code> siblings only when it
+          visibly outgrows a single barrel.
+        </li>
+        <li>
+          <b>Reset-email deliverability.</b> Dev runs on Resend's
+          <code>onboarding@resend.dev</code> sandbox (owner-only delivery). A
+          verified sending domain (SPF + DKIM) is required before preview/prod
+          and before any non-owner tester can receive mail; monitor bounces once
+          live.
+        </li>
+        <li>
+          <b>Vercel &times; Nx build drift.</b> Commit
+          <code>vercel.json</code> and pin Node + Nx versions; keep the build
+          command explicit rather than relying on auto-detection.
+        </li>
+      </ul>
+    </section>
+
+    <p class="foot">
+      Where's My Money &mdash; build plan &middot; revised after auth /
+      data-layer / UI decisions &middot; 7 phases
+    </p>
+  </main>
+</div>

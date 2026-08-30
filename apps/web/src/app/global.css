@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+@import '../../../../libs/ui/src/styles/tokens.css';
+
+/* Tailwind ignores linked workspace packages by default — scan the UI lib. */
+@source '../../../../libs/ui/src/**/*.{ts,tsx}';
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--wmm-ground);
+    color: var(--wmm-ink);
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--wmm-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+}

@@ -1,0 +1,20 @@
+# Build output
+dist
+.next
+out-tsc
+coverage
+.nx
+test-output
+playwright-report
+
+# Dependencies & lockfiles
+node_modules
+pnpm-lock.yaml
+
+# Generated
+apps/*/next-env.d.ts
+apps/*/index.d.ts
+libs/db/migrations
+
+# Design deliverables (authored elsewhere)
+design

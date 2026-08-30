@@ -1,0 +1,25 @@
+{
+  "name": "db",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/db/src",
+  "projectType": "library",
+  "tags": ["type:data"],
+  "targets": {
+    "db-generate": {
+      "command": "drizzle-kit generate",
+      "options": { "cwd": "{workspaceRoot}" }
+    },
+    "db-migrate": {
+      "command": "drizzle-kit migrate",
+      "options": { "cwd": "{workspaceRoot}" }
+    },
+    "db-push": {
+      "command": "drizzle-kit push",
+      "options": { "cwd": "{workspaceRoot}" }
+    },
+    "db-studio": {
+      "command": "drizzle-kit studio",
+      "options": { "cwd": "{workspaceRoot}" }
+    }
+  }
+}

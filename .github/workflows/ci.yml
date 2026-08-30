@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Env is validated for real on Vercel; CI only builds/typechecks.
+      SKIP_ENV_VALIDATION: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Sets NX_BASE / NX_HEAD for `nx affected`
+      - uses: nrwl/nx-set-shas@v4
+
+      - run: pnpm nx sync:check
+      - run: pnpm exec prettier --check .
+      - run: pnpm nx affected -t typecheck lint test build
+
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm nx affected -t e2e
+
+  migrate:
+    # Apply migrations to production after a merge to main, using the DIRECT
+    # (non-pooling) connection. Runs before the Vercel production alias is
+    # promoted — see README "Deploying".
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm nx db-migrate db
+        env:
+          POSTGRES_URL_NON_POOLING: ${{ secrets.POSTGRES_URL_NON_POOLING }}
