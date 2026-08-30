@@ -5,8 +5,9 @@ a manual-transfer checklist, and debts — as a list, a calendar, or a year heat
 
 - **Design:** the approved "Command Deck" direction and full 7-phase build plan
   live in [`design/`](design/) (open the `.html` files in a browser).
-- **Status:** Phase 0 (foundations). The app deploys, connects to Postgres, and
-  enforces module boundaries; feature screens are placeholders until their phase.
+- **Status:** Phase 1. Foundations plus self-owned authentication (sign up, sign
+  in, password reset, email confirmation, profile). Feature screens are
+  placeholders until their phase.
 
 ## Stack
 
@@ -72,6 +73,31 @@ pnpm format            # prettier --write
 ```
 
 Prefer `nx affected -t <target>` when iterating — it only runs what changed.
+
+`AUTH_E2E=1 pnpm e2e` also runs the DB-backed auth flow (sign up → sign out →
+sign in → reset). It's skipped by default so CI's e2e stays hermetic.
+
+## Auth (`libs/auth`)
+
+Auth.js v5, Credentials provider, JWT sessions — we own the `users` table and
+password hashing (`argon2id`). Server actions live in `libs/auth`; the client
+imports them from `@wib/auth`, server code from `@wib/auth/server`, and
+`proxy.ts` (route guard) from `@wib/auth/edge`.
+
+Forms use **react-hook-form + `zodResolver`** for client-side validation; the
+server actions re-validate with the **same Zod schemas** (`libs/auth/schemas.ts`)
+and never trust the client. Field errors round-trip back onto the form via
+`setError` (`apps/web/src/app/_components/apply-server-errors.ts`).
+
+- Screens: `/signup`, `/login`, `/forgot-password`, `/reset-password/[token]`,
+  `/verify/[token]`, and `/account` (name, email, change password).
+- Reset and verification tokens are single-use, hashed at rest, short-TTL.
+- New passwords are checked against Have I Been Pwned (k-anonymity, fails open).
+- Rate limiting is in-memory (`libs/auth/rate-limit.ts`) — **swap for Vercel KV /
+  Upstash before production**; the call sites don't change.
+- Emails go through Resend. The dev sandbox sender only delivers to the Resend
+  account owner, so the reset/verify link is also logged to the server console
+  in development.
 
 Health checks once the DB is connected:
 

@@ -3,6 +3,7 @@ packages:
   - 'libs/*'
 
 onlyBuiltDependencies:
+  - '@node-rs/argon2'
   - '@swc/core'
   - '@tailwindcss/oxide'
   - esbuild

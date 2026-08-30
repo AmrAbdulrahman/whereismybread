@@ -12,18 +12,20 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Brand: the loaf mark's purple (#6321d6), lighter #a98eda for dark grounds
+   and the "bread" half of the wordmark. Neutrals carry a faint violet bias. */
 :root {
-  --wib-ground: #f7f6f3;
+  --wib-ground: #f6f4fb;
   --wib-surface: #ffffff;
-  --wib-surface-2: #f0efe9;
-  --wib-surface-3: #e6e5dd;
-  --wib-ink: #1b1e24;
-  --wib-ink-soft: #464d5a;
-  --wib-muted: #6b7280;
-  --wib-line: #e3e1d9;
-  --wib-line-strong: #cfccc1;
+  --wib-surface-2: #efecf8;
+  --wib-surface-3: #e4dff2;
+  --wib-ink: #1b1533;
+  --wib-ink-soft: #494360;
+  --wib-muted: #6e697f;
+  --wib-line: #e6e1f1;
+  --wib-line-strong: #d0c9e4;
 
-  --wib-accent: #4b57cf;
+  --wib-accent: #6321d6;
   --wib-accent-fg: #ffffff;
   --wib-teal: #0e8074;
 
@@ -31,7 +33,7 @@
   --wib-warn: #8a6410;
   --wib-danger: #b3261e;
 
-  --wib-tag-essentials: #4b57cf;
+  --wib-tag-essentials: #6321d6;
   --wib-tag-subscriptions: #0e8074;
   --wib-tag-health: #a8641a;
   --wib-tag-car: #a83f77;
@@ -39,25 +41,25 @@
 }
 
 .dark {
-  --wib-ground: #14171d;
-  --wib-surface: #171b22;
-  --wib-surface-2: #1c2029;
-  --wib-surface-3: #23272f;
-  --wib-ink: #e7e9ee;
-  --wib-ink-soft: #bcc1cc;
-  --wib-muted: #8b929e;
-  --wib-line: #23272f;
-  --wib-line-strong: #333a44;
+  --wib-ground: #15131c;
+  --wib-surface: #1b1826;
+  --wib-surface-2: #221f30;
+  --wib-surface-3: #2c2840;
+  --wib-ink: #e9e7f0;
+  --wib-ink-soft: #c0bcce;
+  --wib-muted: #8f8aa1;
+  --wib-line: #2a2740;
+  --wib-line-strong: #3b3757;
 
-  --wib-accent: #7c8cff;
-  --wib-accent-fg: #10131a;
+  --wib-accent: #a98eda;
+  --wib-accent-fg: #15131c;
   --wib-teal: #4bd6c6;
 
   --wib-good: #6fcf97;
   --wib-warn: #e0b06a;
   --wib-danger: #f08a8a;
 
-  --wib-tag-essentials: #b9c2ff;
+  --wib-tag-essentials: #c3b0ec;
   --wib-tag-subscriptions: #8fe7db;
   --wib-tag-health: #ecc496;
   --wib-tag-car: #e6a9c8;

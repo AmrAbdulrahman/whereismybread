@@ -1,6 +1,7 @@
 import type { ElementType, ReactNode } from 'react';
 import type { LucideIcon } from '../icons';
 import { cn } from '../lib/cn';
+import { Wordmark } from './wordmark';
 
 export interface NavItem {
   href: string;
@@ -16,6 +17,8 @@ export interface AppShellProps {
   linkComponent?: ElementType;
   /** Primary items get a slot in the mobile tab bar; the rest go behind "More". */
   mobilePrimaryCount?: number;
+  /** Rendered at the bottom of the sidebar — e.g. the signed-in user + sign out. */
+  footerSlot?: ReactNode;
   children: ReactNode;
 }
 
@@ -28,6 +31,7 @@ export function AppShell({
   currentPath,
   linkComponent: Link = 'a',
   mobilePrimaryCount = 5,
+  footerSlot,
   children,
 }: AppShellProps) {
   const primary = navItems.slice(0, mobilePrimaryCount);
@@ -36,13 +40,8 @@ export function AppShell({
     <div className="min-h-[100dvh] bg-ground text-ink">
       {/* Sidebar — lg and up */}
       <aside className="fixed inset-y-0 left-0 hidden w-56 flex-col border-r border-line bg-surface p-3 lg:flex">
-        <div className="flex items-center gap-2 px-2 py-3">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-accent-fg font-display text-sm font-bold">
-            W
-          </span>
-          <span className="font-display text-[15px] font-bold tracking-tight">
-            whereismybread
-          </span>
+        <div className="px-2 py-3">
+          <Wordmark size="sm" />
         </div>
         <nav className="mt-3 flex flex-col gap-0.5">
           {navItems.map((item) => {
@@ -66,6 +65,9 @@ export function AppShell({
             );
           })}
         </nav>
+        {footerSlot ? (
+          <div className="mt-auto border-t border-line pt-3">{footerSlot}</div>
+        ) : null}
       </aside>
 
       {/* Content */}

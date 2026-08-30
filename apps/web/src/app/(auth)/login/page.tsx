@@ -1,10 +1,12 @@
-import { Placeholder } from '../../_components/placeholder';
+import { Suspense } from 'react';
+import { LoginForm } from './_login-form';
+
 export const metadata = { title: 'Sign in' };
-export default function Page() {
+
+export default function LoginPage() {
   return (
-    <Placeholder title="Sign in" phase="Phase 1">
-      Email &amp; password sign-in, sign-up and password reset arrive in Phase 1
-      (Auth.js Credentials).
-    </Placeholder>
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

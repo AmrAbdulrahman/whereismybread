@@ -36,3 +36,5 @@ export {
 } from './components/app-shell';
 
 export { icons, iconFor, type IconName, type LucideIcon } from './icons';
+export { BreadMark } from './icons/brand';
+export { Wordmark } from './components/wordmark';

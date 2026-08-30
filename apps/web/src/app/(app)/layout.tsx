@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react';
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@wib/auth/server';
 import { AppNav } from './_nav';
 
-// TODO(phase-1): guard this route group.
-//   const user = await getCurrentUser();
-//   if (!user) redirect('/login');
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
 
-export default function AppLayout({ children }: { children: ReactNode }) {
-  return <AppNav>{children}</AppNav>;
+  return (
+    <AppNav userName={user.name} userEmail={user.email}>
+      {children}
+    </AppNav>
+  );
 }

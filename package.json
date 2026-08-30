@@ -14,7 +14,8 @@
     "db:generate": "nx run db:db-generate",
     "db:migrate": "nx run db:db-migrate",
     "db:push": "nx run db:db-push",
-    "db:studio": "nx run db:db-studio"
+    "db:studio": "nx run db:db-studio",
+    "setup": "ln -sf ../../.env.local apps/web/.env.local && echo linked"
   },
   "private": true,
   "devDependencies": {

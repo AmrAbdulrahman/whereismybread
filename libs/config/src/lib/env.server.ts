@@ -19,6 +19,10 @@ const serverSchema = z.object({
 
   // Auth.js
   AUTH_SECRET: z.string().min(1),
+  AUTH_URL: z.url().optional(),
+
+  // Absolute base URL, for links in transactional emails.
+  APP_URL: z.url().default('http://localhost:3000'),
 
   // Transactional email — Resend
   RESEND_API_KEY: z.string().min(1),

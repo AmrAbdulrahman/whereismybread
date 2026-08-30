@@ -1,24 +1,26 @@
 import { expect, test } from '@playwright/test';
 
-test('the root redirects to the calendar screen', async ({ page }) => {
+test('a signed-out visitor is sent to the login screen', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveURL(/\/calendar$/);
-  await expect(
-    page.getByRole('heading', { name: 'Upcoming payments' }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
-test('the app shell exposes the primary navigation', async ({ page }) => {
+test('the app guards its routes', async ({ page }) => {
   await page.goto('/calendar');
-  for (const label of [
-    'Calendar',
-    'Subscriptions',
-    'Installments',
-    'Checklist',
-    'Debts',
-  ]) {
-    await expect(page.getByRole('link', { name: label }).first()).toBeVisible();
-  }
+  await expect(page).toHaveURL(/\/login\?next=%2Fcalendar/);
+});
+
+test('the login screen links to sign-up and password reset', async ({
+  page,
+}) => {
+  await page.goto('/login');
+  await expect(
+    page.getByRole('link', { name: 'Create an account' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Forgot your password?' }),
+  ).toBeVisible();
 });
 
 test('the version endpoint reports a build id', async ({ request }) => {

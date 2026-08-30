@@ -50,13 +50,19 @@
   ],
   "references": [
     {
-      "path": "../../libs/db"
-    },
-    {
       "path": "../../libs/updates"
     },
     {
       "path": "../../libs/ui"
+    },
+    {
+      "path": "../../libs/domain"
+    },
+    {
+      "path": "../../libs/db"
+    },
+    {
+      "path": "../../libs/auth"
     }
   ]
 }

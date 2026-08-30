@@ -20,8 +20,8 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_ID: buildId,
     BUILD_TIMESTAMP: new Date().toISOString(),
   },
-  // postgres.js is server-only; keep it out of the client/edge bundle.
-  serverExternalPackages: ['postgres'],
+  // Server-only / native packages — keep them out of the client & edge bundles.
+  serverExternalPackages: ['postgres', '@node-rs/argon2'],
 };
 
 module.exports = nextConfig;
