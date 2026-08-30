@@ -41,7 +41,7 @@ export function AppShell({
             W
           </span>
           <span className="font-display text-[15px] font-bold tracking-tight">
-            whereismymoney
+            whereismybread
           </span>
         </div>
         <nav className="mt-3 flex flex-col gap-0.5">

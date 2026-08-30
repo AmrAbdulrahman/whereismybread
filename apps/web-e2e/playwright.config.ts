@@ -21,9 +21,13 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'SKIP_ENV_VALIDATION=1 pnpm exec nx run web:dev --port=3000',
+    // Invoke `next` directly rather than through `nx run web:dev`: the
+    // pnpm -> nx -> next process chain swallows the SIGTERM Playwright sends on
+    // teardown, orphaning a dev server on :3000 that later runs then reuse.
+    command: 'SKIP_ENV_VALIDATION=1 pnpm exec next dev apps/web --port 3000',
     url: baseURL,
     reuseExistingServer: !process.env['CI'],
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
     cwd: workspaceRoot,
     timeout: 120_000,
   },

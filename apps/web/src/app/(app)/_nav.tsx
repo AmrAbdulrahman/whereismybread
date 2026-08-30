@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AppShell, icons, type NavItem } from '@wmm/ui';
+import { AppShell, icons, type NavItem } from '@wib/ui';
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/calendar', label: 'Calendar', icon: icons.calendar },

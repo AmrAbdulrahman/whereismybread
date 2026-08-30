@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useUpdateCheck } from '@wmm/updates';
-import { Button, useToast } from '@wmm/ui';
+import { useUpdateCheck } from '@wib/updates';
+import { Button, useToast } from '@wib/ui';
 
 /**
  * Passive half of the update flow: when a background check finds a newer

@@ -25,7 +25,7 @@ const serverSchema = z.object({
   EMAIL_FROM: z
     .string()
     .min(1)
-    .default("Where's My Money <onboarding@resend.dev>"),
+    .default('Where Is My Bread <onboarding@resend.dev>'),
 
   // Rate limiting — Vercel KV (optional until Phase 1)
   KV_REST_API_URL: z.url().optional(),

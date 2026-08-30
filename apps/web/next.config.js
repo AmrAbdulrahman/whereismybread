@@ -9,12 +9,12 @@ const buildId =
 const nextConfig = {
   // Workspace libs ship TypeScript source (no build step) — Next must transpile them.
   transpilePackages: [
-    '@wmm/ui',
-    '@wmm/updates',
-    '@wmm/domain',
-    '@wmm/config',
-    '@wmm/db',
-    '@wmm/auth',
+    '@wib/ui',
+    '@wib/updates',
+    '@wib/domain',
+    '@wib/config',
+    '@wib/db',
+    '@wib/auth',
   ],
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,

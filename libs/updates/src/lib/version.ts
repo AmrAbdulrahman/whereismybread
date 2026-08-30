@@ -1,4 +1,4 @@
-import { clientEnv } from '@wmm/config';
+import { clientEnv } from '@wib/config';
 
 /** Response shape of `GET /api/version`. */
 export interface VersionInfo {

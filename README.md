@@ -1,4 +1,4 @@
-# Where's My Money
+# Where Is My Bread
 
 A mobile-first money-planning app — upcoming payments, subscriptions, installments,
 a manual-transfer checklist, and debts — as a list, a calendar, or a year heatmap.

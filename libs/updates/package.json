@@ -1,5 +1,5 @@
 {
-  "name": "@wmm/updates",
+  "name": "@wib/updates",
   "version": "0.0.1",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -12,9 +12,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@wmm/config": "workspace:*"
+    "@wib/config": "workspace:*"
   },
   "devDependencies": {
-    "@wmm/testing": "workspace:*"
+    "@wib/testing": "workspace:*"
   }
 }

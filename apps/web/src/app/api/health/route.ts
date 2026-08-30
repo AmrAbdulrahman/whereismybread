@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkDatabase } from '@wmm/db';
+import { checkDatabase } from '@wib/db';
 
 export const dynamic = 'force-dynamic';
 

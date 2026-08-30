@@ -1,4 +1,4 @@
-import { serverEnv } from '@wmm/config';
+import { serverEnv } from '@wib/config';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema/index';

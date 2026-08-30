@@ -1,11 +1,11 @@
 {
-  "name": "@wmm/web",
+  "name": "@wib/web",
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "@wmm/db": "workspace:*",
-    "@wmm/ui": "workspace:*",
-    "@wmm/updates": "workspace:*",
+    "@wib/db": "workspace:*",
+    "@wib/ui": "workspace:*",
+    "@wib/updates": "workspace:*",
     "next": "~16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

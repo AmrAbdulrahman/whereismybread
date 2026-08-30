@@ -12,8 +12,8 @@
 
   body {
     margin: 0;
-    background: var(--wmm-ground);
-    color: var(--wmm-ink);
+    background: var(--wib-ground);
+    color: var(--wib-ink);
     font-family: var(--font-sans);
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
@@ -27,7 +27,7 @@
   }
 
   *:focus-visible {
-    outline: 2px solid var(--wmm-accent);
+    outline: 2px solid var(--wib-accent);
     outline-offset: 2px;
     border-radius: 3px;
   }

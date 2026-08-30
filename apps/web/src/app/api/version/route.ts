@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Identity of the live deployment. Always runs on the current deployment, so
  * its answer is by definition the latest — the client compares it to the
- * build id baked into its bundle (see @wmm/updates).
+ * build id baked into its bundle (see @wib/updates).
  */
 export function GET() {
   return NextResponse.json(

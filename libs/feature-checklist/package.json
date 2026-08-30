@@ -1,5 +1,5 @@
 {
-  "name": "@wmm/feature-checklist",
+  "name": "@wib/feature-checklist",
   "version": "0.0.1",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

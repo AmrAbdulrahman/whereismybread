@@ -2,7 +2,7 @@ import './global.css';
 
 import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from 'next/font/google';
-import { ToastProvider } from '@wmm/ui';
+import { ToastProvider } from '@wib/ui';
 import { UpdatePrompt } from './_components/update-prompt';
 
 const spaceGrotesk = Space_Grotesk({
@@ -28,8 +28,8 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Where's My Money",
-    template: "%s · Where's My Money",
+    default: 'Where Is My Bread',
+    template: '%s · Where Is My Bread',
   },
   description:
     'Plan your money — upcoming payments, subscriptions, installments and debts, as a list or a calendar.',

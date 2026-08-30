@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { stubFetch } from '@wmm/testing';
+import { stubFetch } from '@wib/testing';
 import { useUpdateCheck } from './use-update-check';
 
 describe('useUpdateCheck', () => {
