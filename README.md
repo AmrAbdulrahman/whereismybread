@@ -5,9 +5,11 @@ a manual-transfer checklist, and debts — as a list, a calendar, or a year heat
 
 - **Design:** the approved "Command Deck" direction and full 7-phase build plan
   live in [`design/`](design/) (open the `.html` files in a browser).
-- **Status:** Phase 1. Foundations plus self-owned authentication (sign up, sign
-  in, password reset, email confirmation, profile). Feature screens are
-  placeholders until their phase.
+- **Status:** Phase 2. Foundations, self-owned auth, and the **Calendar** —
+  upcoming payments as a month grid or a date-grouped list, one-time and
+  recurring (monthly / quarterly / annual), payment methods, multi-tag, and
+  mark-as-paid. Subscriptions, installments, checklist and debts are still
+  placeholders.
 
 ## Stack
 
@@ -98,6 +100,19 @@ and never trust the client. Field errors round-trip back onto the form via
 - Emails go through Resend. The dev sandbox sender only delivers to the Resend
   account owner, so the reset/verify link is also logged to the server console
   in development.
+
+## Payments (`libs/feature-payments`, `libs/domain`)
+
+- The **recurrence engine** (`libs/domain/src/lib/occurrences.ts`) expands a
+  payment's schedule into concrete due dates over a window — pure, timezone-free,
+  clamps end-of-month, jumps efficiently to far windows. Heavily unit-tested.
+- `libs/feature-payments` exports client components + server actions from
+  `@wib/feature-payments`; the server queries (`getPaymentBoard`,
+  `getPaymentsContext`) come from `@wib/feature-payments/server`.
+- `payment_events` stores only actuals — a row appears when an occurrence is
+  marked paid or skipped. Everything upcoming is computed.
+- The four default payment methods are seeded lazily on first use
+  (`ensureDefaultMethods`). Tags are created inline from the payment form.
 
 Health checks once the DB is connected:
 

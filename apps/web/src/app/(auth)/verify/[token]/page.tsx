@@ -21,7 +21,7 @@ export default async function VerifyPage({
           : 'That confirmation link is invalid or has already been used. You can send a new one from your account.'}
       </p>
       <Button asChild className="w-full">
-        <Link href={ok ? '/calendar' : '/account'}>
+        <Link href={ok ? '/plan' : '/account'}>
           {ok ? 'Go to the app' : 'Open account'}
         </Link>
       </Button>

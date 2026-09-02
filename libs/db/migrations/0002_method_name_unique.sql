@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "payment_methods_user_name_uq" ON "payment_methods" USING btree ("user_id",lower("name"));

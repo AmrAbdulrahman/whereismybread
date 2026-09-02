@@ -7,8 +7,8 @@ test('a signed-out visitor is sent to the login screen', async ({ page }) => {
 });
 
 test('the app guards its routes', async ({ page }) => {
-  await page.goto('/calendar');
-  await expect(page).toHaveURL(/\/login\?next=%2Fcalendar/);
+  await page.goto('/plan');
+  await expect(page).toHaveURL(/\/login\?next=%2Fplan/);
 });
 
 test('the login screen links to sign-up and password reset', async ({

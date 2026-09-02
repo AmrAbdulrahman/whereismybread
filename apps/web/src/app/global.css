@@ -1,13 +1,18 @@
 @import 'tailwindcss';
 @import '../../../../libs/ui/src/styles/tokens.css';
 
-/* Tailwind ignores linked workspace packages by default — scan the UI lib. */
-@source '../../../../libs/ui/src/**/*.{ts,tsx}';
+/* Tailwind ignores linked workspace packages by default — scan every lib that
+   ships components (ui + all feature libs). */
+@source '../../../../libs/*/src/**/*.{ts,tsx}';
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
     -webkit-text-size-adjust: 100%;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {

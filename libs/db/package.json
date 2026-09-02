@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@wib/config": "workspace:*",
+    "@wib/domain": "workspace:*",
     "drizzle-orm": "^0.45.2"
   }
 }

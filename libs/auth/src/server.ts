@@ -3,5 +3,5 @@
 // from a client component.
 
 export { handlers, auth, signIn, signOut } from './lib/auth';
-export { getCurrentUser, requireUser } from './lib/session';
+export { getCurrentUser, requireUser, requireUserId } from './lib/session';
 export type { SessionUser } from './lib/types';

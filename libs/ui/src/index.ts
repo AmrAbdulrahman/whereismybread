@@ -29,6 +29,30 @@ export {
 } from './components/sheet';
 export { ToastProvider, useToast, type ToastOptions } from './components/toast';
 export { Spinner } from './components/spinner';
+export { ThemeToggle } from './components/theme-toggle';
+export {
+  THEME_INIT_SCRIPT,
+  THEME_STORAGE_KEY,
+  applyTheme,
+  readStoredTheme,
+  resolveTheme,
+  storeTheme,
+  type Theme,
+} from './lib/theme';
+export { useMediaQuery } from './lib/use-media-query';
+export {
+  ResponsiveModal,
+  type ResponsiveModalProps,
+} from './components/responsive-modal';
+export { CurrencyField } from './components/currency-field';
+export { AmountField, type AmountFieldProps } from './components/amount-field';
+export { ColorPicker, type ColorPickerProps } from './components/color-picker';
+export {
+  COLOR_PALETTE,
+  randomPaletteColor,
+  type PaletteColor,
+} from './lib/colors';
+export { MethodIcon, METHOD_ICON_KEYS } from './components/method-icon';
 export {
   AppShell,
   type AppShellProps,

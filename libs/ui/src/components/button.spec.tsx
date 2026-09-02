@@ -12,10 +12,10 @@ describe('Button', () => {
   it('can render as a child element via asChild', () => {
     render(
       <Button asChild>
-        <a href="/calendar">Open calendar</a>
+        <a href="/plan">Open plan</a>
       </Button>,
     );
-    const link = screen.getByRole('link', { name: 'Open calendar' });
-    expect(link.getAttribute('href')).toBe('/calendar');
+    const link = screen.getByRole('link', { name: 'Open plan' });
+    expect(link.getAttribute('href')).toBe('/plan');
   });
 });

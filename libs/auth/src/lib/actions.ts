@@ -14,8 +14,10 @@ import {
   markEmailVerified,
   markPasswordResetTokenUsed,
   updateUserPassword,
+  updateUserPreferences,
   updateUserProfile,
 } from '@wib/db';
+import { parseMoneyInput } from '@wib/domain';
 import { AuthError } from 'next-auth';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
@@ -28,6 +30,7 @@ import { rateLimit } from './rate-limit';
 import {
   changePasswordSchema,
   fieldErrors,
+  preferencesSchema,
   requestResetSchema,
   resetPasswordSchema,
   signInSchema,
@@ -35,6 +38,7 @@ import {
   updateProfileSchema,
   type ChangePasswordInput,
   type NewPasswordInput,
+  type PreferencesInput,
   type RequestResetInput,
   type SignInInput,
   type SignUpInput,
@@ -64,7 +68,7 @@ const PWNED_MESSAGE =
 
 function safeNext(value: string | undefined): string {
   const next = value ?? '';
-  return next.startsWith('/') && !next.startsWith('//') ? next : '/calendar';
+  return next.startsWith('/') && !next.startsWith('//') ? next : '/plan';
 }
 
 // --- log in ----------------------------------------------------------------
@@ -107,14 +111,20 @@ export async function loginAction(
 
 // --- sign up -----------------------------------------------------------------
 
-export async function registerAction(input: SignUpInput): Promise<FormState> {
+export async function registerAction(
+  input: SignUpInput & { timezone?: string },
+): Promise<FormState> {
   const parsed = signUpSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
   }
   const { name, email, password } = parsed.data;
+  const timezone =
+    typeof input.timezone === 'string' && input.timezone.length <= 64
+      ? input.timezone
+      : undefined;
 
-  const limit = rateLimit(`signup:${await clientIp()}`, 5, 60 * 60 * 1000);
+  const limit = rateLimit(`signup:${await clientIp()}`, 20, 60 * 60 * 1000);
   if (!limit.ok) {
     return { ok: false, error: 'Too many attempts. Try again later.' };
   }
@@ -135,6 +145,7 @@ export async function registerAction(input: SignUpInput): Promise<FormState> {
       name,
       email,
       passwordHash: await hashPassword(password),
+      timezone,
     });
   } catch (error) {
     // Unique-violation race between the check above and the insert.
@@ -156,12 +167,12 @@ export async function registerAction(input: SignUpInput): Promise<FormState> {
   await sendVerificationEmail(user.email, token);
 
   try {
-    await signIn('credentials', { email, password, redirectTo: '/calendar' });
+    await signIn('credentials', { email, password, redirectTo: '/plan' });
   } catch (error) {
     if (error instanceof AuthError) redirect('/login');
     throw error; // NEXT_REDIRECT on success
   }
-  redirect('/calendar');
+  redirect('/plan');
 }
 
 // --- forgot / reset --------------------------------------------------------
@@ -280,6 +291,50 @@ export async function updateProfileAction(
   await updateUserProfile(id, parsed.data);
   revalidatePath('/account');
   return { ok: true, message: 'Profile saved.' };
+}
+
+export async function updatePreferencesAction(
+  input: PreferencesInput,
+): Promise<FormState> {
+  const session = await auth();
+  const id = session?.user?.id;
+  if (!id) return { ok: false, error: 'Sign in first.' };
+
+  const parsed = preferencesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+
+  const { income, hourlyRate, monthlyHours, ...prefs } = parsed.data;
+  const num = (v: string) => Number(String(v).replace(/[, ]/g, '') || '0');
+  const toMinor = (v: string) => {
+    try {
+      return parseMoneyInput(v || '0', prefs.incomeCurrency).minorUnits;
+    } catch {
+      return null;
+    }
+  };
+
+  const incomeMinor = toMinor(income);
+  const hourlyRateMinor = toMinor(hourlyRate);
+  if (incomeMinor == null || hourlyRateMinor == null) {
+    return {
+      ok: false,
+      fieldErrors:
+        incomeMinor == null
+          ? { income: ['Not a valid amount'] }
+          : { hourlyRate: ['Not a valid amount'] },
+    };
+  }
+
+  await updateUserPreferences(id, {
+    ...prefs,
+    incomeMinor,
+    hourlyRateMinor,
+    monthlyHours: num(monthlyHours),
+  });
+  revalidatePath('/', 'layout');
+  return { ok: true, message: 'Preferences saved.' };
 }
 
 export async function changePasswordAction(

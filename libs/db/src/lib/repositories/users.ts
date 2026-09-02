@@ -30,11 +30,13 @@ export async function createUser(input: {
   email: string;
   passwordHash: string;
   name: string;
+  timezone?: string;
 }): Promise<User> {
   const values: NewUser = {
     email: normalizeEmail(input.email),
     passwordHash: input.passwordHash,
     name: input.name.trim(),
+    ...(input.timezone ? { timezone: input.timezone } : {}),
   };
   const rows = await getDb().insert(users).values(values).returning();
   const user = rows[0];
@@ -54,6 +56,25 @@ export async function updateUserProfile(
   const user = rows[0];
   if (!user) throw new Error('updateUserProfile: no such user');
   return user;
+}
+
+export async function updateUserPreferences(
+  id: string,
+  patch: Partial<{
+    timezone: string;
+    defaultCurrency: string;
+    displayCurrency: string;
+    incomeMode: string;
+    incomeCurrency: string;
+    incomeMinor: number;
+    hourlyRateMinor: number;
+    monthlyHours: number;
+  }>,
+): Promise<void> {
+  await getDb()
+    .update(users)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(users.id, id));
 }
 
 export async function updateUserPassword(

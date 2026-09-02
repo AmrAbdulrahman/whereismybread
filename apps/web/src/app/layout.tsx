@@ -2,7 +2,7 @@ import './global.css';
 
 import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from 'next/font/google';
-import { ToastProvider } from '@wib/ui';
+import { THEME_INIT_SCRIPT, ToastProvider } from '@wib/ui';
 import { UpdatePrompt } from './_components/update-prompt';
 
 const spaceGrotesk = Space_Grotesk({
@@ -36,7 +36,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#15131c',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f4f1fa' },
+    { media: '(prefers-color-scheme: dark)', color: '#0e0c14' },
+  ],
   width: 'device-width',
   initialScale: 1,
 };
@@ -49,8 +52,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`dark ${spaceGrotesk.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         <ToastProvider>
           {children}

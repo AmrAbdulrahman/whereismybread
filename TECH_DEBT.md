@@ -24,6 +24,16 @@ noted trigger.
   The `users.password_changed_at` column already exists if we later want to
   reject older tokens in the `jwt` callback.
 
+## Data
+
+- **No Row-Level Security yet.** Every repository function in `libs/db` requires
+  a `userId` and filters by it, and all DB access is server-only behind that
+  layer — so isolation holds today. RLS (enable + `user_id = current_setting`
+  policies + a per-request `SET LOCAL app.user_id` transaction wrapper) is the
+  defense-in-depth the plan calls for, deferred to keep Phase 2 shippable.
+  _Trigger to fix:_ before multi-tenant data volume grows, or the first
+  raw-SQL / admin path that bypasses the repositories.
+
 ## Deploy
 
 - **Migrations and the Vercel deploy race.** Vercel auto-deploys on push to

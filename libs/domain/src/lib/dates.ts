@@ -61,6 +61,56 @@ export function startOfMonth(date: IsoDate): IsoDate {
   return `${date.slice(0, 7)}-01`;
 }
 
+export function daysInMonth(date: IsoDate): number {
+  const d = parseIsoDate(date);
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+}
+
+export function endOfMonth(date: IsoDate): IsoDate {
+  return `${date.slice(0, 7)}-${String(daysInMonth(date)).padStart(2, '0')}`;
+}
+
+/**
+ * The start date for a recurring payment that lands on `dayOfMonth` (1–31),
+ * clamped to the month's length. With no `existing` anchor it picks the
+ * soonest upcoming month (this month if the day hasn't passed, else next);
+ * with one, it keeps that anchor's month and only swaps the day.
+ */
+export function anchorForDayOfMonth(
+  dayOfMonth: number,
+  today: IsoDate,
+  existing?: IsoDate | null,
+): IsoDate {
+  const clamp = (ym: string) =>
+    Math.min(dayOfMonth, daysInMonth(`${ym}-01` as IsoDate));
+
+  if (existing) {
+    const ym = existing.slice(0, 7);
+    return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
+  }
+  const todayDay = Number(today.slice(8, 10));
+  const base = dayOfMonth >= todayDay ? today : addMonths(today, 1);
+  const ym = base.slice(0, 7);
+  return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
+}
+
+/** Whole months from `from` to `to` (negative if `to` is earlier). */
+export function monthsBetween(from: IsoDate, to: IsoDate): number {
+  const a = parseIsoDate(from);
+  const b = parseIsoDate(to);
+  return (
+    (b.getUTCFullYear() - a.getUTCFullYear()) * 12 +
+    (b.getUTCMonth() - a.getUTCMonth())
+  );
+}
+
+/** 0 = Monday … 6 = Sunday. */
+export function weekdayMonday0(date: IsoDate): number {
+  return (parseIsoDate(date).getUTCDay() + 6) % 7;
+}
+
 export function daysBetween(from: IsoDate, to: IsoDate): number {
   const ms = parseIsoDate(to).getTime() - parseIsoDate(from).getTime();
   return Math.round(ms / 86_400_000);

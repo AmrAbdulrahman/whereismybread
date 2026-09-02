@@ -7,12 +7,14 @@ export interface ProgressProps extends React.ComponentPropsWithoutRef<
 > {
   /** 0–100 */
   value?: number;
+  /** Extra classes for the filled bar (e.g. a semantic colour). */
+  indicatorClassName?: string;
 }
 
 export const Progress = forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
   ProgressProps
->(({ className, value = 0, ...props }, ref) => (
+>(({ className, indicatorClassName, value = 0, ...props }, ref) => (
   <ProgressPrimitive.Root
     ref={ref}
     className={cn(
@@ -23,7 +25,10 @@ export const Progress = forwardRef<
     {...props}
   >
     <ProgressPrimitive.Indicator
-      className="h-full rounded-full bg-accent transition-[width]"
+      className={cn(
+        'h-full rounded-full bg-accent transition-[width]',
+        indicatorClassName,
+      )}
       style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
     />
   </ProgressPrimitive.Root>

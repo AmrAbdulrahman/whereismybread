@@ -41,6 +41,39 @@ export type ResetPasswordInput = z.input<typeof resetPasswordSchema>;
 export const updateProfileSchema = z.object({ name });
 export type UpdateProfileInput = z.input<typeof updateProfileSchema>;
 
+const currencyCode = z.string().trim().toUpperCase().length(3);
+
+/** A non-negative number as typed, e.g. "3,200", "3200.50", "" → 0. */
+const nonNegNumber = z
+  .string()
+  .trim()
+  .default('0')
+  .refine(
+    (v) => v === '' || Number.isFinite(Number(v.replace(/[, ]/g, ''))),
+    'Not a number',
+  )
+  .refine(
+    (v) => Number(v.replace(/[, ]/g, '') || '0') >= 0,
+    'Cannot be negative',
+  );
+
+export const preferencesSchema = z.object({
+  timezone: z.string().trim().min(1).max(64),
+  defaultCurrency: currencyCode,
+  displayCurrency: currencyCode,
+  /** How income is worked out. */
+  incomeMode: z.enum(['fixed', 'hourly']).default('fixed'),
+  /** Currency for the income / hourly-rate figures. */
+  incomeCurrency: currencyCode,
+  /** Flat monthly income (fixed mode). */
+  income: nonNegNumber,
+  /** Pay per hour (hourly mode). */
+  hourlyRate: nonNegNumber,
+  /** Usual hours worked per month (hourly mode). */
+  monthlyHours: nonNegNumber,
+});
+export type PreferencesInput = z.input<typeof preferencesSchema>;
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Enter your current password'),
   newPassword: password,

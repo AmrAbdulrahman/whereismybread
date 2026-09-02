@@ -1,0 +1,723 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import {
+  addDays,
+  addMonths,
+  convertMoney,
+  endOfMonth,
+  formatMoney,
+  money,
+  startOfMonth,
+  type RateMap,
+} from '@wib/domain';
+import { cn, Progress, Spinner } from '@wib/ui';
+import { Pencil } from '@wib/ui/icons';
+import { loadListWindowAction } from '../lib/actions';
+import { riskFor } from '../lib/risk';
+import type { BoardOccurrence, DayGroup, PaymentBoard } from '../lib/types';
+import {
+  EMPTY_LIST_FILTER,
+  listFilterCount,
+  type ListFilterValue,
+} from './list-filters';
+import { MonthIncomeEditor } from './month-income-editor';
+import { OccurrenceItem } from './occurrence-item';
+
+function TodayMarker({ label }: { label?: string }) {
+  return (
+    <div className="flex items-center gap-3" aria-label="Today">
+      <span className="grid h-5 place-items-center rounded-full bg-accent px-2 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
+        Today
+      </span>
+      <span className="h-px flex-1 bg-accent/30" />
+      {label ? <span className="text-xs text-muted">{label}</span> : null}
+    </div>
+  );
+}
+
+function StartMarker() {
+  return (
+    <div
+      className="flex h-9 items-center gap-3 text-xs font-medium text-muted"
+      aria-label="Start of your history"
+    >
+      <span className="h-px flex-1 bg-line-strong" />
+      This is where you started
+      <span className="h-px flex-1 bg-line-strong" />
+    </div>
+  );
+}
+
+/** A greyed-out stand-in for a month that's still loading below the fold. */
+function MonthSkeleton() {
+  return (
+    <section className="flex animate-pulse flex-col gap-4" aria-hidden>
+      <div className="flex flex-col gap-2 pb-2 pt-1">
+        <div className="flex items-baseline justify-between border-b-2 border-line-strong pb-1.5">
+          <div className="h-6 w-28 rounded bg-surface-2" />
+          <div className="h-4 w-20 rounded bg-surface-2" />
+        </div>
+        <div className="h-2 w-full rounded-full bg-surface-2" />
+      </div>
+      <div className="h-14 rounded-lg bg-surface-2" />
+      <div className="h-14 rounded-lg bg-surface-2" />
+    </section>
+  );
+}
+
+/** Roll occurrences up into the display currency, split by paid vs. still due. */
+function monthTotals(
+  occurrences: BoardOccurrence[],
+  displayCurrency: string,
+  rates: RateMap,
+): { paidMinor: number; remainingMinor: number; totalMinor: number } {
+  let paidMinor = 0;
+  let totalMinor = 0;
+  for (const o of occurrences) {
+    const converted = convertMoney(o.amount, displayCurrency, rates);
+    if (converted.currency !== displayCurrency.toUpperCase()) continue;
+    totalMinor += converted.minorUnits;
+    if (o.status === 'paid') paidMinor += converted.minorUnits;
+  }
+  return { paidMinor, remainingMinor: totalMinor - paidMinor, totalMinor };
+}
+
+function monthLabel(monthKey: string, todayYear: string): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'long', timeZone: 'UTC' };
+  if (monthKey.slice(0, 4) !== todayYear) opts.year = 'numeric';
+  return new Intl.DateTimeFormat('en-GB', opts).format(
+    new Date(`${monthKey}-01T00:00:00Z`),
+  );
+}
+
+/** Fold earlier / later board slices onto the server-rendered window. */
+function mergeBoards(
+  base: PaymentBoard,
+  past: PaymentBoard | null,
+  future: PaymentBoard | null,
+): PaymentBoard {
+  const present = [base, past, future].filter(
+    (b): b is PaymentBoard => b != null,
+  );
+  if (present.length === 1) return base;
+
+  const seen = new Set<string>();
+  const groups: DayGroup[] = [];
+  for (const b of present) {
+    for (const g of b.groups) {
+      if (seen.has(g.date)) continue;
+      seen.add(g.date);
+      groups.push(g);
+    }
+  }
+  groups.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  return {
+    ...base,
+    window: {
+      from: present.reduce(
+        (m, b) => (b.window.from < m ? b.window.from : m),
+        base.window.from,
+      ),
+      to: present.reduce(
+        (m, b) => (b.window.to > m ? b.window.to : m),
+        base.window.to,
+      ),
+    },
+    groups,
+    incomeByMonth: Object.assign({}, ...present.map((b) => b.incomeByMonth)),
+    incomeRawByMonth: Object.assign(
+      {},
+      ...present.map((b) => b.incomeRawByMonth),
+    ),
+    incomeOverrideByMonth: Object.assign(
+      {},
+      ...present.map((b) => b.incomeOverrideByMonth),
+    ),
+    overriddenIncomeMonths: [
+      ...new Set(present.flatMap((b) => b.overriddenIncomeMonths)),
+    ],
+  };
+}
+
+export function PaymentList({
+  board: baseBoard,
+  filter = EMPTY_LIST_FILTER,
+  onEdit,
+}: {
+  board: PaymentBoard;
+  filter?: ListFilterValue;
+  onEdit: (paymentId: string, dueDate: string) => void;
+}) {
+  const [editingMonth, setEditingMonth] = useState<string | null>(null);
+  const filterActive = listFilterCount(filter) > 0;
+
+  // Months pulled in by scrolling past either end of the server window.
+  const [pastBoard, setPastBoard] = useState<PaymentBoard | null>(null);
+  const [futureBoard, setFutureBoard] = useState<PaymentBoard | null>(null);
+  const [pastFrom, setPastFrom] = useState<string | null>(null);
+  const [futureTo, setFutureTo] = useState<string | null>(null);
+  const [loadingPast, setLoadingPast] = useState(false);
+  const [loadingFuture, setLoadingFuture] = useState(false);
+  const [futureExhausted, setFutureExhausted] = useState(false);
+  // Bumped whenever a slice finishes loading, so the fill effect re-evaluates
+  // and can continue a cascade toward the start / bottom.
+  const [loadTick, setLoadTick] = useState(0);
+  const pastPending = useRef(false);
+  const futurePending = useRef(false);
+  // Set when the reader scrolls up near the top: keep pulling earlier months,
+  // batch after batch, until the start. Cleared when they scroll back down.
+  const chaseStart = useRef(false);
+
+  const board = mergeBoards(baseBoard, pastBoard, futureBoard);
+  const { displayCurrency, rates } = board;
+
+  const startedFloor = baseBoard.startedMonth
+    ? `${baseBoard.startedMonth}-01`
+    : null;
+  const earliestLoaded = pastBoard?.window.from ?? baseBoard.window.from;
+  const atStart = !startedFloor || earliestLoaded <= startedFloor;
+
+  // Keep already-loaded slices in sync when the server board itself changes
+  // (an edit / add / delete triggers a soft refresh).
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    let cancelled = false;
+    setFutureExhausted(false);
+    void (async () => {
+      if (pastFrom) {
+        const r = await loadListWindowAction({
+          from: pastFrom,
+          to: addDays(baseBoard.window.from, -1),
+        });
+        if (!cancelled && r.ok) setPastBoard(r.board);
+      }
+      if (futureTo) {
+        const r = await loadListWindowAction({
+          from: addDays(baseBoard.window.to, 1),
+          to: futureTo,
+        });
+        if (!cancelled && r.ok) setFutureBoard(r.board);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resync only when the server board changes
+  }, [baseBoard]);
+
+  // Prepending months pushes everything down. Pin whichever month sits nearest
+  // the top of the viewport, apply the update synchronously, then re-scroll to
+  // it — so the content under the reader's eyes doesn't jump.
+  const headerRefs = useRef(new Map<string, HTMLElement>());
+  const sectionTop = (key: string) =>
+    headerRefs.current.get(key)?.parentElement?.getBoundingClientRect().top ??
+    null;
+  const topmostMonthKey = () => {
+    let key: string | null = null;
+    let best = Infinity;
+    for (const k of headerRefs.current.keys()) {
+      const top = sectionTop(k);
+      if (top == null) continue;
+      if (Math.abs(top) < best) {
+        best = Math.abs(top);
+        key = k;
+      }
+    }
+    return key;
+  };
+
+  const loadPast = () => {
+    if (loadingPast || pastPending.current || atStart) return;
+    const cursor = pastFrom ?? baseBoard.window.from;
+    let newFrom = startOfMonth(addMonths(cursor, -2));
+    if (startedFloor && newFrom < startedFloor) newFrom = startedFloor;
+    if (newFrom >= cursor) return;
+    const to = addDays(baseBoard.window.from, -1);
+
+    pastPending.current = true;
+    setLoadingPast(true);
+    void loadListWindowAction({ from: newFrom, to })
+      .then((r) => {
+        if (!r.ok) return;
+        const anchorKey = topmostMonthKey();
+        const before = anchorKey ? sectionTop(anchorKey) : null;
+        flushSync(() => {
+          setPastBoard(r.board);
+          setPastFrom(newFrom);
+        });
+        const after = anchorKey ? sectionTop(anchorKey) : null;
+        if (before != null && after != null && Math.abs(after - before) > 1) {
+          window.scrollBy(0, after - before);
+        }
+      })
+      .finally(() => {
+        setLoadingPast(false);
+        pastPending.current = false;
+        setLoadTick((n) => n + 1);
+      });
+  };
+
+  const loadFuture = () => {
+    if (loadingFuture || futurePending.current || futureExhausted) return;
+    const cursor = futureTo ?? baseBoard.window.to;
+    const newTo = endOfMonth(addMonths(cursor, 2));
+    const from = addDays(baseBoard.window.to, 1);
+
+    futurePending.current = true;
+    setLoadingFuture(true);
+    void loadListWindowAction({ from, to: newTo })
+      .then((r) => {
+        if (r.ok) {
+          // Nothing beyond what we already had → the schedule ends here.
+          if (!r.board.groups.some((g) => g.date > cursor)) {
+            setFutureExhausted(true);
+          }
+          setFutureBoard(r.board);
+          setFutureTo(newTo);
+        }
+      })
+      .finally(() => {
+        setLoadingFuture(false);
+        futurePending.current = false;
+        setLoadTick((n) => n + 1);
+      });
+  };
+
+  // Latest closures for the scroll handler, which is wired up once.
+  const loadPastRef = useRef(loadPast);
+  const loadFutureRef = useRef(loadFuture);
+  loadPastRef.current = loadPast;
+  loadFutureRef.current = loadFuture;
+
+  // Scrolling toward the top pulls earlier months in; scrolling toward the
+  // bottom pulls later ones. The near-top load also re-triggers the priming
+  // effect below, so a sustained scroll up keeps the history coming.
+  useEffect(() => {
+    let raf = 0;
+    let lastY = window.scrollY;
+    const check = () => {
+      const doc = document.documentElement;
+      const y = window.scrollY;
+      const dir = y - lastY;
+      lastY = y;
+      const vh = window.innerHeight || doc.clientHeight;
+      if (dir < 0 && y < vh) {
+        chaseStart.current = true;
+        loadPastRef.current();
+      } else if (dir > 0 && y > vh * 2) {
+        chaseStart.current = false;
+      }
+      if (dir > 0 && doc.scrollHeight - (y + vh) < vh) {
+        loadFutureRef.current();
+      }
+    };
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(check);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, []);
+
+  // Keep the list filled. Future: top it up whenever it's shorter than the
+  // viewport. Past: prime one batch on mount so the top isn't a dead end (you
+  // can't scroll up from the very top), then — once the reader heads for the
+  // top — cascade batch after batch until the start. Past prepends are
+  // scroll-anchored so this stays invisible: the viewport holds still and
+  // earlier months stack up just above it. Both ends stop on their own.
+  // Paused while a filter is on — a narrow match could otherwise loop forever
+  // trying to fill the screen; scrolling still loads more on demand.
+  useEffect(() => {
+    if (filterActive) return;
+    const vh = window.innerHeight;
+    const sh = document.documentElement.scrollHeight;
+    if (!futureExhausted && !loadingFuture && sh <= vh + 240) {
+      loadFutureRef.current();
+    }
+    if (
+      !atStart &&
+      !loadingPast &&
+      !pastPending.current &&
+      (pastFrom == null || chaseStart.current || sh <= vh + 240)
+    ) {
+      loadPastRef.current();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-checks after each slice lands
+  }, [pastBoard, futureBoard, atStart, futureExhausted, loadTick, filterActive]);
+
+  // Search / account / bank / tag filter — matched against the occurrence and
+  // its payment's notes.
+  const matchesFilter = (occ: BoardOccurrence): boolean => {
+    if (
+      filter.accountIds.length > 0 &&
+      !(occ.account && filter.accountIds.includes(occ.account.id))
+    ) {
+      return false;
+    }
+    if (
+      filter.bankIds.length > 0 &&
+      !(occ.bank && filter.bankIds.includes(occ.bank.id))
+    ) {
+      return false;
+    }
+    if (
+      filter.tagIds.length > 0 &&
+      !occ.tags.some((t) => filter.tagIds.includes(t.id))
+    ) {
+      return false;
+    }
+    const q = filter.search.trim().toLowerCase();
+    if (q) {
+      const notes = board.editable[occ.paymentId]?.notes ?? '';
+      const hay = `${occ.name}\n${notes}\n${occ.url ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  };
+
+  // Today and later show as normal; earlier days inside the server window keep
+  // only unpaid stragglers; months scrolled back into view show full history.
+  const baseFrom = baseBoard.window.from;
+  const upcoming = board.groups
+    .map((g) => ({
+      ...g,
+      occurrences: g.occurrences.filter((o) => {
+        if (!matchesFilter(o)) return false;
+        if (g.date >= board.today) return o.status !== 'skipped';
+        if (g.date >= baseFrom) return o.status === 'scheduled';
+        return o.status !== 'skipped';
+      }),
+    }))
+    .filter((g) => g.occurrences.length > 0);
+  const todayHasPayments = upcoming.some((g) => g.date === board.today);
+
+  // Bucket the day groups by calendar month, in order.
+  const months: { key: string; groups: DayGroup[] }[] = [];
+  for (const group of upcoming) {
+    const key = group.date.slice(0, 7);
+    let bucket = months.at(-1);
+    if (!bucket || bucket.key !== key) {
+      bucket = { key, groups: [] };
+      months.push(bucket);
+    }
+    bucket.groups.push(group);
+  }
+
+  const todayYear = board.today.slice(0, 4);
+  const todayMonth = board.today.slice(0, 7);
+  const defaultKey =
+    months.find((m) => m.key === todayMonth)?.key ?? months[0]?.key ?? '';
+
+  // The active month follows the scroll: whichever month fills the most of the
+  // viewport is highlighted (so scrolling up lights it as soon as it's in view,
+  // not once its header reaches the top); the rest fade back.
+  const [scrolledKey, setScrolledKey] = useState<string | null>(null);
+  const monthKeys = months.map((m) => m.key).join(',');
+  const activeKey =
+    scrolledKey && months.some((m) => m.key === scrolledKey)
+      ? scrolledKey
+      : defaultKey;
+
+  useEffect(() => {
+    const order = monthKeys ? monthKeys.split(',') : [];
+    if (order.length === 0) return;
+
+    const pick = () => {
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      let best: string | null = null;
+      let bestVisible = 0;
+      for (const key of order) {
+        const section = headerRefs.current.get(key)?.parentElement;
+        if (!section) continue;
+        const r = section.getBoundingClientRect();
+        const visible = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+        if (visible > bestVisible) {
+          bestVisible = visible;
+          best = key;
+        }
+      }
+      if (best) setScrolledKey(best);
+    };
+
+    pick();
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(pick);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [monthKeys]);
+
+  if (upcoming.length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        {filterActive ? null : <TodayMarker />}
+        <p className="rounded-xl border border-dashed border-line-strong p-8 text-center text-sm text-muted">
+          {filterActive
+            ? 'No payments match your filters in the months loaded so far. Scroll to load more, or clear the filters.'
+            : 'Nothing scheduled in this window. Add a payment to get started.'}
+        </p>
+      </div>
+    );
+  }
+
+  const editing = editingMonth
+    ? {
+        key: editingMonth,
+        label: monthLabel(editingMonth, todayYear),
+        effective: board.incomeRawByMonth[editingMonth] ?? {
+          minor: board.globalIncomeMinor,
+          currency: board.incomeCurrency,
+        },
+        override: board.incomeOverrideByMonth[editingMonth] ?? null,
+        isOverride: board.overriddenIncomeMonths.includes(editingMonth),
+      }
+    : null;
+
+  return (
+    <div className="flex flex-col gap-8">
+      {atStart ? (
+        <StartMarker />
+      ) : (
+        <div className="flex h-9 items-center justify-center gap-2 text-xs text-muted">
+          {loadingPast ? (
+            <>
+              <Spinner />
+              Loading earlier months…
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {months.map((mo) => {
+        const isActive = mo.key === activeKey;
+        const occs = mo.groups.flatMap((g) => g.occurrences);
+        const { paidMinor, remainingMinor, totalMinor } = monthTotals(
+          occs,
+          displayCurrency,
+          rates,
+        );
+        const paidPct = totalMinor > 0 ? (paidMinor / totalMinor) * 100 : 0;
+
+        const incomeMinor =
+          board.incomeByMonth[mo.key] ?? board.defaultIncomeMinor;
+        const isIncomeOverride = board.overriddenIncomeMonths.includes(mo.key);
+        const hasIncome = incomeMinor > 0;
+        const leftMinor = incomeMinor - totalMinor;
+        const risk = riskFor(totalMinor, incomeMinor);
+        const spendPct = hasIncome ? (totalMinor / incomeMinor) * 100 : 0;
+
+        return (
+          <section
+            key={mo.key}
+            className={cn(
+              'flex flex-col gap-4 transition-opacity duration-200',
+              !isActive && 'opacity-30',
+            )}
+          >
+            <div
+              ref={(el) => {
+                if (el) headerRefs.current.set(mo.key, el);
+                else headerRefs.current.delete(mo.key);
+              }}
+              data-month-key={mo.key}
+              className="sticky top-0 z-20 flex flex-col gap-2 bg-ground pb-2 pt-1"
+            >
+              <div
+                className={cn(
+                  'flex items-baseline justify-between border-b-2 pb-1.5',
+                  isActive ? 'border-accent' : 'border-line-strong',
+                )}
+              >
+                <h3
+                  className={cn(
+                    'font-display text-lg font-semibold',
+                    isActive ? 'text-ink' : 'text-ink-soft',
+                  )}
+                >
+                  {monthLabel(mo.key, todayYear)}
+                </h3>
+                <span className="font-mono text-sm font-semibold tabular-nums text-ink">
+                  {formatMoney(money(totalMinor, displayCurrency))}
+                </span>
+              </div>
+              {hasIncome ? (
+                <>
+                  <Progress value={spendPct} indicatorClassName={risk.bar} />
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setEditingMonth(mo.key)}
+                      className="inline-flex items-center gap-1.5 text-ink-soft hover:text-ink"
+                    >
+                      <span>
+                        Income{' '}
+                        <span className="font-medium tabular-nums text-ink">
+                          {formatMoney(money(incomeMinor, displayCurrency))}
+                        </span>
+                        {isIncomeOverride ? (
+                          <span className="ml-1 text-muted">· custom</span>
+                        ) : null}
+                      </span>
+                      <Pencil size={12} className="opacity-60" />
+                    </button>
+                    <span
+                      className={cn('font-medium tabular-nums', risk.text)}
+                    >
+                      {leftMinor >= 0
+                        ? `${formatMoney(money(leftMinor, displayCurrency))} left`
+                        : `${formatMoney(
+                            money(-leftMinor, displayCurrency),
+                          )} over`}
+                      {' · '}
+                      {risk.label}
+                    </span>
+                  </div>
+                  {totalMinor > 0 ? (
+                    <div className="flex items-center justify-between text-xs text-muted">
+                      <span className="font-medium text-teal">
+                        {formatMoney(money(paidMinor, displayCurrency))} paid
+                      </span>
+                      <span>
+                        {formatMoney(money(remainingMinor, displayCurrency))}{' '}
+                        still due
+                      </span>
+                    </div>
+                  ) : null}
+                </>
+              ) : totalMinor > 0 ? (
+                <>
+                  <Progress value={paidPct} className="bg-warn/20" />
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-teal">
+                      {formatMoney(money(paidMinor, displayCurrency))} paid
+                    </span>
+                    <span className="font-medium text-warn">
+                      {formatMoney(money(remainingMinor, displayCurrency))}{' '}
+                      remaining
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingMonth(mo.key)}
+                    className="inline-flex items-center gap-1.5 self-start text-xs text-muted hover:text-ink"
+                  >
+                    <Pencil size={12} />
+                    Add a monthly income to gauge risk
+                  </button>
+                </>
+              ) : null}
+            </div>
+
+            {mo.key === todayMonth && !todayHasPayments ? (
+              <TodayMarker label="Nothing due today" />
+            ) : null}
+
+            {mo.groups.map((group) => {
+              const isToday = group.date === board.today;
+              // Recompute from the (filtered) occurrences, in the display
+              // currency — so a mixed-currency day adds up correctly.
+              const dayTotalMinor = monthTotals(
+                group.occurrences,
+                displayCurrency,
+                rates,
+              ).totalMinor;
+              return (
+                <div key={group.date} className="flex flex-col gap-2">
+                  <div
+                    className={cn(
+                      'flex items-baseline justify-between border-b pb-1',
+                      isToday ? 'border-accent/50' : 'border-line',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex items-center gap-2 font-display text-sm font-semibold',
+                        isToday ? 'text-accent' : 'text-ink',
+                      )}
+                    >
+                      {isToday ? (
+                        <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
+                          Today
+                        </span>
+                      ) : null}
+                      {new Intl.DateTimeFormat('en-GB', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        timeZone: 'UTC',
+                      }).format(new Date(`${group.date}T00:00:00Z`))}
+                    </span>
+                    <span className="flex items-center gap-2 text-xs text-muted">
+                      {!isToday &&
+                      /^(Tomorrow|Yesterday|in \d|\d+ days ago)/.test(
+                        group.relativeLabel,
+                      ) ? (
+                        <span>{group.relativeLabel}</span>
+                      ) : null}
+                      <span className="font-mono tabular-nums">
+                        {formatMoney(money(dayTotalMinor, displayCurrency))}
+                      </span>
+                    </span>
+                  </div>
+                  {group.occurrences.map((occ) => (
+                    <OccurrenceItem
+                      key={occ.key}
+                      occ={occ}
+                      onEdit={onEdit}
+                      displayCurrency={displayCurrency}
+                      rates={rates}
+                      today={board.today}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </section>
+        );
+      })}
+
+      {loadingFuture ? (
+        <>
+          <MonthSkeleton />
+          <MonthSkeleton />
+        </>
+      ) : null}
+
+      {editing ? (
+        <MonthIncomeEditor
+          open
+          onOpenChange={(o) => !o && setEditingMonth(null)}
+          month={editing.key}
+          monthLabel={editing.label}
+          mode={board.incomeMode}
+          hourlyRateMinor={board.hourlyRateMinor}
+          defaultHours={board.monthlyHours}
+          override={editing.override}
+          effectiveRawMinor={editing.effective.minor}
+          effectiveCurrency={editing.effective.currency}
+          globalRawMinor={board.globalIncomeMinor}
+          incomeCurrency={board.incomeCurrency}
+          usedCurrencies={board.usedCurrencies}
+          isOverride={editing.isOverride}
+        />
+      ) : null}
+    </div>
+  );
+}

@@ -12,6 +12,7 @@ export {
   verifyEmailAction,
   resendVerificationAction,
   updateProfileAction,
+  updatePreferencesAction,
   changePasswordAction,
   signOutAction,
 } from './lib/actions';
@@ -23,6 +24,7 @@ export {
   newPasswordSchema,
   resetPasswordSchema,
   updateProfileSchema,
+  preferencesSchema,
   changePasswordSchema,
   fieldErrors,
   type SignUpInput,
@@ -31,5 +33,6 @@ export {
   type NewPasswordInput,
   type ResetPasswordInput,
   type UpdateProfileInput,
+  type PreferencesInput,
   type ChangePasswordInput,
 } from './lib/schemas';

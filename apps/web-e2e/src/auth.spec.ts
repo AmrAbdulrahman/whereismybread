@@ -22,7 +22,9 @@ test('sign up, sign out, sign back in', async ({ page }) => {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/calendar$/);
+  // First hit of the dynamic calendar route on a cold dev server / cold DB
+  // connection can take several seconds to render.
+  await expect(page).toHaveURL(/\/plan$/, { timeout: 20_000 });
 
   // account page shows the profile
   await page.goto('/account');
@@ -35,7 +37,7 @@ test('sign up, sign out, sign back in', async ({ page }) => {
     .getByRole('button', { name: 'Sign out' })
     .click();
   await expect(page).toHaveURL(/\/login/);
-  await page.goto('/calendar');
+  await page.goto('/plan');
   await expect(page).toHaveURL(/\/login/);
 
   // wrong password is rejected generically
@@ -48,7 +50,7 @@ test('sign up, sign out, sign back in', async ({ page }) => {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/calendar$/);
+  await expect(page).toHaveURL(/\/plan$/, { timeout: 20_000 });
 });
 
 test('forgot-password always reports the generic message', async ({ page }) => {

@@ -1,7 +1,17 @@
 export { getDb, getSql, type Db } from './lib/client';
 export { checkDatabase, type DbHealth } from './lib/health';
 export * as schema from './lib/schema/index';
-export type { User, NewUser } from './lib/schema/users';
+export type { User, NewUser, MonthIncome } from './lib/schema/users';
+export type {
+  Tag,
+  Account,
+  Bank,
+  PaymentMethod,
+  RecipientMethod,
+  Payment,
+  NewPayment,
+  PaymentEvent,
+} from './lib/schema/payments';
 
 export {
   normalizeEmail,
@@ -9,9 +19,16 @@ export {
   findUserById,
   createUser,
   updateUserProfile,
+  updateUserPreferences,
   updateUserPassword,
   markEmailVerified,
 } from './lib/repositories/users';
+
+export {
+  listMonthIncomes,
+  setMonthIncome,
+  clearMonthIncome,
+} from './lib/repositories/month-incomes';
 
 export {
   createPasswordResetToken,
@@ -23,3 +40,65 @@ export {
   markEmailVerificationTokenUsed,
   deleteUserEmailVerificationTokens,
 } from './lib/repositories/auth-tokens';
+
+export {
+  listPaymentMethods,
+  ensureDefaultMethods,
+  createPaymentMethod,
+  updatePaymentMethod,
+  deletePaymentMethod,
+} from './lib/repositories/payment-methods';
+
+export {
+  listTags,
+  createTag,
+  getOrCreateTags,
+  deleteTag,
+  tagsByIds,
+} from './lib/repositories/tags';
+
+export {
+  listAccounts,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+} from './lib/repositories/accounts';
+
+export {
+  listBanks,
+  createBank,
+  updateBank,
+  deleteBank,
+} from './lib/repositories/banks';
+
+export {
+  listRecipientMethods,
+  createRecipientMethod,
+  updateRecipientMethod,
+  deleteRecipientMethod,
+} from './lib/repositories/recipient-methods';
+
+export {
+  listPayments,
+  listActivePayments,
+  getPayment,
+  createPayment,
+  updatePayment,
+  deletePayment,
+  deletePaymentFrom,
+  splitPaymentForward,
+  type PaymentWithMeta,
+  type PaymentInput,
+  type DeletePaymentResult,
+} from './lib/repositories/payments';
+
+export {
+  listPaymentEvents,
+  markOccurrence,
+  setOccurrenceOverride,
+  mergeOccurrenceOverride,
+  clearOccurrence,
+  type PaymentOverrides,
+} from './lib/repositories/payment-events';
+
+export { getRates } from './lib/repositories/rates';

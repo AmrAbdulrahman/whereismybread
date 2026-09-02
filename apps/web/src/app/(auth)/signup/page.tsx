@@ -22,7 +22,13 @@ export default function SignupPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(undefined);
-    const result = await registerAction(values);
+    let timezone: string | undefined;
+    try {
+      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+    } catch {
+      timezone = undefined;
+    }
+    const result = await registerAction({ ...values, timezone });
     if (!result.ok) setFormError(applyServerErrors(setError, result));
   });
 

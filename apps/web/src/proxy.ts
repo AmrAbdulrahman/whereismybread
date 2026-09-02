@@ -23,7 +23,7 @@ export default auth((req) => {
   }
 
   if (req.auth && (pathname === '/login' || pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/calendar', req.nextUrl));
+    return NextResponse.redirect(new URL('/plan', req.nextUrl));
   }
 
   return NextResponse.next();

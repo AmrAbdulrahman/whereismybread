@@ -1,8 +1,11 @@
 /*
  * "Command Deck" design system — the approved direction.
- * Dark-first: the app renders <html class="dark"> by default.
  *
- * Raw, theme-swappable values live on :root / .dark as --wib-* custom
+ * The app ships with <html class="dark"> for SSR; an inline script in the root
+ * layout (THEME_INIT_SCRIPT) flips it per the stored/system preference before
+ * paint, and <ThemeToggle> lets the user pick light / dark / system.
+ *
+ * Raw, theme-swappable values live on :root (light) / .dark as --wib-* custom
  * properties; @theme inline maps them onto Tailwind's --color-* / --font-*
  * so utilities like `bg-surface` and `font-display` resolve per theme.
  *
@@ -12,26 +15,26 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Brand: the loaf mark's purple (#6321d6), lighter #a98eda for dark grounds
-   and the "bread" half of the wordmark. Neutrals carry a faint violet bias. */
+/* Brand: the loaf mark's purple (#6321d6), lighter for dark grounds and the
+   "bread" half of the wordmark. Neutrals carry a faint violet bias. */
 :root {
-  --wib-ground: #f6f4fb;
+  --wib-ground: #f4f1fa;
   --wib-surface: #ffffff;
   --wib-surface-2: #efecf8;
-  --wib-surface-3: #e4dff2;
-  --wib-ink: #1b1533;
-  --wib-ink-soft: #494360;
-  --wib-muted: #6e697f;
-  --wib-line: #e6e1f1;
-  --wib-line-strong: #d0c9e4;
+  --wib-surface-3: #e2ddf1;
+  --wib-ink: #191330;
+  --wib-ink-soft: #423c58;
+  --wib-muted: #625d74;
+  --wib-line: #e0dbef;
+  --wib-line-strong: #c7bfe0;
 
-  --wib-accent: #6321d6;
+  --wib-accent: #5d1fce;
   --wib-accent-fg: #ffffff;
-  --wib-teal: #0e8074;
+  --wib-teal: #0c7a6e;
 
-  --wib-good: #147a4b;
-  --wib-warn: #8a6410;
-  --wib-danger: #b3261e;
+  --wib-good: #157a4b;
+  --wib-warn: #92600b;
+  --wib-danger: #bb241c;
 
   --wib-tag-essentials: #6321d6;
   --wib-tag-subscriptions: #0e8074;
@@ -41,23 +44,23 @@
 }
 
 .dark {
-  --wib-ground: #15131c;
-  --wib-surface: #1b1826;
-  --wib-surface-2: #221f30;
-  --wib-surface-3: #2c2840;
-  --wib-ink: #e9e7f0;
-  --wib-ink-soft: #c0bcce;
-  --wib-muted: #8f8aa1;
-  --wib-line: #2a2740;
-  --wib-line-strong: #3b3757;
+  --wib-ground: #0e0c14;
+  --wib-surface: #1b1927;
+  --wib-surface-2: #272338;
+  --wib-surface-3: #34304a;
+  --wib-ink: #f4f2f9;
+  --wib-ink-soft: #cdc9db;
+  --wib-muted: #a29cb4;
+  --wib-line: #39344f;
+  --wib-line-strong: #544e73;
 
-  --wib-accent: #a98eda;
-  --wib-accent-fg: #15131c;
-  --wib-teal: #4bd6c6;
+  --wib-accent: #b399ee;
+  --wib-accent-fg: #14121c;
+  --wib-teal: #48d9c8;
 
-  --wib-good: #6fcf97;
-  --wib-warn: #e0b06a;
-  --wib-danger: #f08a8a;
+  --wib-good: #66d69c;
+  --wib-warn: #e7b878;
+  --wib-danger: #f28d8d;
 
   --wib-tag-essentials: #c3b0ec;
   --wib-tag-subscriptions: #8fe7db;

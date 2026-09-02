@@ -7,7 +7,7 @@ import { AppShell, icons, type NavItem } from '@wib/ui';
 import { UserMenu } from './_user-menu';
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/calendar', label: 'Calendar', icon: icons.calendar },
+  { href: '/plan', label: 'Plan', icon: icons.calendar },
   { href: '/subscriptions', label: 'Subscriptions', icon: icons.subscriptions },
   { href: '/installments', label: 'Installments', icon: icons.installments },
   { href: '/checklist', label: 'Checklist', icon: icons.checklist },

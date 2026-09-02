@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { signOutAction } from '@wib/auth';
+import { ThemeToggle } from '@wib/ui';
 
 export function UserMenu({
   name,
@@ -21,6 +22,7 @@ export function UserMenu({
         </div>
         <div className="truncate text-[11px] text-muted">{email}</div>
       </Link>
+      <ThemeToggle className="mx-1" />
       <form action={signOutAction}>
         <button
           type="submit"
