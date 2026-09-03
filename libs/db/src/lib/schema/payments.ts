@@ -78,6 +78,10 @@ export const banks = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     color: text('color').notNull().default('#6321d6'),
+    /** An icon-set key (see `METHOD_ICON_KEYS`); `null` → show the colour dot. */
+    iconKey: text('icon_key'),
+    /** An uploaded / fetched image (data: URI) used instead of `icon_key`. */
+    logoUrl: text('logo_url'),
     sortOrder: integer('sort_order').notNull().default(0),
     ...audit,
   },
@@ -204,6 +208,8 @@ export const payments = pgTable('payments', {
   brandColor: text('brand_color'),
   isSubscription: boolean('is_subscription').notNull().default(false),
   notes: text('notes'),
+  /** A user note flagging the whole series for attention; `null` = not flagged. */
+  flagNote: text('flag_note'),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   ...audit,
 }, (t) => [
@@ -269,9 +275,9 @@ export interface PaymentOverrides {
 }
 
 /**
- * One row per occurrence the user has touched — marked paid/skipped, and/or
- * given a per-month override. `status` is null when the row only carries an
- * override.
+ * One row per occurrence the user has touched — marked paid/skipped, given a
+ * per-month override, and/or flagged. `status` is null when the row only carries
+ * an override or a flag.
  */
 export const paymentEvents = pgTable(
   'payment_events',
@@ -288,6 +294,8 @@ export const paymentEvents = pgTable(
     paidAt: timestamp('paid_at', { withTimezone: true }),
     amountMinor: integer('amount_minor'),
     overrides: jsonb('overrides').$type<PaymentOverrides>(),
+    /** A user note flagging just this occurrence; `null` = not flagged. */
+    flagNote: text('flag_note'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

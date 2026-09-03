@@ -37,11 +37,13 @@ export function PaymentCalendar({
   month,
   onMonthChange,
   onEdit,
+  onFlag,
 }: {
   board: PaymentBoard;
   month: IsoDate; // first of month
   onMonthChange: (month: IsoDate) => void;
   onEdit: (paymentId: string, dueDate: string) => void;
+  onFlag: (paymentId: string, dueDate: string) => void;
 }) {
   const [selected, setSelected] = useState<IsoDate | null>(board.today);
 
@@ -168,6 +170,7 @@ export function PaymentCalendar({
                         opacity: occ.status === 'skipped' ? 0.55 : undefined,
                       }}
                     >
+                      {occ.instanceFlagNote || occ.seriesFlagNote ? '🚩 ' : ''}
                       {dueAlertIcon(occ, board.today)}
                       {occ.name}
                     </span>
@@ -204,6 +207,7 @@ export function PaymentCalendar({
                     key={occ.key}
                     occ={occ}
                     onEdit={onEdit}
+                    onFlag={onFlag}
                     displayCurrency={board.displayCurrency}
                     rates={board.rates}
                     today={board.today}

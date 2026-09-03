@@ -5,6 +5,7 @@ import { formatConverted, money, type RateMap } from '@wib/domain';
 import { cn, MethodIcon } from '@wib/ui';
 import {
   ChevronDown,
+  Flag,
   Link as LinkIcon,
   OctagonAlert,
   Pencil,
@@ -47,6 +48,7 @@ const DUE_STYLE: Record<
 export function OccurrenceItem({
   occ,
   onEdit,
+  onFlag,
   onToggle,
   displayCurrency,
   rates,
@@ -55,6 +57,8 @@ export function OccurrenceItem({
 }: {
   occ: BoardOccurrence;
   onEdit?: (paymentId: string, dueDate: string) => void;
+  /** Open the flag modal for this occurrence. */
+  onFlag?: (paymentId: string, dueDate: string) => void;
   /** Fired the instant the paid checkbox is clicked, before the server responds
    * — lets the list re-sort (paid → bottom) with an animation. */
   onToggle?: (paid: boolean) => void;
@@ -79,6 +83,13 @@ export function OccurrenceItem({
 
   const dueAlert = today ? dueAlertFor(occ, today) : null;
   const dueStyle = dueAlert ? DUE_STYLE[dueAlert.level] : null;
+
+  const flagNote = occ.instanceFlagNote ?? occ.seriesFlagNote;
+  const flagScope = occ.instanceFlagNote
+    ? 'this occurrence'
+    : occ.seriesFlagNote
+      ? 'whole series'
+      : null;
 
   const toggle = () => {
     const nextPaid = occ.status !== 'paid';
@@ -299,10 +310,18 @@ export function OccurrenceItem({
           />
           {occ.bank ? (
             <span className="inline-flex items-center gap-1">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: occ.bank.color }}
-              />
+              {occ.bank.iconKey || occ.bank.logoUrl ? (
+                <MethodIcon
+                  iconKey={occ.bank.iconKey ?? 'bank'}
+                  logoUrl={occ.bank.logoUrl}
+                  size={12}
+                />
+              ) : (
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: occ.bank.color }}
+                />
+              )}
               {occ.bank.name}
             </span>
           ) : null}
@@ -350,19 +369,59 @@ export function OccurrenceItem({
         {formatConverted(occ.amount, displayCurrency, rates)}
       </span>
 
-      {skipped ? (
-        <span className="h-7 w-7 shrink-0" aria-hidden />
-      ) : (
+      {!skipped && onFlag ? (
         <button
           type="button"
-          onClick={() => onEdit?.(occ.paymentId, occ.dueDate)}
+          onClick={() => onFlag(occ.paymentId, occ.dueDate)}
+          aria-label={flagNote ? `Edit flag on ${occ.name}` : `Flag ${occ.name}`}
+          aria-pressed={flagNote != null}
+          className={cn(
+            'grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors',
+            flagNote
+              ? 'text-warn hover:bg-warn/10'
+              : 'text-muted hover:bg-surface-2 hover:text-ink',
+          )}
+        >
+          <Flag
+            size={14}
+            strokeWidth={2}
+            fill={flagNote ? 'currentColor' : 'none'}
+          />
+        </button>
+      ) : null}
+
+      {onEdit && skipped ? (
+        <span className="h-7 w-7 shrink-0" aria-hidden />
+      ) : onEdit ? (
+        <button
+          type="button"
+          onClick={() => onEdit(occ.paymentId, occ.dueDate)}
           aria-label={`Edit ${occ.name}`}
           className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink"
         >
           <Pencil size={14} strokeWidth={2} />
         </button>
-      )}
+      ) : null}
       </div>
+
+      {flagNote && !skipped ? (
+        <button
+          type="button"
+          onClick={() => onFlag?.(occ.paymentId, occ.dueDate)}
+          className={cn(
+            'flex w-full items-start gap-1.5 border-t border-warn/40 bg-warn/10 text-left text-xs text-warn',
+            compact ? 'px-2.5 py-1.5' : 'px-3 py-2',
+          )}
+        >
+          <Flag size={12} strokeWidth={2.5} fill="currentColor" className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            <span className="whitespace-pre-wrap break-words">{flagNote}</span>
+            {flagScope ? (
+              <span className="ml-1 font-medium opacity-70">· {flagScope}</span>
+            ) : null}
+          </span>
+        </button>
+      ) : null}
 
       {items && showItems ? (
         <ul

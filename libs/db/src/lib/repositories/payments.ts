@@ -259,6 +259,18 @@ export async function deletePayment(userId: string, id: string): Promise<void> {
     .where(and(eq(payments.id, id), eq(payments.userId, userId)));
 }
 
+/** Flag / unflag the whole series. `note` of `null` clears the flag. */
+export async function setPaymentFlag(
+  userId: string,
+  id: string,
+  note: string | null,
+): Promise<void> {
+  await getDb()
+    .update(payments)
+    .set({ flagNote: note, updatedAt: new Date() })
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+}
+
 export interface DeletePaymentResult {
   /** True when the row was removed outright (no earlier month to preserve). */
   removed: boolean;

@@ -135,6 +135,51 @@ export async function mergeOccurrenceOverride(
   });
 }
 
+/**
+ * Flag / unflag a single occurrence with a note. An empty / `null` note clears
+ * the flag, and drops the row if it carries nothing else (no status, override).
+ */
+export async function setOccurrenceFlag(
+  userId: string,
+  input: { paymentId: string; dueDate: string; note: string | null },
+): Promise<void> {
+  const note = input.note?.trim() ? input.note.trim() : null;
+  const match = and(
+    eq(paymentEvents.userId, userId),
+    eq(paymentEvents.paymentId, input.paymentId),
+    eq(paymentEvents.dueDate, input.dueDate),
+  );
+
+  if (note == null) {
+    await getDb().update(paymentEvents).set({ flagNote: null }).where(match);
+    await getDb()
+      .delete(paymentEvents)
+      .where(
+        and(
+          match,
+          isNull(paymentEvents.status),
+          isNull(paymentEvents.overrides),
+          isNull(paymentEvents.flagNote),
+        ),
+      );
+    return;
+  }
+
+  await getDb()
+    .insert(paymentEvents)
+    .values({
+      userId,
+      paymentId: input.paymentId,
+      dueDate: input.dueDate,
+      status: null,
+      flagNote: note,
+    })
+    .onConflictDoUpdate({
+      target: [paymentEvents.paymentId, paymentEvents.dueDate],
+      set: { flagNote: note },
+    });
+}
+
 /** Forget everything the user did to one occurrence — status and override. */
 export async function clearOccurrence(
   userId: string,

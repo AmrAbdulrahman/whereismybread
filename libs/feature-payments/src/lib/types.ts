@@ -26,6 +26,8 @@ export interface OccurrenceBank {
   id: string;
   name: string;
   color: string;
+  iconKey: string | null;
+  logoUrl: string | null;
 }
 
 export interface OccurrenceRecipientMethod {
@@ -95,6 +97,39 @@ export interface BoardOccurrence {
   recipientMethod: OccurrenceRecipientMethod | null;
   tags: OccurrenceTag[];
   status: 'scheduled' | 'paid' | 'skipped';
+  /** A note flagging the whole series for attention (`null` = not flagged). */
+  seriesFlagNote: string | null;
+  /** A note flagging just this occurrence (`null` = not flagged). */
+  instanceFlagNote: string | null;
+}
+
+/** One month's section of the manual-payments checklist. */
+export interface ChecklistMonth {
+  /** `YYYY-MM`. */
+  key: string;
+  /** e.g. "September 2026". */
+  label: string;
+  /** Manual occurrences for the month, unpaid first then done/skipped. */
+  occurrences: BoardOccurrence[];
+  /** Occurrences marked paid. */
+  doneCount: number;
+  /** Occurrences still to pay (paid + scheduled, excludes skipped). */
+  totalCount: number;
+  /** Sum of the still-scheduled ones, in the display currency's minor units. */
+  remainingMinor: number;
+  /** True for months before the current checklist month. */
+  isPast: boolean;
+  isCurrent: boolean;
+}
+
+export interface ChecklistData {
+  months: ChecklistMonth[];
+  currentMonthKey: string;
+  today: string;
+  displayCurrency: string;
+  rates: RateMap;
+  /** No manual payments exist at all. */
+  empty: boolean;
 }
 
 export interface DayGroup {

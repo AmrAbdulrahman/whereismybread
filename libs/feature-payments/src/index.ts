@@ -2,6 +2,8 @@
 
 export { PaymentsView } from './components/payments-view';
 export { PaymentForm, type PaymentFormProps } from './components/payment-form';
+export { BankManager } from './components/bank-manager';
+export { ChecklistView } from './components/checklist-view';
 
 export {
   savePaymentAction,
@@ -20,6 +22,7 @@ export {
   markOccurrenceAction,
   clearOccurrenceAction,
   resetOccurrenceAction,
+  flagPaymentAction,
   setMonthIncomeAction,
   resetMonthIncomeAction,
   uploadAttachmentAction,
@@ -27,6 +30,7 @@ export {
   discardBlobsAction,
   type AttachmentDraft,
   type LabelRow,
+  type BankMark,
   type EditScope,
   type ScopeInput,
 } from './lib/actions';

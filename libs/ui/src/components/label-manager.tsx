@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import { cn } from '../lib/cn';
 import { COLOR_PALETTE } from '../lib/colors';
 import { Pencil, Plus, Search, Trash2, X } from '../icons';
@@ -9,22 +16,24 @@ import { ColorPicker } from './color-picker';
 import { Field, Input, Label } from './input';
 import { ResponsiveModal } from './responsive-modal';
 
-export interface LabelItem {
+export interface LabelItem<M = undefined> {
   id: string;
   name: string;
   color: string;
   /** How many things reference this label (e.g. payments). */
   usageCount: number;
+  /** Optional extra payload (e.g. a bank's icon / logo). */
+  mark?: M;
 }
 
-export interface LabelSaveResult {
+export interface LabelSaveResult<M = undefined> {
   ok: boolean;
-  item?: LabelItem;
+  item?: LabelItem<M>;
   fieldErrors?: Record<string, string[]>;
   error?: string;
 }
 
-export interface LabelManagerProps {
+export interface LabelManagerProps<M = undefined> {
   title: string;
   /** Lowercase singular, e.g. "tag" / "account" / "bank". */
   noun: string;
@@ -37,13 +46,23 @@ export interface LabelManagerProps {
    * `cascade` → deleting removes the label from everything it's on.
    */
   deleteImpact: 'unlink' | 'cascade';
-  items: LabelItem[];
+  items: LabelItem<M>[];
   onSave: (
     id: string | null,
-    values: { name: string; color: string },
-  ) => Promise<LabelSaveResult>;
+    values: { name: string; color: string; mark?: M },
+  ) => Promise<LabelSaveResult<M>>;
   onDelete: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  onRefresh: () => Promise<LabelItem[]>;
+  onRefresh: () => Promise<LabelItem<M>[]>;
+  /** Render a per-row mark instead of the colour dot (e.g. an icon / logo). */
+  renderMark?: (item: LabelItem<M>) => ReactNode;
+  /** An extra form section that edits `mark`; brings its own field/label. */
+  renderMarkEditor?: (
+    mark: M,
+    setMark: Dispatch<SetStateAction<M>>,
+    setColor: Dispatch<SetStateAction<string>>,
+  ) => ReactNode;
+  /** The `mark` a new item starts with — required when `renderMarkEditor` is set. */
+  newMark?: M;
 }
 
 const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
@@ -51,8 +70,9 @@ const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`;
 /**
  * List / add / edit / delete a set of colour-coded labels (tags, accounts,
  * banks) with a stats strip, a name filter, and a usage-aware delete confirm.
+ * Optionally each label carries a `mark` (bank icon / logo).
  */
-export function LabelManager({
+export function LabelManager<M = undefined>({
   title,
   noun,
   description,
@@ -63,14 +83,19 @@ export function LabelManager({
   onSave,
   onDelete,
   onRefresh,
-}: LabelManagerProps) {
+  renderMark,
+  renderMarkEditor,
+  newMark,
+}: LabelManagerProps<M>) {
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useState('');
   const [unusedOnly, setUnusedOnly] = useState(false);
   const [sheet, setSheet] = useState<
-    { mode: 'closed' } | { mode: 'new' } | { mode: 'edit'; item: LabelItem }
+    | { mode: 'closed' }
+    | { mode: 'new' }
+    | { mode: 'edit'; item: LabelItem<M> }
   >({ mode: 'closed' });
-  const [confirmDelete, setConfirmDelete] = useState<LabelItem | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<LabelItem<M> | null>(null);
   const [inlineConfirm, setInlineConfirm] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string>();
@@ -98,11 +123,13 @@ export function LabelManager({
       .filter((i) => (q ? i.name.toLowerCase().includes(q) : true));
   }, [items, query, unusedOnly]);
 
-  const onSaved = (item: LabelItem) => {
+  const onSaved = (item: LabelItem<M>) => {
     setItems((prev) => {
       const next = prev.some((t) => t.id === item.id)
         ? prev.map((t) =>
-            t.id === item.id ? { ...t, name: item.name, color: item.color } : t,
+            t.id === item.id
+              ? { ...t, name: item.name, color: item.color, mark: item.mark }
+              : t,
           )
         : [...prev, item];
       return [...next].sort((a, b) =>
@@ -113,7 +140,7 @@ export function LabelManager({
     void refresh();
   };
 
-  const runDelete = async (item: LabelItem) => {
+  const runDelete = async (item: LabelItem<M>) => {
     setBusyId(item.id);
     setDeleteError(undefined);
     setConfirmDelete(null);
@@ -128,7 +155,7 @@ export function LabelManager({
     void refresh();
   };
 
-  const askDelete = (item: LabelItem) => {
+  const askDelete = (item: LabelItem<M>) => {
     if (item.usageCount > 0) setConfirmDelete(item);
     else setInlineConfirm(item.id);
   };
@@ -233,11 +260,15 @@ export function LabelManager({
                 busyId === item.id && 'opacity-50',
               )}
             >
-              <span
-                className="h-3 w-3 shrink-0 rounded-full"
-                style={{ background: item.color }}
-                aria-hidden
-              />
+              {renderMark ? (
+                <span className="shrink-0">{renderMark(item)}</span>
+              ) : (
+                <span
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ background: item.color }}
+                  aria-hidden
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-ink">
                   {item.name}
@@ -301,14 +332,16 @@ export function LabelManager({
         title={sheet.mode === 'edit' ? `Edit ${noun}` : `New ${noun}`}
       >
         {sheet.mode !== 'closed' ? (
-          <LabelFormBody
+          <LabelFormBody<M>
             key={sheet.mode === 'edit' ? sheet.item.id : 'new'}
             noun={noun}
             placeholder={namePlaceholder}
             initial={sheet.mode === 'edit' ? sheet.item : undefined}
+            newMark={newMark}
             onSave={onSave}
             onSaved={onSaved}
             onCancel={() => setSheet({ mode: 'closed' })}
+            renderMarkEditor={renderMarkEditor}
           />
         ) : null}
       </ResponsiveModal>
@@ -397,23 +430,30 @@ function Stat({
   );
 }
 
-function LabelFormBody({
+function LabelFormBody<M = undefined>({
   noun,
   placeholder,
   initial,
+  newMark,
   onSave,
   onSaved,
   onCancel,
+  renderMarkEditor,
 }: {
   noun: string;
   placeholder: string;
-  initial?: LabelItem;
-  onSave: LabelManagerProps['onSave'];
-  onSaved: (item: LabelItem) => void;
+  initial?: LabelItem<M>;
+  newMark?: M;
+  onSave: LabelManagerProps<M>['onSave'];
+  onSaved: (item: LabelItem<M>) => void;
   onCancel: () => void;
+  renderMarkEditor?: LabelManagerProps<M>['renderMarkEditor'];
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [color, setColor] = useState(initial?.color ?? COLOR_PALETTE[0]);
+  const [mark, setMark] = useState<M>(
+    (initial?.mark ?? newMark) as M,
+  );
   const [nameError, setNameError] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -429,7 +469,11 @@ function LabelFormBody({
     setBusy(true);
     setNameError(undefined);
     setFormError(undefined);
-    const res = await onSave(initial?.id ?? null, { name: trimmed, color });
+    const res = await onSave(initial?.id ?? null, {
+      name: trimmed,
+      color,
+      ...(renderMarkEditor ? { mark } : {}),
+    });
     setBusy(false);
     if (res.ok && res.item) {
       onSaved(res.item);
@@ -475,6 +519,8 @@ function LabelFormBody({
         </span>
         <ColorPicker value={color} onChange={setColor} />
       </Field>
+
+      {renderMarkEditor ? renderMarkEditor(mark, setMark, setColor) : null}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="ghost" onClick={onCancel}>

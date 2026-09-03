@@ -5,6 +5,12 @@ export {
   type PaymentsContext,
 } from './lib/queries';
 export {
+  getChecklistData,
+  checklistMonthKey,
+  type ChecklistData,
+  type ChecklistMonth,
+} from './lib/checklist';
+export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_ALLOWED_TYPES,
   ATTACHMENT_MAX_BYTES,

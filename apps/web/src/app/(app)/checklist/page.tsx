@@ -1,9 +1,15 @@
-import { Placeholder } from '../../_components/placeholder';
-export const metadata = { title: 'Manual transfers' };
-export default function Page() {
-  return (
-    <Placeholder title="Manual transfers checklist" phase="Phase 4">
-      A monthly to-do list of transfers you send by hand.
-    </Placeholder>
-  );
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '@wib/auth/server';
+import { ChecklistView } from '@wib/feature-payments';
+import { getChecklistData } from '@wib/feature-payments/server';
+
+export const metadata = { title: 'Manual payments' };
+export const dynamic = 'force-dynamic';
+
+export default async function ChecklistPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
+
+  const data = await getChecklistData();
+  return <ChecklistView {...data} />;
 }

@@ -1,11 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
-import { LabelManager } from '@wib/ui';
-import {
-  deleteBankAction,
-  listBanksAction,
-  saveBankAction,
-} from '@wib/feature-payments';
+import { BankManager } from '@wib/feature-payments';
 import { getBanks } from '@wib/feature-payments/server';
 
 export const metadata = { title: 'Banks' };
@@ -17,22 +12,14 @@ export default async function BanksPage() {
 
   const banks = await getBanks();
   return (
-    <LabelManager
-      title="Banks"
-      noun="bank"
-      usageNoun="payment"
-      deleteImpact="unlink"
-      description="The bank behind a direct-debit or card payment."
-      namePlaceholder="Monzo, Barclays, Revolut…"
+    <BankManager
       items={banks.map((b) => ({
         id: b.id,
         name: b.name,
         color: b.color,
         usageCount: b.paymentCount,
+        mark: { iconKey: b.iconKey, logoUrl: b.logoUrl },
       }))}
-      onSave={saveBankAction}
-      onDelete={deleteBankAction}
-      onRefresh={listBanksAction}
     />
   );
 }

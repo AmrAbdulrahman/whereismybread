@@ -22,9 +22,16 @@ export async function listBanks(userId: string): Promise<Bank[]> {
     .orderBy(asc(banks.sortOrder), asc(sql`lower(${banks.name})`));
 }
 
+export interface BankInput {
+  name: string;
+  color?: string;
+  iconKey?: string | null;
+  logoUrl?: string | null;
+}
+
 export async function createBank(
   userId: string,
-  input: { name: string; color?: string },
+  input: BankInput,
 ): Promise<Bank> {
   const color =
     input.color ??
@@ -33,7 +40,13 @@ export async function createBank(
 
   const rows = await getDb()
     .insert(banks)
-    .values({ userId, name: input.name.trim(), color })
+    .values({
+      userId,
+      name: input.name.trim(),
+      color,
+      iconKey: input.iconKey ?? null,
+      logoUrl: input.logoUrl ?? null,
+    })
     .onConflictDoNothing()
     .returning();
   if (rows[0]) return rows[0];
@@ -61,6 +74,8 @@ export async function listBanksWithUsage(
       userId: banks.userId,
       name: banks.name,
       color: banks.color,
+      iconKey: banks.iconKey,
+      logoUrl: banks.logoUrl,
       sortOrder: banks.sortOrder,
       createdAt: banks.createdAt,
       updatedAt: banks.updatedAt,
@@ -98,7 +113,13 @@ export async function getBankByName(
 export async function updateBank(
   userId: string,
   id: string,
-  patch: Partial<{ name: string; color: string; sortOrder: number }>,
+  patch: Partial<{
+    name: string;
+    color: string;
+    iconKey: string | null;
+    logoUrl: string | null;
+    sortOrder: number;
+  }>,
 ): Promise<Bank | null> {
   if (patch.name != null) {
     const clash = await getDb()

@@ -268,7 +268,15 @@ function buildBoard({
         account: account
           ? { id: account.id, name: account.name, color: account.color }
           : null,
-        bank: bank ? { id: bank.id, name: bank.name, color: bank.color } : null,
+        bank: bank
+          ? {
+              id: bank.id,
+              name: bank.name,
+              color: bank.color,
+              iconKey: bank.iconKey,
+              logoUrl: bank.logoUrl,
+            }
+          : null,
         recipientMethod: recipientMethod
           ? {
               id: recipientMethod.id,
@@ -280,6 +288,8 @@ function buildBoard({
           : null,
         tags: p.tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
         status: ev?.status ?? 'scheduled',
+        seriesFlagNote: p.flagNote ?? null,
+        instanceFlagNote: ev?.flagNote ?? null,
       });
     }
   }

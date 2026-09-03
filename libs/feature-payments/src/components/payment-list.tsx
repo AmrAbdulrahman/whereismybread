@@ -148,12 +148,14 @@ export function PaymentList({
   filter = EMPTY_LIST_FILTER,
   stickyTop = 0,
   onEdit,
+  onFlag,
 }: {
   board: PaymentBoard;
   filter?: ListFilterValue;
   /** Px offset for the sticky month headers — the height of the sticky panel. */
   stickyTop?: number;
   onEdit: (paymentId: string, dueDate: string) => void;
+  onFlag: (paymentId: string, dueDate: string) => void;
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
@@ -800,6 +802,7 @@ export function PaymentList({
                           <OccurrenceItem
                             occ={occ}
                             onEdit={onEdit}
+                            onFlag={onFlag}
                             onToggle={(paid) => setLocalPaid(occ.key, paid)}
                             displayCurrency={displayCurrency}
                             rates={rates}

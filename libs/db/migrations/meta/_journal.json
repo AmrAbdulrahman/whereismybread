@@ -148,6 +148,20 @@
       "when": 1788433125414,
       "tag": "0020_payment_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788461196208,
+      "tag": "0021_payment_flags",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788462453342,
+      "tag": "0022_bank_icons",
+      "breakpoints": true
     }
   ]
 }

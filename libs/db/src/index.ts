@@ -98,6 +98,7 @@ export {
   createPayment,
   updatePayment,
   deletePayment,
+  setPaymentFlag,
   deletePaymentFrom,
   splitPaymentForward,
   type PaymentWithMeta,
@@ -125,6 +126,7 @@ export {
   markOccurrence,
   setOccurrenceOverride,
   mergeOccurrenceOverride,
+  setOccurrenceFlag,
   clearOccurrence,
   type PaymentOverrides,
 } from './lib/repositories/payment-events';

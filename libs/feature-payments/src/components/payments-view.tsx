@@ -20,6 +20,7 @@ import {
 } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
 import { Plus } from '@wib/ui/icons';
+import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
 import { PaymentForm } from './payment-form';
 import { PaymentList } from './payment-list';
@@ -173,6 +174,22 @@ export function PaymentsView({
       payment: ov ? applyOverride(base, ov) : base,
       occurrenceDate,
       hasOverride: ov != null,
+    });
+  };
+
+  const [flagTarget, setFlagTarget] = useState<FlagTarget | null>(null);
+  const openFlag = (paymentId: string, occurrenceDate: string) => {
+    const occ = board.occurrences.find(
+      (o) => o.paymentId === paymentId && o.dueDate === occurrenceDate,
+    );
+    if (!occ) return;
+    setFlagTarget({
+      paymentId,
+      name: occ.name,
+      occurrenceDate,
+      recurring: !occ.isOneTime,
+      seriesNote: occ.seriesFlagNote,
+      instanceNote: occ.instanceFlagNote,
     });
   };
 
@@ -344,6 +361,7 @@ export function PaymentsView({
           filter={listFilter}
           stickyTop={panelH}
           onEdit={openEdit}
+          onFlag={openFlag}
         />
       ) : (
         <PaymentCalendar
@@ -351,10 +369,12 @@ export function PaymentsView({
           month={calMonth}
           onMonthChange={changeMonth}
           onEdit={openEdit}
+          onFlag={openFlag}
         />
       )}
 
       {formModal}
+      <FlagModal target={flagTarget} onDone={() => setFlagTarget(null)} />
     </div>
   );
 }

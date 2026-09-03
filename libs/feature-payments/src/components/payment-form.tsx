@@ -768,10 +768,18 @@ export function PaymentForm({
                   : 'border-line-strong text-muted hover:text-ink',
               )}
             >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: b.color }}
-              />
+              {b.iconKey || b.logoUrl ? (
+                <MethodIcon
+                  iconKey={b.iconKey ?? 'bank'}
+                  logoUrl={b.logoUrl}
+                  size={13}
+                />
+              ) : (
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: b.color }}
+                />
+              )}
               {b.name}
             </button>
           ))}

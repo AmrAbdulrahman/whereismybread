@@ -26,7 +26,9 @@ import {
   markOccurrence,
   reconcileAttachments,
   setMonthIncome,
+  setOccurrenceFlag,
   setOccurrenceOverride,
+  setPaymentFlag,
   splitPaymentForward,
   updateAccount,
   updateBank,
@@ -329,22 +331,37 @@ export async function createBankAction(
 
 // --- Account / bank management (the /accounts + /banks pages) --------------
 
+/** A bank's optional icon-set key + uploaded / fetched logo (data: URI). */
+export interface BankMark {
+  iconKey: string | null;
+  logoUrl: string | null;
+}
+
 /** The `{id,name,color}` a manager row needs, plus its payment count. */
 export interface LabelRow {
   id: string;
   name: string;
   color: string;
   usageCount: number;
+  /** Banks only — their custom icon / logo. */
+  mark?: BankMark;
 }
 
-const toLabelRows = (
-  rows: AccountWithUsage[] | BankWithUsage[],
-): LabelRow[] =>
+const toLabelRows = (rows: AccountWithUsage[]): LabelRow[] =>
   rows.map((r) => ({
     id: r.id,
     name: r.name,
     color: r.color,
     usageCount: r.paymentCount,
+  }));
+
+const toBankRows = (rows: BankWithUsage[]): LabelRow[] =>
+  rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    usageCount: r.paymentCount,
+    mark: { iconKey: r.iconKey, logoUrl: r.logoUrl },
   }));
 
 export async function saveAccountAction(
@@ -406,13 +423,32 @@ export async function listAccountsAction(): Promise<LabelRow[]> {
 
 export async function saveBankAction(
   id: string | null,
-  values: BankFormValues,
+  values: { name: string; color: string; mark?: BankMark },
 ): Promise<FormState & { item?: LabelRow }> {
   const userId = await requireUserId();
-  const parsed = bankFormSchema.safeParse(values);
+  const parsed = bankFormSchema.safeParse({
+    name: values.name,
+    color: values.color,
+    iconKey: values.mark?.iconKey ?? null,
+    logoUrl: values.mark?.logoUrl ?? null,
+  } satisfies BankFormValues);
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
   }
+
+  const row = (bank: {
+    id: string;
+    name: string;
+    color: string;
+    iconKey: string | null;
+    logoUrl: string | null;
+  }): LabelRow => ({
+    id: bank.id,
+    name: bank.name,
+    color: bank.color,
+    usageCount: 0,
+    mark: { iconKey: bank.iconKey, logoUrl: bank.logoUrl },
+  });
 
   if (!id) {
     if (await getBankByName(userId, parsed.data.name)) {
@@ -424,10 +460,7 @@ export async function saveBankAction(
     const bank = await createBank(userId, parsed.data);
     revalidatePath('/banks');
     revalidatePath('/plan');
-    return {
-      ok: true,
-      item: { id: bank.id, name: bank.name, color: bank.color, usageCount: 0 },
-    };
+    return { ok: true, item: row(bank) };
   }
 
   const bank = await updateBank(userId, id, parsed.data);
@@ -439,10 +472,7 @@ export async function saveBankAction(
   }
   revalidatePath('/banks');
   revalidatePath('/plan');
-  return {
-    ok: true,
-    item: { id: bank.id, name: bank.name, color: bank.color, usageCount: 0 },
-  };
+  return { ok: true, item: row(bank) };
 }
 
 export async function deleteBankAction(id: string): Promise<FormState> {
@@ -458,7 +488,7 @@ export async function deleteBankAction(id: string): Promise<FormState> {
 
 export async function listBanksAction(): Promise<LabelRow[]> {
   const userId = await requireUserId();
-  return toLabelRows(await listBanksWithUsage(userId));
+  return toBankRows(await listBanksWithUsage(userId));
 }
 
 export async function fetchBrandingAction(
@@ -558,6 +588,7 @@ export async function markOccurrenceAction(input: {
   const userId = await requireUserId();
   await markOccurrence(userId, input);
   revalidatePath('/plan');
+  revalidatePath('/checklist');
   return { ok: true };
 }
 
@@ -568,6 +599,7 @@ export async function clearOccurrenceAction(
   const userId = await requireUserId();
   await clearOccurrence(userId, paymentId, dueDate);
   revalidatePath('/plan');
+  revalidatePath('/checklist');
   return { ok: true };
 }
 
@@ -632,6 +664,46 @@ export async function resetOccurrenceAction(
 ): Promise<FormState> {
   const userId = await requireUserId();
   await setOccurrenceOverride(userId, { paymentId, dueDate, overrides: {} });
+  revalidatePath('/plan');
+  return { ok: true };
+}
+
+/**
+ * Flag (or, with an empty note, unflag) a payment. `scope: 'series'` sets the
+ * note on the payment itself; `scope: 'instance'` sets it on the one occurrence
+ * (`occurrenceDate` required). The two are independent.
+ */
+export async function flagPaymentAction(input: {
+  paymentId: string;
+  scope: 'series' | 'instance';
+  occurrenceDate?: string;
+  note: string;
+}): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof input?.paymentId !== 'string' || !input.paymentId) {
+    return { ok: false, error: 'That payment no longer exists.' };
+  }
+  const note =
+    typeof input.note === 'string' && input.note.trim()
+      ? input.note.trim().slice(0, 1000)
+      : null;
+
+  if (input.scope === 'instance') {
+    if (
+      typeof input.occurrenceDate !== 'string' ||
+      !ISO_DATE.test(input.occurrenceDate)
+    ) {
+      return { ok: false, error: 'Missing the occurrence to flag.' };
+    }
+    await setOccurrenceFlag(userId, {
+      paymentId: input.paymentId,
+      dueDate: input.occurrenceDate,
+      note,
+    });
+  } else {
+    await setPaymentFlag(userId, input.paymentId, note);
+  }
+
   revalidatePath('/plan');
   return { ok: true };
 }
