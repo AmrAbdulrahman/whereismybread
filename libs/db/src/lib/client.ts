@@ -26,5 +26,8 @@ function create() {
     max: 10,
     idle_timeout: 20,
   });
-  return { db: drizzle(sql, { schema }), sql };
+  // Set WIB_DB_PERF=1 to log one line per query — handy for spotting N+1s and
+  // duplicate reads while tuning. No-op otherwise.
+  const logger = process.env['WIB_DB_PERF'] === '1';
+  return { db: drizzle(sql, { schema, logger }), sql };
 }

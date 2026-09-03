@@ -91,7 +91,9 @@ export async function getPaymentBoard(
 
   const { methods, accounts, banks, recipientMethods } = lookups;
   const [payments, events, rates, incomeRows] = await Promise.all([
-    listActivePayments(user.id),
+    // Reuse the method/account/bank lists already loaded in `lookups` instead
+    // of letting `attachMeta` re-query them.
+    listActivePayments(user.id, { methods, accounts, banks }),
     listPaymentEvents(user.id, { from, to }),
     getRates(),
     listMonthIncomes(user.id, { from: from.slice(0, 7), to: to.slice(0, 7) }),

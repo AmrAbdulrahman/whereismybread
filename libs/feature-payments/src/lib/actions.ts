@@ -12,7 +12,7 @@ import {
   createRecipientMethod,
   deletePaymentFrom,
   getOrCreateTags,
-  getPayment,
+  getPaymentRow,
   markOccurrence,
   setMonthIncome,
   setOccurrenceOverride,
@@ -151,7 +151,7 @@ export async function savePaymentAction(
     return { ok: true };
   }
 
-  const original = await getPayment(userId, paymentId);
+  const original = await getPaymentRow(userId, paymentId);
   if (!original) return { ok: false, error: 'That payment no longer exists.' };
 
   // Editing a recurring series: keep its start month, just move the day.
@@ -294,7 +294,7 @@ export async function deletePaymentAction(
   const user = await requireUser();
   const scope = normalizeScope(scopeInput);
 
-  const original = await getPayment(user.id, paymentId);
+  const original = await getPaymentRow(user.id, paymentId);
   if (!original) return { ok: false, error: 'That payment no longer exists.' };
 
   if (scope?.scope === 'this' && original.recurrence !== 'one_time') {

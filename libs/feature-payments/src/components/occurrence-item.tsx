@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useOptimistic, useTransition } from 'react';
 import { formatConverted, money, type RateMap } from '@wib/domain';
 import { cn, MethodIcon } from '@wib/ui';
 import {
@@ -60,25 +60,36 @@ export function OccurrenceItem({
   compact?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const paid = occ.status === 'paid';
-  const skipped = occ.status === 'skipped';
+  // Flip the checkbox immediately; the server round trip + board refetch happen
+  // in the background and reconcile once `occ.status` catches up.
+  const [status, setStatus] = useOptimistic(
+    occ.status,
+    (_prev, next: BoardOccurrence['status']) => next,
+  );
+  const paid = status === 'paid';
+  const skipped = status === 'skipped';
 
   const dueAlert = today ? dueAlertFor(occ, today) : null;
   const dueStyle = dueAlert ? DUE_STYLE[dueAlert.level] : null;
 
   const toggle = () =>
     startTransition(async () => {
-      if (paid) await clearOccurrenceAction(occ.paymentId, occ.dueDate);
-      else
+      if (occ.status === 'paid') {
+        setStatus('scheduled');
+        await clearOccurrenceAction(occ.paymentId, occ.dueDate);
+      } else {
+        setStatus('paid');
         await markOccurrenceAction({
           paymentId: occ.paymentId,
           dueDate: occ.dueDate,
           status: 'paid',
         });
+      }
     });
 
   const restore = () =>
     startTransition(async () => {
+      setStatus('scheduled');
       await clearOccurrenceAction(occ.paymentId, occ.dueDate);
     });
 

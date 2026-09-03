@@ -3,11 +3,15 @@ import { getDb } from '../client';
 import { exchangeRateSnapshots } from '../schema/rates';
 
 const STALE_MS = 12 * 60 * 60 * 1000;
+/** How long a resolved rate map is reused within one process without re-reading
+ * the snapshot table. The snapshot itself only changes every 12h. */
+const MEMO_MS = 60 * 1000;
 const BASE = 'EUR';
 
 type RateMap = Record<string, number>;
 
 let refreshing: Promise<RateMap | null> | null = null;
+let memo: { rates: RateMap; at: number } | null = null;
 
 /** Pull fresh rates from the provider and upsert the snapshot. Never throws. */
 async function refreshRates(): Promise<RateMap | null> {
@@ -52,6 +56,10 @@ function refreshInBackground(): void {
  * snapshot at all. Never throws; falls back to identity.
  */
 export async function getRates(): Promise<RateMap> {
+  // Board renders ask for rates constantly; the snapshot barely moves. Serve a
+  // recent in-process copy without touching the DB.
+  if (memo && Date.now() - memo.at < MEMO_MS) return memo.rates;
+
   const rows = await getDb()
     .select()
     .from(exchangeRateSnapshots)
@@ -62,9 +70,12 @@ export async function getRates(): Promise<RateMap> {
   if (snap) {
     if (Date.now() - snap.fetchedAt.getTime() >= STALE_MS)
       refreshInBackground();
+    memo = { rates: snap.rates, at: Date.now() };
     return snap.rates;
   }
 
   // Cold cache — fetch once so conversions work at all.
-  return (await refreshRates()) ?? { [BASE]: 1 };
+  const fresh = (await refreshRates()) ?? { [BASE]: 1 };
+  memo = { rates: fresh, at: Date.now() };
+  return fresh;
 }

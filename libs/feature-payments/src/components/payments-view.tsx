@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type {
   Account,
@@ -100,6 +100,27 @@ export function PaymentsView({
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
   };
 
+  // The calendar's visible month. Paging within the already-loaded board window
+  // is a local state change (instant); stepping outside it navigates so the
+  // server widens the window. Re-syncs whenever the URL/server month changes.
+  const [calMonth, setCalMonth] = useState<IsoDate>(month);
+  useEffect(() => setCalMonth(month), [month]);
+
+  const changeMonth = (m: IsoDate) => {
+    setCalMonth(m);
+    const inWindow =
+      startOfMonth(m) >= startOfMonth(board.window.from) &&
+      endOfMonth(m) <= board.window.to;
+    if (inWindow) {
+      // Keep the URL honest (refresh / share) without a server round trip.
+      const next = new URLSearchParams(params);
+      next.set('month', m.slice(0, 7));
+      window.history.replaceState(null, '', `${pathname}?${next.toString()}`);
+    } else {
+      setParam('month', m.slice(0, 7));
+    }
+  };
+
   const close = () => {
     setSheet({ mode: 'closed' });
     router.refresh();
@@ -131,7 +152,7 @@ export function PaymentsView({
   // Header stats follow whatever month the calendar is showing; the list has
   // no single month, so it stays on the current one.
   const scopeStart =
-    view === 'calendar' ? startOfMonth(month) : startOfMonth(board.today);
+    view === 'calendar' ? startOfMonth(calMonth) : startOfMonth(board.today);
   const scopeEnd = endOfMonth(scopeStart);
   const inScope = board.occurrences.filter(
     (o) =>
@@ -282,8 +303,8 @@ export function PaymentsView({
       ) : (
         <PaymentCalendar
           board={board}
-          month={month}
-          onMonthChange={(m) => setParam('month', m.slice(0, 7))}
+          month={calMonth}
+          onMonthChange={changeMonth}
           onEdit={openEdit}
         />
       )}

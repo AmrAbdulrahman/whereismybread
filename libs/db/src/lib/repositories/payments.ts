@@ -55,27 +55,36 @@ export interface PaymentInput {
   tagIds: string[];
 }
 
+/** Method / account / bank lists a caller may already have loaded. */
+export interface PaymentMetaLookups {
+  methods: PaymentMethod[];
+  accounts: Account[];
+  banks: Bank[];
+}
+
 async function attachMeta(
   userId: string,
   rows: Payment[],
+  lookups?: PaymentMetaLookups,
 ): Promise<PaymentWithMeta[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
+  // Reuse the caller's already-loaded lists when given — otherwise fetch them.
   // Sequential, not Promise.all: the Supabase transaction pooler does not
   // support pipelining concurrent queries on one connection — it hangs.
-  const methodRows = await getDb()
-    .select()
-    .from(paymentMethods)
-    .where(eq(paymentMethods.userId, userId));
-  const accountRows = await getDb()
-    .select()
-    .from(accounts)
-    .where(eq(accounts.userId, userId));
-  const bankRows = await getDb()
-    .select()
-    .from(banks)
-    .where(eq(banks.userId, userId));
+  const methodRows =
+    lookups?.methods ??
+    (await getDb()
+      .select()
+      .from(paymentMethods)
+      .where(eq(paymentMethods.userId, userId)));
+  const accountRows =
+    lookups?.accounts ??
+    (await getDb().select().from(accounts).where(eq(accounts.userId, userId)));
+  const bankRows =
+    lookups?.banks ??
+    (await getDb().select().from(banks).where(eq(banks.userId, userId)));
   const methodById = new Map(methodRows.map((m) => [m.id, m]));
   const accountById = new Map(accountRows.map((a) => [a.id, a]));
   const bankById = new Map(bankRows.map((b) => [b.id, b]));
@@ -112,12 +121,13 @@ export async function listPayments(userId: string): Promise<PaymentWithMeta[]> {
 
 export async function listActivePayments(
   userId: string,
+  lookups?: PaymentMetaLookups,
 ): Promise<PaymentWithMeta[]> {
   const rows = await getDb()
     .select()
     .from(payments)
     .where(and(eq(payments.userId, userId), isNull(payments.archivedAt)));
-  return attachMeta(userId, rows);
+  return attachMeta(userId, rows, lookups);
 }
 
 export async function getPayment(
@@ -131,6 +141,23 @@ export async function getPayment(
     .limit(1);
   if (!rows[0]) return null;
   return (await attachMeta(userId, rows))[0] ?? null;
+}
+
+/**
+ * The bare payment row, no method/account/bank/tag joins — for callers that
+ * only need the payment's own columns (edit/delete flows compare fields and
+ * read the recurrence spec). Saves three sequential lookups per call.
+ */
+export async function getPaymentRow(
+  userId: string,
+  id: string,
+): Promise<Payment | null> {
+  const rows = await getDb()
+    .select()
+    .from(payments)
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 /** Column values shared by insert and update (everything but ownership/tags). */
@@ -329,7 +356,7 @@ export async function splitPaymentForward(
   occurrenceDate: string,
   newInput: PaymentInput,
 ): Promise<void> {
-  const original = await getPayment(userId, id);
+  const original = await getPaymentRow(userId, id);
   if (!original) throw new Error('splitPaymentForward: not found');
 
   if (

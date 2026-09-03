@@ -4,6 +4,7 @@ import {
   boolean,
   date,
   doublePrecision,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -186,7 +187,12 @@ export const payments = pgTable('payments', {
   notes: text('notes'),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   ...audit,
-});
+}, (t) => [
+  // Every board render filters the user's still-active payments.
+  index('payments_user_active_idx')
+    .on(t.userId)
+    .where(sql`${t.archivedAt} is null`),
+]);
 
 export const paymentTags = pgTable(
   'payment_tags',
@@ -241,6 +247,8 @@ export const paymentEvents = pgTable(
   },
   (t) => [
     uniqueIndex('payment_events_payment_due_uq').on(t.paymentId, t.dueDate),
+    // The board reads a user's events inside a date window.
+    index('payment_events_user_due_idx').on(t.userId, t.dueDate),
   ],
 );
 

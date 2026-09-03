@@ -1,0 +1,2 @@
+CREATE INDEX "payment_events_user_due_idx" ON "payment_events" USING btree ("user_id","due_date");--> statement-breakpoint
+CREATE INDEX "payments_user_active_idx" ON "payments" USING btree ("user_id") WHERE "payments"."archived_at" is null;
