@@ -378,7 +378,7 @@ export function OccurrenceItem({
           className={cn(
             'grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors',
             flagNote
-              ? 'text-warn hover:bg-warn/10'
+              ? 'text-danger hover:bg-danger/10'
               : 'text-muted hover:bg-surface-2 hover:text-ink',
           )}
         >
@@ -409,7 +409,7 @@ export function OccurrenceItem({
           type="button"
           onClick={() => onFlag?.(occ.paymentId, occ.dueDate)}
           className={cn(
-            'flex w-full items-start gap-1.5 border-t border-warn/40 bg-warn/10 text-left text-xs text-warn',
+            'flex w-full items-start gap-1.5 border-t border-danger/40 bg-danger/10 text-left text-xs text-danger',
             compact ? 'px-2.5 py-1.5' : 'px-3 py-2',
           )}
         >

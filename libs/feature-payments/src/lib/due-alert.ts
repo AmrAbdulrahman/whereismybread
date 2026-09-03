@@ -8,13 +8,14 @@ const AUTO_COLLECTED = new Set<PaymentMethodKind>([
 ]);
 
 /**
- * A "manual" payment is one the user makes themselves — cash, a manual transfer,
- * or no method at all. Direct debits and card payments collect automatically.
+ * True only when the payment's method is a **manual transfer** — the ones the
+ * user sends by hand and needs a checklist for. Cash, cards, direct debits and
+ * payments with no method are excluded.
  */
-export function isManualPayment(
+export function isManualTransfer(
   occ: Pick<BoardOccurrence, 'method'>,
 ): boolean {
-  return !occ.method || !AUTO_COLLECTED.has(occ.method.kind);
+  return occ.method?.kind === 'manual_transfer';
 }
 
 export type DueLevel = 'overdue' | 'today' | 'soon';

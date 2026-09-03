@@ -104,10 +104,20 @@ export function ListFilters({
             type="text"
             aria-label="Search payments"
             placeholder="Search description, notes, link…"
-            className="pl-9"
+            className={cn('pl-9', value.search && 'pr-9')}
             value={value.search}
             onChange={(e) => onChange({ ...value, search: e.target.value })}
           />
+          {value.search ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => onChange({ ...value, search: '' })}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+            >
+              <X size={15} />
+            </button>
+          ) : null}
         </div>
         {hasChips ? (
           <button

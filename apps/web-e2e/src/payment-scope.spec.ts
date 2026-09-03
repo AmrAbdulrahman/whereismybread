@@ -63,9 +63,9 @@ test('"this & following" delete removes the payment from that month on, keeps ea
 
   await addGym(page);
 
-  await page.goto(`/plan?month=${start}`);
+  await page.goto(`/plan?view=calendar&month=${start}`);
   await expect(page.getByText('Gym').first()).toBeVisible();
-  await page.goto(`/plan?month=${cutoff}`);
+  await page.goto(`/plan?view=calendar&month=${cutoff}`);
   await expect(page.getByText('Gym').first()).toBeVisible();
 
   await openGymEditor(page);
@@ -76,7 +76,7 @@ test('"this & following" delete removes the payment from that month on, keeps ea
 
   await expect(page.getByText('Gym')).toHaveCount(0);
   // the starting month still has it
-  await page.goto(`/plan?month=${start}`);
+  await page.goto(`/plan?view=calendar&month=${start}`);
   await expect(page.getByText('Gym').first()).toBeVisible();
 });
 
@@ -88,7 +88,7 @@ test('"this month only" delete skips just that occurrence', async ({
 
   await addGym(page);
 
-  await page.goto(`/plan?month=${future}`);
+  await page.goto(`/plan?view=calendar&month=${future}`);
   await expect(page.getByText('Gym').first()).toBeVisible();
 
   await openGymEditor(page);
@@ -99,7 +99,7 @@ test('"this month only" delete skips just that occurrence', async ({
 
   await expect(page.getByRole('button', { name: 'Restore Gym' })).toBeVisible();
 
-  await page.goto(`/plan?month=${isoMonth(2)}`);
+  await page.goto(`/plan?view=calendar&month=${isoMonth(2)}`);
   await page.getByRole('button').filter({ hasText: 'Gym' }).first().click();
   await expect(page.getByRole('button', { name: 'Edit Gym' })).toBeVisible();
 });
@@ -113,7 +113,7 @@ test('"this month only" edit overrides just that month, not the series', async (
 
   await addGym(page);
 
-  await page.goto(`/plan?month=${future}`);
+  await page.goto(`/plan?view=calendar&month=${future}`);
   await openGymEditor(page);
   await page.getByLabel('Amount').fill('99');
   await page.getByRole('button', { name: 'Save changes' }).click();
@@ -125,12 +125,12 @@ test('"this month only" edit overrides just that month, not the series', async (
   await expect(page.getByText('Edited').first()).toBeVisible();
 
   // the month after is untouched at €30
-  await page.goto(`/plan?month=${later}`);
+  await page.goto(`/plan?view=calendar&month=${later}`);
   await page.getByRole('button').filter({ hasText: 'Gym' }).first().click();
   await expect(page.getByText('€30.00').first()).toBeVisible();
 
   // reset the override → back to €30
-  await page.goto(`/plan?month=${future}`);
+  await page.goto(`/plan?view=calendar&month=${future}`);
   await openGymEditor(page);
   await page
     .getByRole('button', { name: 'Reset this month’s changes' })

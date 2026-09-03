@@ -176,6 +176,9 @@ export function PaymentList({
   // Set when the reader scrolls up near the top: keep pulling earlier months,
   // batch after batch, until the start. Cleared when they scroll back down.
   const chaseStart = useRef(false);
+  // The "this is where you started" marker only appears once the reader has
+  // actually scrolled up looking for earlier months — not on the first render.
+  const [scrolledUp, setScrolledUp] = useState(false);
 
   const board = mergeBoards(baseBoard, pastBoard, futureBoard);
   const { displayCurrency, rates } = board;
@@ -388,6 +391,7 @@ export function PaymentList({
       const vh = window.innerHeight || doc.clientHeight;
       if (dir < 0 && y < vh) {
         chaseStart.current = true;
+        setScrolledUp(true);
         loadPastRef.current();
       } else if (dir > 0 && y > vh * 2) {
         chaseStart.current = false;
@@ -602,7 +606,7 @@ export function PaymentList({
         />
       ) : null}
       {atStart ? (
-        <StartMarker />
+        scrolledUp ? <StartMarker /> : null
       ) : (
         <div className="flex h-9 items-center justify-center gap-2 text-xs text-muted">
           {loadingPast ? (

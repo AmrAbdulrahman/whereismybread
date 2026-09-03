@@ -77,9 +77,13 @@ test('the list view search + day total span currencies', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit Rent' })).toHaveCount(0);
 
-  // clearing brings everything back
-  await page.getByRole('button', { name: /Clear filter/ }).click();
+  // the in-input clear button empties the search
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(page.getByLabel('Search payments')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Edit Rent' }).first()).toBeVisible();
+
+  // and it's gone once the field is empty
+  await expect(page.getByRole('button', { name: 'Clear search' })).toHaveCount(0);
 
   // the account filter (in the collapsible panel) narrows to Rent
   await page.getByRole('button', { name: /^Filters/ }).click();

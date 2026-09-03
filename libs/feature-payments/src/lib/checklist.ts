@@ -8,7 +8,7 @@ import {
 } from '@wib/domain';
 import { requireUser } from '@wib/auth/server';
 import { getBoardData } from './queries';
-import { isManualPayment } from './due-alert';
+import { isManualTransfer } from './due-alert';
 import type { BoardOccurrence, ChecklistData, ChecklistMonth } from './types';
 
 export type { ChecklistData, ChecklistMonth };
@@ -31,7 +31,7 @@ const monthLabel = (key: string) =>
     timeZone: 'UTC',
   }).format(new Date(`${key}-01T00:00:00Z`));
 
-/** The monthly manual-payment checklist — 6 months back, a year ahead. */
+/** The monthly manual-transfer checklist — 6 months back, a year ahead. */
 export async function getChecklistData(): Promise<ChecklistData> {
   const user = await requireUser();
   const today = todayIn(user.timezone);
@@ -44,7 +44,7 @@ export async function getChecklistData(): Promise<ChecklistData> {
   const display = board.displayCurrency;
   const rates = board.rates;
 
-  const manual = board.occurrences.filter(isManualPayment);
+  const manual = board.occurrences.filter(isManualTransfer);
 
   const byMonth = new Map<string, BoardOccurrence[]>();
   for (const occ of manual) {

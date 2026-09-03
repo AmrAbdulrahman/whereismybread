@@ -16,7 +16,7 @@ export default async function CalendarPage({
   if (!user) redirect('/login');
 
   const sp = await searchParams;
-  const view = sp.view === 'list' ? 'list' : 'calendar';
+  const view = sp.view === 'calendar' ? 'calendar' : 'list';
   const today = todayIn(user.timezone);
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? '')
     ? `${sp.month}-01`

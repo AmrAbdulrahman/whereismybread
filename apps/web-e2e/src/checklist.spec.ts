@@ -45,7 +45,7 @@ test('checklist shows manual payments month-by-month, current month open', async
 
   await page.goto('/checklist');
   await expect(
-    page.getByRole('heading', { name: 'Manual payments', level: 1 }),
+    page.getByRole('heading', { name: 'Manual transfers', level: 1 }),
   ).toBeVisible();
 
   // the current month is expanded and lists the manual payment

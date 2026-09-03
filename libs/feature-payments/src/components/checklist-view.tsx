@@ -54,20 +54,19 @@ export function ChecklistView({
   return (
     <div className="flex max-w-xl flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">Manual payments</h1>
+        <h1 className="text-2xl font-semibold">Manual transfers</h1>
         <p className="text-ink-soft">
-          A month-by-month checklist of the payments you send yourself — cash and
-          manual transfers. Direct debits and card payments aren&rsquo;t here;
-          they collect on their own.
+          A month-by-month checklist of the transfers you send by hand. Direct
+          debits, card payments and cash aren&rsquo;t here.
         </p>
         {!empty ? (
           <p className="mt-1 text-sm">
             {current && current.totalCount > 0 ? (
               <span className="font-medium text-ink">
-                {current.totalCount - current.doneCount} left to pay this month
+                {current.totalCount - current.doneCount} left to send this month
               </span>
             ) : (
-              <span className="text-muted">Nothing to pay yourself this month.</span>
+              <span className="text-muted">Nothing to send this month.</span>
             )}
             {behind > 0 ? (
               <span className="text-danger">
@@ -81,8 +80,8 @@ export function ChecklistView({
 
       {empty ? (
         <div className="rounded-xl border border-dashed border-line-strong py-12 text-center text-sm text-ink-soft">
-          No manual payments yet. Anything you pay by cash or manual transfer
-          shows up here.
+          No manual transfers yet. Payments whose method is “Manual transfer”
+          show up here.
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -157,7 +156,7 @@ export function ChecklistView({
                   <div className="flex flex-col gap-1.5 border-t border-line bg-ground px-3 py-3">
                     {m.occurrences.length === 0 ? (
                       <p className="py-2 text-center text-sm text-muted">
-                        Nothing to pay yourself this month.
+                        Nothing to send this month.
                       </p>
                     ) : (
                       m.occurrences.map((occ) => (

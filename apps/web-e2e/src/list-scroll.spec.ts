@@ -6,7 +6,7 @@ test.skip(
   'set AUTH_E2E=1 to run the DB-backed list scroll flow',
 );
 
-test('the list marks the start and lazy-loads later months on scroll', async ({
+test('the list lazy-loads later months on scroll; start marker stays hidden', async ({
   page,
 }) => {
   const email = `e2e+scroll-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
@@ -22,13 +22,14 @@ test('the list marks the start and lazy-loads later months on scroll', async ({
   await page.getByLabel('Description').fill('Rent');
   await page.getByLabel('Amount').fill('900');
   await page.getByRole('button', { name: 'Monthly', exact: true }).click();
+  await page.getByLabel('Day of the month').fill('12');
   await page.getByRole('button', { name: 'Add payment' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'New payment' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'list' }).click();
-
-  // a brand-new account has no history before the window — the first month is
-  // the start.
-  await expect(page.getByText('This is where you started')).toBeVisible();
+  // the "this is where you started" marker only appears once the reader has
+  // scrolled up looking for earlier months — never on the initial render.
+  await expect(page.getByText('This is where you started')).toBeHidden();
 
   // scrolling to the bottom pulls later months in, two at a time
   const monthHeadings = page.getByRole('heading', { level: 3 });
