@@ -113,6 +113,7 @@ export function MethodMarkPicker({
         </button>
         <input
           ref={fileRef}
+          id="mark-image"
           type="file"
           accept="image/*"
           className="hidden"

@@ -56,6 +56,9 @@
       "path": "../../libs/ui"
     },
     {
+      "path": "../../libs/feature-tags"
+    },
+    {
       "path": "../../libs/feature-payments"
     },
     {

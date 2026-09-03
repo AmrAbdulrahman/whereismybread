@@ -17,25 +17,71 @@ const optionalUrl = z.preprocess(
   z.string().trim().url('Enter a valid URL').max(2048).nullable().default(null),
 );
 
+/** One record of a `group` payment — a named value in its own currency. */
+export const lineItemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1, 'Name it').max(80),
+  /** Major-unit value as typed, e.g. "12.99". */
+  value: z
+    .string()
+    .trim()
+    .min(1, 'Enter a value')
+    .refine(
+      (v) => Number.isFinite(Number(v.replace(/[, ]/g, ''))),
+      'Not a number',
+    )
+    .refine((v) => Number(v.replace(/[, ]/g, '')) > 0, 'Must be more than zero'),
+  currency: z.string().trim().length(3).toUpperCase().default('EUR'),
+  /** An icon-set key, a fetched logo (data: URI), and a brand colour. The
+   * form always supplies an explicit value or `null` (never a blank string). */
+  iconKey: z.string().trim().max(40).nullable().default(null),
+  logoUrl: z.string().max(300_000).nullable().default(null),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .default(null),
+});
+
+/**
+ * A file already uploaded to Vercel Blob, staged on the form until the payment
+ * is saved. Only used when creating a payment — edits manage attachments with
+ * their own immediate actions.
+ */
+export const attachmentDraftSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().min(1).max(120),
+  size: z.number().int().nonnegative(),
+  url: z.string().url().max(2048),
+  pathname: z.string().trim().min(1).max(1024),
+});
+
 /** Shared by the client form (zodResolver) and the server action. */
 export const paymentFormSchema = z
   .object({
     name: z.string().trim().min(1, 'Give it a name').max(120),
-    /** `fixed` → `amount` is the charge; `per_unit` → `amount` is the unit price. */
-    amountKind: z.enum(['fixed', 'per_unit']).default('fixed'),
-    /** Major-unit amount as typed, e.g. "12.99". */
+    /**
+     * `fixed` → `amount` is the charge; `per_unit` → `amount` is the unit price;
+     * `group` → the charge is the sum of `lineItems` and `amount` is ignored.
+     */
+    amountKind: z.enum(['fixed', 'per_unit', 'group']).default('fixed'),
+    /** Major-unit amount as typed, e.g. "12.99". Ignored for `group`. */
     amount: z
       .string()
       .trim()
-      .min(1, 'Enter an amount')
+      .default('')
       .refine(
-        (v) => Number.isFinite(Number(v.replace(/[, ]/g, ''))),
+        (v) => v === '' || Number.isFinite(Number(v.replace(/[, ]/g, ''))),
         'Not a number',
       )
       .refine(
-        (v) => Number(v.replace(/[, ]/g, '')) > 0,
+        (v) => v === '' || Number(v.replace(/[, ]/g, '')) > 0,
         'Must be more than zero',
       ),
+    /** The records a `group` payment's amount is derived from. */
+    lineItems: z.array(lineItemSchema).max(50).default([]),
+    /** Files staged for a new payment (edits attach immediately instead). */
+    attachments: z.array(attachmentDraftSchema).max(20).default([]),
     /** The thing being counted, e.g. "session", "visit" — per-unit only. */
     unitName: z.preprocess(
       blankToNull,
@@ -128,9 +174,17 @@ export const paymentFormSchema = z
     (v) => v.recurrence === 'one_time' || !v.endsOn || v.endsOn >= v.anchorDate,
     { path: ['endsOn'], message: 'End date is before the first payment' },
   )
-  .refine((v) => v.amountKind === 'fixed' || !!v.unitName, {
+  .refine((v) => v.amountKind === 'group' || v.amount.trim() !== '', {
+    path: ['amount'],
+    message: 'Enter an amount',
+  })
+  .refine((v) => v.amountKind !== 'per_unit' || !!v.unitName, {
     path: ['unitName'],
     message: 'Name the unit (e.g. session, visit)',
+  })
+  .refine((v) => v.amountKind !== 'group' || v.lineItems.length > 0, {
+    path: ['lineItems'],
+    message: 'Add at least one record',
   })
   .refine((v) => v.recurrence === 'one_time' || /^\d{1,2}$/.test(v.dayOfMonth), {
     path: ['dayOfMonth'],

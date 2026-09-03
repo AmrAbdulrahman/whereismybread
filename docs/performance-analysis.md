@@ -147,38 +147,30 @@ a framework migration.
 
 | # | Change | Where | Status | Effect |
 |---|---|---|---|---|
-| 1 | Pin region to `lhr1` | `vercel.json` | ✅ committed — **applies on next deploy** | ~8× on every DB wait |
-| 2 | Stop re-querying in `attachMeta` — thread the loaded lookups | `payments.ts`, `queries.ts` | ✅ done | 14 → 11 queries |
-| 3 | Optimistic mark-as-paid (`useOptimistic`) | `occurrence-item.tsx` | ✅ done | ~2.3 s → **~20 ms** |
-| 4a | In-process rates memo (60 s) | `rates.ts` | ✅ done | 11 → 10 on warm renders |
-| 4b | Collapse the 5 context lookups + 4 board reads into 1–2 round trips (CTE / `db.query`) | `queries.ts` + repos | ⬜ **not done** | 10 → ~3 queries |
-| 5 | Client-side calendar paging within the loaded window | `payments-view.tsx` | ✅ done | in-window month change **~3.5 s → ~0 ms** |
-| 6 | Optimistic add/edit/delete — actions return data, drop `router.refresh()` | `payments-view.tsx` + `actions.ts` | ⬜ **not done** | forms feel instant |
-| 7 | Cache the board — `unstable_cache` + `revalidateTag` per user | `queries.ts` + `actions.ts` | ⬜ **not done** | cached navigations |
+| 1 | Pin region to `lhr1` | `vercel.json` | ✅ done — **applies on next deploy** | ~8× on every DB wait |
+| 2 | Stop re-querying in `attachMeta` — thread the loaded lookups | `payments.ts`, `queries.ts` | ✅ done (then superseded by #4b) | 14 → 11 queries |
+| 3 | Optimistic mark-as-paid (`useOptimistic`) | `occurrence-item.tsx` | ✅ done | ~2.3 s → **~40 ms** |
+| 4a | In-process rates memo (60 s) | `rates.ts` | ✅ done | −1 query on warm renders |
+| 4b | **Collapse context + board reads into ONE round trip** (raw SQL `jsonb_agg` megaquery) | `board-bundle.ts` (new) + `queries.ts` `getBoardData`/`buildBoard` | ✅ **done** | **14 → 2 queries** (bundle + rates) |
+| 5 | Client-side calendar paging within the loaded window | `payments-view.tsx` | ✅ done | in-window month change **~3.5 s → ~90 ms** |
+| 6 | Optimistic add/edit/delete — actions return the board, client swaps it in | `payments-view.tsx` + `actions.ts` | ❌ **attempted, reverted** — Next's Router Cache serves a stale RSC payload after a non-revalidating Server Action, which then overwrites the optimistic state; it also fought the list's infinite-scroll slice state. Kept `revalidatePath` (now cheap: one megaquery) and dropped only the redundant second `router.refresh()`. | add/edit/delete ~2.7 s → ~0.9–1.4 s |
+| 7 | Cache the board — `unstable_cache` + `revalidateTag` per user | `queries.ts` + `actions.ts` | ⬜ **not done** — the megaquery makes fresh renders cheap enough; caching adds invalidation risk for a marginal gain | cached navigations |
 | 8 | `loading.tsx` skeleton for `/plan` | `plan/loading.tsx` | ✅ done | instant skeleton on nav |
-| 9a | Index migration (`payments (user_id) partial`, `payment_events (user_id, due_date)`) | `0017_board_query_indexes` | ✅ generated + **applied to prod** | future-proofing |
+| 9a | Index migration | `0017_board_query_indexes` | ✅ applied to prod | future-proofing |
 | 9b | Enable Vercel Fluid Compute | Vercel dashboard | ⬜ **can't — needs dashboard** | cold-start relief, pool reuse |
 
-### Measured after #1–#9a (local dev → London Supabase, `lhr1` not yet live)
+### Measured — local dev → London Supabase (`lhr1` not yet live)
 
-| Operation | before | after |
-|---|---|---|
-| calendar → next month (in window) | ~3465 ms | **~0 ms** (client render) |
-| mark paid | ~2338 ms | **~20 ms** (optimistic) |
-| open `/plan` | ~1700 ms, 14 q | ~1350 ms, 10 q — collapses to **~80 ms once `lhr1` is live** |
-| add payment | ~2700 ms | ~1400 ms — still does `router.refresh()` (see #6) |
+| Operation | before | after | after + `lhr1` (projected) |
+|---|---|---|---|
+| calendar → next month (in window) | ~3465 ms | **~90 ms** (client render) | ~90 ms |
+| mark paid | ~2338 ms | **~40 ms** (optimistic checkbox) | ~40 ms |
+| open `/plan` (warm) | ~1700 ms, 14 q | ~620 ms, **2 q** | **~120 ms** |
+| add payment | ~2700 ms | ~900 ms (2nd+), ~2.2 s cold | ~250 ms |
+| edit payment | ~1900 ms | ~1000–1400 ms | ~300 ms |
 
-### Projected
-
-| State | `/plan` open | month page | mark paid | add payment |
-|---|---|---|---|---|
-| today | ~1700 ms | ~1700 ms | ~2300 ms | ~2700 ms |
-| after #1 | ~450 ms | ~450 ms | ~500 ms | ~550 ms |
-| after #1–#6 | ~250 ms | **~0 ms** | **~0 ms** | **~0 ms** |
-| after #1–#8 (cached) | **~80 ms** | ~0 ms | ~0 ms | ~0 ms |
-
-"~0 ms" = optimistic client update; the server call still happens, in the
-background, and reconciles.
+The DB portion is now 1 round trip; the rest is Node/React render + (locally)
+transatlantic latency that `lhr1` removes.
 
 _Dev double-render inflates the raw wall-clock numbers; the per-render query
 counts and the `GET /plan?month=…` figure (14 queries / 1.24 s) are

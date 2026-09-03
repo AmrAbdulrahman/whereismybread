@@ -1,6 +1,9 @@
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import { getDb } from '../client';
-import { tags, type Tag } from '../schema/payments';
+import { paymentTags, payments, tags, type Tag } from '../schema/payments';
+
+/** A tag plus how many of the user's active payments carry it. */
+export type TagWithUsage = Tag & { paymentCount: number };
 
 const TAG_PALETTE = [
   '#6321d6',
@@ -104,10 +107,92 @@ export async function getOrCreateTags(
     .filter((t): t is Tag => t != null);
 }
 
+/**
+ * Every tag the user owns, each with a count of the active (non-archived)
+ * payments that carry it. Ordered by name.
+ */
+export async function listTagsWithUsage(
+  userId: string,
+): Promise<TagWithUsage[]> {
+  const rows = await getDb()
+    .select({
+      id: tags.id,
+      userId: tags.userId,
+      name: tags.name,
+      color: tags.color,
+      createdAt: tags.createdAt,
+      updatedAt: tags.updatedAt,
+      paymentCount: sql<number>`count(distinct ${payments.id})`,
+    })
+    .from(tags)
+    .leftJoin(paymentTags, eq(paymentTags.tagId, tags.id))
+    .leftJoin(
+      payments,
+      and(
+        eq(payments.id, paymentTags.paymentId),
+        sql`${payments.archivedAt} is null`,
+      ),
+    )
+    .where(eq(tags.userId, userId))
+    .groupBy(tags.id)
+    .orderBy(asc(sql`lower(${tags.name})`));
+
+  return rows.map((r) => ({ ...r, paymentCount: Number(r.paymentCount) }));
+}
+
+/**
+ * Rename / recolour a tag. Returns the updated row, or `null` when the row
+ * isn't the user's or the new name collides with another of their tags.
+ */
+export async function updateTag(
+  userId: string,
+  id: string,
+  patch: { name: string; color: string },
+): Promise<Tag | null> {
+  const name = patch.name.trim();
+
+  const clash = await getDb()
+    .select({ id: tags.id })
+    .from(tags)
+    .where(
+      and(
+        eq(tags.userId, userId),
+        sql`lower(${tags.name}) = lower(${name})`,
+        sql`${tags.id} <> ${id}`,
+      ),
+    )
+    .limit(1);
+  if (clash[0]) return null;
+
+  const rows = await getDb()
+    .update(tags)
+    .set({ name, color: patch.color, updatedAt: new Date() })
+    .where(and(eq(tags.id, id), eq(tags.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function deleteTag(userId: string, id: string): Promise<void> {
   await getDb()
     .delete(tags)
     .where(and(eq(tags.id, id), eq(tags.userId, userId)));
+}
+
+export async function getTagByName(
+  userId: string,
+  name: string,
+): Promise<Tag | null> {
+  const rows = await getDb()
+    .select()
+    .from(tags)
+    .where(
+      and(
+        eq(tags.userId, userId),
+        sql`lower(${tags.name}) = lower(${name.trim()})`,
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function tagsByIds(userId: string, ids: string[]): Promise<Tag[]> {

@@ -19,7 +19,8 @@ export const users = pgTable('users', {
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   passwordHash: text('password_hash').notNull(),
   name: text('name'),
-  timezone: text('timezone').notNull().default('UTC'),
+  /** IANA zone. `null` → detect from the browser (a `wib-tz` cookie). */
+  timezone: text('timezone'),
   /** Currency new payments default to. */
   defaultCurrency: text('default_currency').notNull().default('EUR'),
   /** Currency every amount is shown converted into. */

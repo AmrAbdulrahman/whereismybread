@@ -2,7 +2,9 @@
 
 import { requireUser, requireUserId } from '@wib/auth/server';
 import { fieldErrors, type FormState } from '@wib/auth';
+import { del, put } from '@vercel/blob';
 import {
+  addAttachment,
   clearMonthIncome,
   clearOccurrence,
   createAccount,
@@ -10,33 +12,43 @@ import {
   createPayment,
   createPaymentMethod,
   createRecipientMethod,
+  deleteAttachment,
   deletePaymentFrom,
   getOrCreateTags,
   getPaymentRow,
+  getRates,
   markOccurrence,
+  reconcileAttachments,
   setMonthIncome,
   setOccurrenceOverride,
   splitPaymentForward,
   updatePayment,
   type Account,
   type Bank,
+  type PaymentAttachment,
+  type PaymentLineItem,
   type PaymentMethod,
   type PaymentOverrides,
   type RecipientMethod,
 } from '@wib/db';
 import {
   anchorForDayOfMonth,
+  convertMoney,
+  money,
   parseMoneyInput,
   startOfMonth,
   todayIn,
 } from '@wib/domain';
 import { revalidatePath } from 'next/cache';
-import {
-  getPaymentBoard,
-  getPaymentsContext,
-} from './queries';
+import { getBoardData } from './queries';
 import type { PaymentBoard } from './types';
 import { paymentFormSchema, type PaymentFormValues } from './schema';
+import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_TYPES,
+  isBlobUrl,
+  resolveAttachmentType,
+} from './attachments';
 import { methodFormSchema, type MethodFormValues } from './method-schema';
 import {
   recipientMethodFormSchema,
@@ -87,12 +99,38 @@ export async function savePaymentAction(
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
   }
   const v = parsed.data;
+  const isGroup = v.amountKind === 'group';
 
+  // Group records → typed rows, and a snapshot of their sum (in the payment
+  // currency, at today's rates) for `amount_minor`. The board recomputes it
+  // live on every render, so drift between saves is cosmetic only.
+  let lineItems: PaymentLineItem[] | null = null;
   let amountMinor: number;
-  try {
-    amountMinor = parseMoneyInput(v.amount, v.currency).minorUnits;
-  } catch {
-    return { ok: false, fieldErrors: { amount: ['Not a valid amount'] } };
+  if (isGroup) {
+    try {
+      lineItems = v.lineItems.map((li) => ({
+        id: li.id,
+        name: li.name,
+        valueMinor: parseMoneyInput(li.value, li.currency).minorUnits,
+        currency: li.currency,
+        iconKey: li.iconKey,
+        logoUrl: li.logoUrl,
+        color: li.color,
+      }));
+    } catch {
+      return { ok: false, fieldErrors: { lineItems: ['A record has a bad value'] } };
+    }
+    const rates = await getRates();
+    amountMinor = lineItems.reduce((sum, li) => {
+      const c = convertMoney(money(li.valueMinor, li.currency), v.currency, rates);
+      return c.currency === v.currency.toUpperCase() ? sum + c.minorUnits : sum;
+    }, 0);
+  } else {
+    try {
+      amountMinor = parseMoneyInput(v.amount, v.currency).minorUnits;
+    } catch {
+      return { ok: false, fieldErrors: { amount: ['Not a valid amount'] } };
+    }
   }
 
   const tags = await getOrCreateTags(userId, v.tags);
@@ -118,8 +156,13 @@ export async function savePaymentAction(
 
   const input = {
     name: v.name,
-    amountKind: perUnit ? ('per_unit' as const) : ('fixed' as const),
+    amountKind: isGroup
+      ? ('group' as const)
+      : perUnit
+        ? ('per_unit' as const)
+        : ('fixed' as const),
     amountMinor,
+    lineItems,
     unitName: perUnit ? v.unitName : null,
     defaultUnits: perUnit ? units : 1,
     feeKind,
@@ -146,7 +189,15 @@ export async function savePaymentAction(
   };
 
   if (!paymentId) {
-    await createPayment(userId, input);
+    const created = await createPayment(userId, input);
+    // Files the user staged while creating — attach them to the fresh payment.
+    const drafts = validAttachmentDrafts(v.attachments);
+    if (drafts.length > 0) {
+      // The payment saved; a failed attach shouldn't roll that back.
+      await reconcileAttachments(userId, created.id, drafts).catch(
+        () => undefined,
+      );
+    }
     revalidatePath('/plan');
     return { ok: true };
   }
@@ -177,10 +228,16 @@ export async function savePaymentAction(
   // `this` month only → store what differs from the series as an override.
   const overrides: PaymentOverrides = {};
   if (input.name !== original.name) overrides.name = input.name;
-  if (input.amountMinor !== original.amountMinor)
+  if (!isGroup && input.amountMinor !== original.amountMinor)
     overrides.amountMinor = input.amountMinor;
   if (perUnit && input.defaultUnits !== original.defaultUnits)
     overrides.units = input.defaultUnits;
+  if (
+    isGroup &&
+    JSON.stringify(input.lineItems ?? []) !==
+      JSON.stringify(original.lineItems ?? [])
+  )
+    overrides.lineItems = input.lineItems;
   if (input.currency !== original.currency) overrides.currency = input.currency;
   if (input.methodId !== original.methodId) overrides.methodId = input.methodId;
   if (input.accountId !== original.accountId)
@@ -345,8 +402,7 @@ export async function loadListWindowAction(range: {
   const maxTo = `${Number(range.from.slice(0, 4)) + 6}${range.from.slice(4)}`;
   const to = range.to > maxTo ? maxTo : range.to;
 
-  const ctx = await getPaymentsContext();
-  const board = await getPaymentBoard(ctx, { from: range.from, to });
+  const { board } = await getBoardData({ from: range.from, to });
   return { ok: true, board };
 }
 
@@ -433,5 +489,126 @@ export async function resetOccurrenceAction(
   const userId = await requireUserId();
   await setOccurrenceOverride(userId, { paymentId, dueDate, overrides: {} });
   revalidatePath('/plan');
+  return { ok: true };
+}
+
+// --- Attachments -----------------------------------------------------------
+
+export interface AttachmentDraft {
+  name: string;
+  contentType: string;
+  size: number;
+  url: string;
+  pathname: string;
+}
+
+/** Keep only well-formed drafts pointing at our blob store with an allowed type. */
+function validAttachmentDrafts(
+  drafts: readonly AttachmentDraft[],
+): AttachmentDraft[] {
+  return (Array.isArray(drafts) ? drafts : [])
+    .filter(
+      (d) =>
+        d &&
+        typeof d.url === 'string' &&
+        isBlobUrl(d.url) &&
+        typeof d.pathname === 'string' &&
+        d.pathname.length > 0 &&
+        typeof d.contentType === 'string' &&
+        d.contentType in ATTACHMENT_TYPES &&
+        Number.isFinite(d.size) &&
+        d.size >= 0 &&
+        d.size <= ATTACHMENT_MAX_BYTES,
+    )
+    .slice(0, 20)
+    .map((d) => ({
+      name: String(d.name || 'file').slice(0, 255),
+      contentType: d.contentType,
+      size: Math.round(d.size),
+      url: d.url,
+      pathname: d.pathname,
+    }));
+}
+
+const SAFE_NAME = /[^\w.\- ]+/g;
+
+/**
+ * Upload a file to Vercel Blob and, when editing an existing payment, record it
+ * straight away. When creating (`paymentId` null) the blob is stored and its
+ * details returned as a draft — the form stages it and `savePaymentAction`
+ * writes the row after the payment exists.
+ */
+export async function uploadAttachmentAction(
+  paymentId: string | null,
+  form: FormData,
+): Promise<
+  | { ok: true; draft: AttachmentDraft; attachment: PaymentAttachment | null }
+  | { ok: false; error: string }
+> {
+  const userId = await requireUserId();
+
+  const file = form.get('file');
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: 'No file received.' };
+  }
+  if (file.size > ATTACHMENT_MAX_BYTES) {
+    return { ok: false, error: 'That file is too large (max 10 MB).' };
+  }
+  const contentType = resolveAttachmentType(file.name, file.type);
+  if (!contentType) {
+    return { ok: false, error: 'Only images, PDFs and text files are allowed.' };
+  }
+
+  const safeName = file.name.replace(SAFE_NAME, '_').slice(0, 120) || 'file';
+  // Scoped to the user so the streaming route can authorise by prefix alone.
+  const blob = await put(
+    `payments/${userId}/${crypto.randomUUID()}-${safeName}`,
+    file,
+    { access: 'private', contentType, addRandomSuffix: false },
+  );
+
+  const draft: AttachmentDraft = {
+    name: file.name.slice(0, 255),
+    contentType,
+    size: file.size,
+    url: blob.url,
+    pathname: blob.pathname,
+  };
+
+  if (!paymentId) return { ok: true, draft, attachment: null };
+
+  const attachment = await addAttachment(userId, { paymentId, ...draft });
+  if (!attachment) {
+    await del(blob.url).catch(() => undefined);
+    return { ok: false, error: 'That payment no longer exists.' };
+  }
+  revalidatePath('/plan');
+  return { ok: true, draft, attachment };
+}
+
+/** Remove an attachment — deletes the row and the underlying blob. */
+export async function removeAttachmentAction(id: string): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof id !== 'string' || !id) {
+    return { ok: false, error: 'Bad attachment.' };
+  }
+  const row = await deleteAttachment(userId, id);
+  if (row) await del(row.url).catch(() => undefined);
+  revalidatePath('/plan');
+  return { ok: true };
+}
+
+/**
+ * Delete blobs that were uploaded but never saved — the form calls this when a
+ * new-payment sheet is cancelled, or a staged file is removed before saving.
+ */
+export async function discardBlobsAction(
+  urls: string[],
+): Promise<{ ok: true }> {
+  await requireUserId();
+  const safe = (Array.isArray(urls) ? urls : [])
+    .filter((u) => typeof u === 'string' && isBlobUrl(u))
+    .slice(0, 20);
+  if (safe.length > 0) await del(safe).catch(() => undefined);
   return { ok: true };
 }

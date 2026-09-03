@@ -40,7 +40,7 @@ test('a manual payment can pick a recipient method, added on the fly', async ({
   await page.getByRole('button', { name: 'New recipient method' }).click();
   await page.getByLabel('Name').fill('Wise');
   await page
-    .locator('input[type="file"]')
+    .locator('#mark-image')
     .setInputFiles({ name: 'wise.png', mimeType: 'image/png', buffer: PNG_1PX });
   await expect(page.getByRole('button', { name: 'Use an icon' })).toBeVisible();
   await page

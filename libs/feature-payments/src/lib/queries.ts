@@ -1,15 +1,11 @@
 import {
   ensureDefaultMethods,
+  getBoardBundle,
   getRates,
-  listAccounts,
-  listActivePayments,
-  listBanks,
-  listMonthIncomes,
-  listPaymentEvents,
-  listRecipientMethods,
-  listTags,
+  listPaymentMethods,
   type Account,
   type Bank,
+  type BoardBundle,
   type PaymentMethod,
   type PaymentOverrides,
   type RecipientMethod,
@@ -25,13 +21,15 @@ import {
   startOfMonth,
   todayIn,
   type IsoDate,
+  type RateMap,
 } from '@wib/domain';
-import { requireUser } from '@wib/auth/server';
+import { requireUser, type SessionUser } from '@wib/auth/server';
 import { feeMinor, type FeeKind } from './fees';
 import type {
   BoardOccurrence,
   DayGroup,
   EditablePayment,
+  OccurrenceLineItem,
   PaymentBoard,
 } from './types';
 
@@ -62,42 +60,73 @@ export interface PaymentsContext {
   tags: Tag[];
 }
 
-export async function getPaymentsContext(): Promise<PaymentsContext> {
-  const user = await requireUser();
-  const [methods, accounts, banks, recipientMethods, tags] = await Promise.all([
-    ensureDefaultMethods(user.id),
-    listAccounts(user.id),
-    listBanks(user.id),
-    listRecipientMethods(user.id),
-    listTags(user.id),
-  ]);
-  return { methods, accounts, banks, recipientMethods, tags };
-}
-
-/** Method / account / bank lists the board needs to resolve overrides. */
-export type BoardLookups = Pick<
-  PaymentsContext,
-  'methods' | 'accounts' | 'banks' | 'recipientMethods'
->;
-
-export async function getPaymentBoard(
-  lookups: BoardLookups,
-  range?: { from?: IsoDate; to?: IsoDate },
-): Promise<PaymentBoard> {
+/**
+ * The board and its lookup lists in a **single** DB round trip (+ a memoised
+ * rates read). Replaces the old `getPaymentsContext()` + `getPaymentBoard()`
+ * pair, which together fired ~11 queries.
+ */
+export async function getBoardData(opts?: {
+  from?: IsoDate;
+  to?: IsoDate;
+  /** First of the calendar month in view; widens the window to cover it. */
+  month?: IsoDate;
+}): Promise<{ context: PaymentsContext; board: PaymentBoard }> {
   const user = await requireUser();
   const today = todayIn(user.timezone);
-  const from = range?.from ?? startOfMonth(today);
-  const to = range?.to ?? endOfMonth(addMonths(today, 2));
 
-  const { methods, accounts, banks, recipientMethods } = lookups;
-  const [payments, events, rates, incomeRows] = await Promise.all([
-    // Reuse the method/account/bank lists already loaded in `lookups` instead
-    // of letting `attachMeta` re-query them.
-    listActivePayments(user.id, { methods, accounts, banks }),
-    listPaymentEvents(user.id, { from, to }),
-    getRates(),
-    listMonthIncomes(user.id, { from: from.slice(0, 7), to: to.slice(0, 7) }),
-  ]);
+  // One window that covers the upcoming list and the visible calendar month.
+  const month = opts?.month ?? startOfMonth(today);
+  const from =
+    opts?.from ??
+    (month < startOfMonth(today) ? startOfMonth(month) : startOfMonth(today));
+  const farByMonth = endOfMonth(addMonths(month, 1));
+  const farByToday = endOfMonth(addMonths(today, 3));
+  const to = opts?.to ?? (farByMonth > farByToday ? farByMonth : farByToday);
+
+  let bundle = await getBoardBundle(user.id, {
+    from,
+    to,
+    monthFrom: from.slice(0, 7),
+    monthTo: to.slice(0, 7),
+  });
+
+  // Brand-new account → seed the four default methods, then re-read just those.
+  if (bundle.methods.length === 0) {
+    await ensureDefaultMethods(user.id);
+    bundle = { ...bundle, methods: await listPaymentMethods(user.id) };
+  }
+
+  const rates = await getRates();
+  const board = buildBoard({ user, today, from, to, bundle, rates });
+  const context: PaymentsContext = {
+    methods: bundle.methods,
+    accounts: bundle.accounts,
+    banks: bundle.banks,
+    recipientMethods: bundle.recipientMethods,
+    tags: bundle.tags,
+  };
+  return { context, board };
+}
+
+/** Assemble a `PaymentBoard` from an already-loaded bundle — pure, no I/O. */
+function buildBoard({
+  user,
+  today,
+  from,
+  to,
+  bundle,
+  rates,
+}: {
+  user: SessionUser;
+  today: IsoDate;
+  from: IsoDate;
+  to: IsoDate;
+  bundle: BoardBundle;
+  rates: RateMap;
+}): PaymentBoard {
+  const { methods, accounts, banks, recipientMethods, payments } = bundle;
+  const events = bundle.events;
+  const incomeRows = bundle.incomes;
 
   const methodById = new Map(methods.map((m) => [m.id, m]));
   const accountById = new Map(accounts.map((a) => [a.id, a]));
@@ -148,9 +177,35 @@ export async function getPaymentBoard(
 
       const occCurrency = ov?.currency ?? p.currency;
       const isPerUnit = p.amountKind === 'per_unit';
+      const isGroup = p.amountKind === 'group';
       const rateMinor = ov?.amountMinor ?? p.amountMinor;
       const units = isPerUnit ? (ov?.units ?? p.defaultUnits) : 1;
-      const baseMinor = isPerUnit ? Math.round(rateMinor * units) : rateMinor;
+
+      // Group: the charge is the sum of every record, converted into the
+      // occurrence currency at current rates (an unconvertible record — no
+      // rate — is left out, matching the day-total rule). A month's override
+      // can swap the whole record list.
+      const rawItems = isGroup ? (ov?.lineItems ?? p.lineItems ?? []) : [];
+      const lineItems: OccurrenceLineItem[] = rawItems.map((li) => ({
+        id: li.id,
+        name: li.name,
+        amount: money(li.valueMinor, li.currency),
+        iconKey: li.iconKey,
+        logoUrl: li.logoUrl,
+        color: li.color,
+      }));
+      const groupMinor = lineItems.reduce((sum, li) => {
+        const c = convertMoney(li.amount, occCurrency, rates);
+        return c.currency === occCurrency.toUpperCase()
+          ? sum + c.minorUnits
+          : sum;
+      }, 0);
+
+      const baseMinor = isGroup
+        ? groupMinor
+        : isPerUnit
+          ? Math.round(rateMinor * units)
+          : rateMinor;
       const feeKind = (p.feeKind ?? 'none') as FeeKind;
       const feePortionMinor = feeMinor(
         baseMinor,
@@ -167,12 +222,14 @@ export async function getPaymentBoard(
         amount: money(baseMinor + feePortionMinor, occCurrency),
         feeMinor: feePortionMinor,
         feeLabel: feeKind === 'percent' ? `+${p.feePercent}%` : null,
-        amountKind: isPerUnit ? 'per_unit' : 'fixed',
+        amountKind: isGroup ? 'group' : isPerUnit ? 'per_unit' : 'fixed',
         unitName: isPerUnit ? p.unitName : null,
         units: isPerUnit ? units : null,
         rate: isPerUnit
           ? money(rateMinor, ov?.currency ?? p.currency)
           : null,
+        lineItems: isGroup ? lineItems : null,
+        attachments: p.attachments ?? [],
         recurrence: p.recurrence,
         isOneTime: p.recurrence === 'one_time',
         isSubscription: p.isSubscription,
@@ -217,8 +274,30 @@ export async function getPaymentBoard(
     editable[p.id] = {
       id: p.id,
       name: p.name,
-      amountKind: p.amountKind === 'per_unit' ? 'per_unit' : 'fixed',
+      amountKind:
+        p.amountKind === 'per_unit'
+          ? 'per_unit'
+          : p.amountKind === 'group'
+            ? 'group'
+            : 'fixed',
       amount: (p.amountMinor / 100).toFixed(2),
+      lineItems: (p.lineItems ?? []).map((li) => ({
+        id: li.id,
+        name: li.name,
+        value: (li.valueMinor / 100).toFixed(2),
+        currency: li.currency,
+        iconKey: li.iconKey,
+        logoUrl: li.logoUrl,
+        color: li.color,
+      })),
+      attachments: (p.attachments ?? []).map((a) => ({
+        id: a.id,
+        name: a.name,
+        contentType: a.contentType,
+        size: a.size,
+        url: a.url,
+        pathname: a.pathname,
+      })),
       unitName: p.unitName,
       defaultUnits: String(p.defaultUnits),
       feeKind:

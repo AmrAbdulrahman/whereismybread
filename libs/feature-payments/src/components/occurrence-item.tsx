@@ -1,9 +1,10 @@
 'use client';
 
-import { useOptimistic, useTransition } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 import { formatConverted, money, type RateMap } from '@wib/domain';
 import { cn, MethodIcon } from '@wib/ui';
 import {
+  ChevronDown,
   Link as LinkIcon,
   OctagonAlert,
   Pencil,
@@ -13,6 +14,7 @@ import {
 import { clearOccurrenceAction, markOccurrenceAction } from '../lib/actions';
 import { dueAlertFor, type DueLevel } from '../lib/due-alert';
 import type { BoardOccurrence } from '../lib/types';
+import { OccurrenceAttachments } from './occurrence-attachments';
 
 const RECURRENCE_LABEL: Record<BoardOccurrence['recurrence'], string> = {
   one_time: 'One-time',
@@ -45,6 +47,7 @@ const DUE_STYLE: Record<
 export function OccurrenceItem({
   occ,
   onEdit,
+  onToggle,
   displayCurrency,
   rates,
   today,
@@ -52,6 +55,9 @@ export function OccurrenceItem({
 }: {
   occ: BoardOccurrence;
   onEdit?: (paymentId: string, dueDate: string) => void;
+  /** Fired the instant the paid checkbox is clicked, before the server responds
+   * — lets the list re-sort (paid → bottom) with an animation. */
+  onToggle?: (paid: boolean) => void;
   displayCurrency: string;
   rates: RateMap;
   /** `board.today` — powers the "due tomorrow" / "overdue" markers. */
@@ -60,8 +66,10 @@ export function OccurrenceItem({
   compact?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  // Flip the checkbox immediately; the server round trip + board refetch happen
-  // in the background and reconcile once `occ.status` catches up.
+  const [showItems, setShowItems] = useState(false);
+  const items = occ.lineItems && occ.lineItems.length > 0 ? occ.lineItems : null;
+  // Flip the checkbox immediately. The month/day totals reconcile on the next
+  // navigation (the page is `force-dynamic`); the write itself is instant.
   const [status, setStatus] = useOptimistic(
     occ.status,
     (_prev, next: BoardOccurrence['status']) => next,
@@ -72,40 +80,51 @@ export function OccurrenceItem({
   const dueAlert = today ? dueAlertFor(occ, today) : null;
   const dueStyle = dueAlert ? DUE_STYLE[dueAlert.level] : null;
 
-  const toggle = () =>
+  const toggle = () => {
+    const nextPaid = occ.status !== 'paid';
+    onToggle?.(nextPaid);
     startTransition(async () => {
-      if (occ.status === 'paid') {
-        setStatus('scheduled');
-        await clearOccurrenceAction(occ.paymentId, occ.dueDate);
-      } else {
+      if (nextPaid) {
         setStatus('paid');
         await markOccurrenceAction({
           paymentId: occ.paymentId,
           dueDate: occ.dueDate,
           status: 'paid',
         });
+      } else {
+        setStatus('scheduled');
+        await clearOccurrenceAction(occ.paymentId, occ.dueDate);
       }
     });
+  };
 
-  const restore = () =>
+  const restore = () => {
+    onToggle?.(false);
     startTransition(async () => {
       setStatus('scheduled');
       await clearOccurrenceAction(occ.paymentId, occ.dueDate);
     });
+  };
 
   const edgeColor = occ.account?.color ?? occ.brandColor ?? null;
 
   return (
     <div
       className={cn(
-        'flex items-center rounded-xl border border-line bg-surface',
-        compact ? 'gap-2 px-2.5 py-2' : 'gap-3 px-3.5 py-3',
+        'rounded-xl border border-line bg-surface transition-opacity duration-300',
         dueStyle?.card,
         edgeColor && 'border-l-[3px]',
-        (paid || skipped) && 'opacity-60',
+        skipped && 'opacity-60',
+        paid && 'opacity-45',
       )}
       style={edgeColor ? { borderLeftColor: edgeColor } : undefined}
     >
+      <div
+        className={cn(
+          'flex items-center',
+          compact ? 'gap-2 px-2.5 py-2' : 'gap-2.5 px-3 py-2.5',
+        )}
+      >
       {skipped ? (
         <button
           type="button"
@@ -166,7 +185,7 @@ export function OccurrenceItem({
         <div
           className={cn(
             'flex items-center gap-1.5 truncate text-sm font-semibold text-ink',
-            (paid || skipped) && 'line-through',
+            (paid || skipped) && 'line-through decoration-2',
           )}
         >
           {dueAlert && dueStyle ? (
@@ -184,7 +203,7 @@ export function OccurrenceItem({
             </span>
           ) : null}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
           {occ.amountKind === 'per_unit' && occ.rate ? (
             <span
               className="rounded-full bg-line-strong/60 px-1.5 py-0.5 text-[10px] font-medium text-muted"
@@ -239,6 +258,32 @@ export function OccurrenceItem({
           ))}
         </div>
       </button>
+
+      {items && !skipped ? (
+        <button
+          type="button"
+          onClick={() => setShowItems((v) => !v)}
+          aria-expanded={showItems}
+          aria-label={
+            showItems ? 'Hide records' : `Show ${items.length} records`
+          }
+          className={cn(
+            'flex shrink-0 items-center gap-0.5 rounded-full border border-line-strong px-1.5 py-0.5 text-[10px] font-medium text-muted transition-colors hover:border-accent hover:text-accent',
+            showItems && 'border-accent text-accent',
+          )}
+        >
+          {items.length} item{items.length === 1 ? '' : 's'}
+          <ChevronDown
+            size={11}
+            strokeWidth={2.5}
+            className={cn('transition-transform', showItems && 'rotate-180')}
+          />
+        </button>
+      ) : null}
+
+      {!skipped ? (
+        <OccurrenceAttachments attachments={occ.attachments} label={occ.name} />
+      ) : null}
 
       {occ.method && !skipped && !compact ? (
         <span
@@ -299,7 +344,7 @@ export function OccurrenceItem({
       <span
         className={cn(
           'shrink-0 font-display text-sm font-semibold tabular-nums text-ink',
-          skipped && 'line-through',
+          skipped && 'line-through decoration-2',
         )}
       >
         {formatConverted(occ.amount, displayCurrency, rates)}
@@ -317,6 +362,43 @@ export function OccurrenceItem({
           <Pencil size={14} strokeWidth={2} />
         </button>
       )}
+      </div>
+
+      {items && showItems ? (
+        <ul
+          className={cn(
+            'flex flex-col gap-1.5 border-t border-line/60',
+            compact ? 'px-2.5 py-2' : 'px-3 py-2.5',
+          )}
+        >
+          {items.map((li) => (
+            <li key={li.id} className="flex items-center gap-2 text-xs">
+              <span className="grid h-5 w-5 shrink-0 place-items-center overflow-hidden rounded border border-line bg-surface">
+                {li.logoUrl ? (
+                  <img
+                    src={li.logoUrl}
+                    alt=""
+                    className="h-full w-full object-contain"
+                  />
+                ) : li.iconKey ? (
+                  <MethodIcon iconKey={li.iconKey} size={11} />
+                ) : (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: li.color ?? 'var(--color-muted)' }}
+                  />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink-soft">
+                {li.name}
+              </span>
+              <span className="shrink-0 font-mono tabular-nums text-muted">
+                {formatConverted(li.amount, displayCurrency, rates)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

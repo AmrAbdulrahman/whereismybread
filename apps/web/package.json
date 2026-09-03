@@ -8,6 +8,7 @@
     "@wib/db": "workspace:*",
     "@wib/domain": "workspace:*",
     "@wib/feature-payments": "workspace:*",
+    "@wib/feature-tags": "workspace:*",
     "@wib/ui": "workspace:*",
     "@wib/updates": "workspace:*",
     "next": "~16.1.6",

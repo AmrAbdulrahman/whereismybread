@@ -21,6 +21,7 @@ import { applyServerErrors } from '../../_components/apply-server-errors';
 
 export function PreferencesForm({
   timezone,
+  timezoneAuto,
   defaultCurrency,
   displayCurrency,
   incomeMode,
@@ -30,6 +31,7 @@ export function PreferencesForm({
   monthlyHours,
 }: {
   timezone: string;
+  timezoneAuto: boolean;
   defaultCurrency: string;
   displayCurrency: string;
   incomeMode: 'fixed' | 'hourly';
@@ -53,7 +55,7 @@ export function PreferencesForm({
     resolver: zodResolver(preferencesSchema),
     mode: 'onTouched',
     defaultValues: {
-      timezone,
+      timezone: timezoneAuto ? '' : timezone,
       defaultCurrency,
       displayCurrency,
       incomeMode,
@@ -69,14 +71,21 @@ export function PreferencesForm({
   const setIncomeCur = (c: string) =>
     setValue('incomeCurrency', c, { shouldDirty: true });
 
-  const detect = () => {
+  const tzValue = watch('timezone');
+  const auto = !tzValue?.trim();
+  const browserTz = (() => {
     try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (tz) setValue('timezone', tz, { shouldDirty: true });
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     } catch {
-      /* leave as-is */
+      return 'UTC';
     }
-  };
+  })();
+  const setAuto = (on: boolean) =>
+    setValue('timezone', on ? '' : timezoneAuto ? browserTz : timezone, {
+      shouldDirty: true,
+    });
+  const detect = () =>
+    setValue('timezone', browserTz, { shouldDirty: true });
 
   const onSubmit = handleSubmit(async (values) => {
     setMessage(undefined);
@@ -94,19 +103,34 @@ export function PreferencesForm({
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
       <Field>
         <Label htmlFor="timezone">Time zone</Label>
-        <div className="flex gap-2">
-          <Input
-            id="timezone"
-            className="flex-1"
-            placeholder="Europe/Berlin"
-            {...register('timezone')}
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-accent"
+            checked={auto}
+            onChange={(e) => setAuto(e.target.checked)}
           />
-          <Button type="button" variant="secondary" onClick={detect}>
-            Detect
-          </Button>
-        </div>
+          Detect automatically
+          <span className="text-muted">
+            (currently {auto ? browserTz : 'off'})
+          </span>
+        </label>
+        {auto ? null : (
+          <div className="flex gap-2">
+            <Input
+              id="timezone"
+              className="flex-1"
+              placeholder="Europe/Berlin"
+              {...register('timezone')}
+            />
+            <Button type="button" variant="secondary" onClick={detect}>
+              Detect
+            </Button>
+          </div>
+        )}
         <p className="text-xs text-muted">
-          Used to work out what counts as “today”.
+          Used to work out what counts as “today”. Auto follows your device; an
+          explicit zone stays fixed wherever you sign in.
         </p>
         {errors.timezone?.message ? (
           <p className="text-xs text-danger">{errors.timezone.message}</p>

@@ -22,13 +22,17 @@ export default function SignupPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(undefined);
-    let timezone: string | undefined;
+    // The zone is auto-detected (no stored override) — drop it in a cookie so
+    // the first signed-in render already knows "today".
     try {
-      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) {
+        document.cookie = `wib-tz=${encodeURIComponent(tz)}; path=/; max-age=31536000; samesite=lax`;
+      }
     } catch {
-      timezone = undefined;
+      /* fall back to UTC server-side */
     }
-    const result = await registerAction({ ...values, timezone });
+    const result = await registerAction(values);
     if (!result.ok) setFormError(applyServerErrors(setError, result));
   });
 

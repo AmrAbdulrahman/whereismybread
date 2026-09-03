@@ -71,16 +71,30 @@ export function PaymentCalendar({
     setSelected(null);
   };
 
+  const thisMonth = startOfMonth(board.today);
+  const onThisMonth = start === thisMonth;
+
   const selectedOccurrences = selected ? (byDate.get(selected) ?? []) : [];
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
       <div className="min-w-0 flex-1">
-        <div className="mb-3 flex items-center gap-3">
-          <h2 className="font-display text-lg font-semibold">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="min-w-0 truncate font-display text-lg font-semibold">
             {monthLabel(start)}
           </h2>
-          <div className="flex gap-1">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                onMonthChange(thisMonth);
+                setSelected(board.today);
+              }}
+              disabled={onThisMonth}
+              className="rounded-md border border-line-strong px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-muted"
+            >
+              Today
+            </button>
             <button
               type="button"
               aria-label="Previous month"

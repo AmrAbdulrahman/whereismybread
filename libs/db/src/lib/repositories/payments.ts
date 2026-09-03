@@ -17,6 +17,7 @@ import {
   type Account,
   type Bank,
   type Payment,
+  type PaymentLineItem,
   type PaymentMethod,
   type Tag,
 } from '../schema/payments';
@@ -30,11 +31,13 @@ export interface PaymentWithMeta extends Payment {
 
 export interface PaymentInput {
   name: string;
-  amountKind: 'fixed' | 'per_unit';
-  /** Fixed: the charge. Per-unit: the price of one unit. */
+  amountKind: 'fixed' | 'per_unit' | 'group';
+  /** Fixed: the charge. Per-unit: unit price. Group: snapshot of the record sum. */
   amountMinor: number;
   unitName: string | null;
   defaultUnits: number;
+  /** The records a `group` payment's amount is derived from (else null). */
+  lineItems: PaymentLineItem[] | null;
   feeKind: 'none' | 'fixed' | 'percent';
   feeFixedMinor: number;
   feePercent: number;
@@ -165,6 +168,7 @@ const paymentColumns = (input: PaymentInput) => ({
   name: input.name,
   amountKind: input.amountKind,
   amountMinor: input.amountMinor,
+  lineItems: input.lineItems,
   unitName: input.unitName,
   defaultUnits: input.defaultUnits,
   feeKind: input.feeKind,

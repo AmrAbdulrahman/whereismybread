@@ -5,7 +5,10 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string | null;
+  /** The effective IANA zone — the stored override, else browser-detected, else UTC. */
   timezone: string;
+  /** True when no explicit override is stored (the zone is auto-detected). */
+  timezoneAuto: boolean;
   defaultCurrency: string;
   displayCurrency: string;
   /** 'fixed' → a flat monthly figure; 'hourly' → hours × a rate. */

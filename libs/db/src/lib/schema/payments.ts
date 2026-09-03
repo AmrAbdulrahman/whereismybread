@@ -135,6 +135,21 @@ export const recipientMethods = pgTable(
   ],
 );
 
+/** One line of a `group` payment — a named amount in its own currency. */
+export interface PaymentLineItem {
+  /** Stable id (client-generated) so a row survives reorders/edits. */
+  id: string;
+  name: string;
+  valueMinor: number;
+  currency: string;
+  /** An icon-set key (see `METHOD_ICON_KEYS`), or null when a logo is used. */
+  iconKey: string | null;
+  /** A logo (data: URI) fetched from a website, used instead of `iconKey`. */
+  logoUrl: string | null;
+  /** Brand colour pulled alongside the logo, for the icon fallback dot. */
+  color: string | null;
+}
+
 export const payments = pgTable('payments', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')
@@ -145,9 +160,13 @@ export const payments = pgTable('payments', {
    * `fixed`   → `amount_minor` is the charge.
    * `per_unit` → `amount_minor` is the price of one `unit_name`; the charge is
    *              `amount_minor × units` (units per occurrence, default `default_units`).
+   * `group`   → the charge is the sum of `line_items`, each converted into
+   *              `currency`; `amount_minor` holds a snapshot of that sum.
    */
   amountKind: text('amount_kind').notNull().default('fixed'),
   amountMinor: integer('amount_minor').notNull(),
+  /** The records a `group` payment's amount is derived from. */
+  lineItems: jsonb('line_items').$type<PaymentLineItem[]>(),
   /** e.g. "session", "visit", "hour" — set when `amount_kind = 'per_unit'`. */
   unitName: text('unit_name'),
   /** Units assumed for an occurrence with no explicit override. */
@@ -207,11 +226,39 @@ export const paymentTags = pgTable(
   (t) => [primaryKey({ columns: [t.paymentId, t.tagId] })],
 );
 
+/** A file (image / PDF / text) attached to a payment, stored in Vercel Blob. */
+export const paymentAttachments = pgTable(
+  'payment_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    paymentId: uuid('payment_id')
+      .notNull()
+      .references(() => payments.id, { onDelete: 'cascade' }),
+    /** Original filename, for display + download. */
+    name: text('name').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    /** Public Vercel Blob URL. */
+    url: text('url').notNull(),
+    /** Blob pathname — kept so the object can be deleted. */
+    pathname: text('pathname').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('payment_attachments_payment_idx').on(t.paymentId)],
+);
+
 /** Per-occurrence override for a single due date (amount, method, notes…). */
 export interface PaymentOverrides {
   amountMinor?: number;
   /** Units for this occurrence (per-unit payments only). */
   units?: number | null;
+  /** Replacement record list for this occurrence (group payments only). */
+  lineItems?: PaymentLineItem[] | null;
   currency?: string;
   name?: string;
   methodId?: string | null;
@@ -260,3 +307,4 @@ export type RecipientMethod = typeof recipientMethods.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
 export type PaymentEvent = typeof paymentEvents.$inferSelect;
+export type PaymentAttachment = typeof paymentAttachments.$inferSelect;

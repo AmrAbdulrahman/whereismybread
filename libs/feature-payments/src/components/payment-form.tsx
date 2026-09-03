@@ -10,10 +10,15 @@ import type {
   RecipientMethod,
   Tag,
 } from '@wib/db';
-import { anchorForDayOfMonth, RECURRENCES } from '@wib/domain';
+import {
+  anchorForDayOfMonth,
+  RECURRENCES,
+  type RateMap,
+} from '@wib/domain';
 import {
   AmountField,
   Button,
+  CurrencyField,
   Field,
   Input,
   Label,
@@ -25,6 +30,7 @@ import {
 import { ImagePlus, Plus } from '@wib/ui/icons';
 import {
   deletePaymentAction,
+  discardBlobsAction,
   fetchBrandingAction,
   resetOccurrenceAction,
   savePaymentAction,
@@ -33,7 +39,10 @@ import { readLastCurrency, writeLastCurrency } from '../lib/last-currency';
 import { fileToLogoDataUrl } from '../lib/logo-file';
 import { paymentFormSchema, type PaymentFormValues } from '../lib/schema';
 import { AccountForm } from './account-form';
+import { AttachmentsField } from './attachments-field';
 import { BankForm } from './bank-form';
+import { PaymentGroupEditor } from './payment-group-editor';
+import type { OccurrenceAttachment } from '../lib/types';
 import { RecipientMethodForm } from './recipient-method-form';
 import { MethodForm } from './method-form';
 import { TagInput } from './tag-input';
@@ -58,6 +67,8 @@ export interface PaymentFormProps {
   today: string;
   /** Currencies already in use — surfaced first in the picker. */
   usedCurrencies?: string[];
+  /** Exchange rates — powers the live total on a group payment. */
+  rates?: RateMap;
   /** Present when editing. */
   initial?: Partial<PaymentFormValues> & { id: string };
   /** The due date of the occurrence the user opened, for scoped edits. */
@@ -84,6 +95,7 @@ export function PaymentForm({
   defaultCurrency,
   today,
   usedCurrencies = [],
+  rates = {},
   initial,
   occurrenceDate,
   hasOverride = false,
@@ -101,6 +113,9 @@ export function PaymentForm({
   const [addingBank, setAddingBank] = useState(false);
   const [addingRecipientMethod, setAddingRecipientMethod] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [savedAttachments, setSavedAttachments] = useState<
+    OccurrenceAttachment[]
+  >(() => (initial?.attachments as OccurrenceAttachment[] | undefined) ?? []);
 
   /** A recurring payment opened on a specific occurrence can be scoped. */
   const canScope =
@@ -146,6 +161,8 @@ export function PaymentForm({
       name: initial?.name ?? '',
       amountKind: initial?.amountKind ?? 'fixed',
       amount: initial?.amount ?? '',
+      lineItems: initial?.lineItems ?? [],
+      attachments: [],
       unitName: initial?.unitName ?? '',
       defaultUnits: initial?.defaultUnits ?? '1',
       feeKind: initial?.feeKind ?? 'none',
@@ -174,6 +191,7 @@ export function PaymentForm({
   const dayOfMonth = watch('dayOfMonth');
   const amountKind = watch('amountKind');
   const perUnit = amountKind === 'per_unit';
+  const isGroup = amountKind === 'group';
   const unitName = watch('unitName');
   const unitLabel =
     typeof unitName === 'string' && unitName.trim() ? unitName.trim() : 'unit';
@@ -405,6 +423,7 @@ export function PaymentForm({
             </button>
             <input
               ref={logoInputRef}
+              id="provider-logo"
               type="file"
               accept="image/*"
               className="hidden"
@@ -449,13 +468,18 @@ export function PaymentForm({
       <Field>
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="amount">
-            {perUnit ? `Price per ${unitLabel}` : 'Amount'}
+            {isGroup
+              ? 'Records'
+              : perUnit
+                ? `Price per ${unitLabel}`
+                : 'Amount'}
           </Label>
           <div className="flex gap-1">
             {(
               [
                 ['fixed', 'Fixed'],
                 ['per_unit', 'Per unit'],
+                ['group', 'Group'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -476,29 +500,55 @@ export function PaymentForm({
             ))}
           </div>
         </div>
-        <Controller
-          control={control}
-          name="amount"
-          render={({ field, fieldState }) => (
-            <AmountField
-              id="amount"
-              amount={field.value ?? ''}
-              onAmountChange={field.onChange}
-              onAmountBlur={field.onBlur}
+
+        {isGroup ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">Total settles in</span>
+              <CurrencyField
+                value={watch('currency') ?? defaultCurrency}
+                onChange={(c) => setValue('currency', c, { shouldDirty: true })}
+                usedCodes={usedCurrencies}
+                triggerClassName="h-8 rounded-md border border-line-strong px-2 text-sm"
+              />
+            </div>
+            <PaymentGroupEditor
+              control={control}
+              register={register}
+              setValue={setValue}
               currency={watch('currency') ?? defaultCurrency}
-              onCurrencyChange={(c) =>
-                setValue('currency', c, { shouldDirty: true })
-              }
               usedCurrencies={usedCurrencies}
-              invalid={!!fieldState.error}
+              rates={rates}
+              error={fieldMessage(errors, 'lineItems')}
             />
-          )}
-        />
-        {fieldMessage(errors, 'amount') ? (
-          <p className="text-xs text-danger">
-            {fieldMessage(errors, 'amount')}
-          </p>
-        ) : null}
+          </>
+        ) : (
+          <>
+            <Controller
+              control={control}
+              name="amount"
+              render={({ field, fieldState }) => (
+                <AmountField
+                  id="amount"
+                  amount={field.value ?? ''}
+                  onAmountChange={field.onChange}
+                  onAmountBlur={field.onBlur}
+                  currency={watch('currency') ?? defaultCurrency}
+                  onCurrencyChange={(c) =>
+                    setValue('currency', c, { shouldDirty: true })
+                  }
+                  usedCurrencies={usedCurrencies}
+                  invalid={!!fieldState.error}
+                />
+              )}
+            />
+            {fieldMessage(errors, 'amount') ? (
+              <p className="text-xs text-danger">
+                {fieldMessage(errors, 'amount')}
+              </p>
+            ) : null}
+          </>
+        )}
       </Field>
 
       {perUnit ? (
@@ -928,6 +978,25 @@ export function PaymentForm({
         ) : null}
       </Field>
 
+      <Field>
+        <Label>Attachments</Label>
+        <Controller
+          control={control}
+          name="attachments"
+          render={({ field }) => (
+            <AttachmentsField
+              paymentId={initial?.id ?? null}
+              saved={savedAttachments}
+              onSavedChange={setSavedAttachments}
+              drafts={field.value ?? []}
+              onDraftsChange={(next) =>
+                field.onChange(next as typeof field.value)
+              }
+            />
+          )}
+        />
+      </Field>
+
       <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
         <div className="flex flex-col items-start gap-0.5">
           {initial ? (
@@ -952,7 +1021,20 @@ export function PaymentForm({
         </div>
 
         <div className="flex gap-2">
-          <Button type="button" variant="ghost" onClick={onDone}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              // Bin any files uploaded but never saved with this new payment.
+              const staged = (getValues('attachments') ?? [])
+                .map((a) => a.url)
+                .filter(Boolean);
+              if (!initial && staged.length > 0) {
+                void discardBlobsAction(staged);
+              }
+              onDone();
+            }}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>

@@ -22,7 +22,9 @@ test('the list view search + day total span currencies', async ({ page }) => {
     currency: string,
     account?: string,
   ) => {
-    await page.getByRole('button', { name: 'Add a payment' }).click();
+    await page
+      .getByRole('button', { name: /^(Add a payment|New payment)$/ })
+      .click();
     await page.getByRole('button', { name: 'Monthly', exact: true }).click();
     await page.getByLabel('Description').fill(name);
     await page.getByLabel('Amount').fill(amount);

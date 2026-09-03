@@ -36,6 +36,27 @@ export interface OccurrenceRecipientMethod {
   color: string;
 }
 
+/** A file attached to a payment, stored in Vercel Blob. */
+export interface OccurrenceAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  url: string;
+  pathname: string;
+}
+
+/** One record of a `group` payment, resolved for display. */
+export interface OccurrenceLineItem {
+  id: string;
+  name: string;
+  /** The record's value in its own currency. */
+  amount: Money;
+  iconKey: string | null;
+  logoUrl: string | null;
+  color: string | null;
+}
+
 /** One concrete due date of a payment, with its paid state. */
 export interface BoardOccurrence {
   key: string; // `${paymentId}:${dueDate}`
@@ -48,13 +69,17 @@ export interface BoardOccurrence {
   feeMinor: number;
   /** "+2.5%" / "+€1.50" when this payment has a fee, else null. */
   feeLabel: string | null;
-  amountKind: 'fixed' | 'per_unit';
+  amountKind: 'fixed' | 'per_unit' | 'group';
   /** e.g. "session" — per-unit payments only. */
   unitName: string | null;
   /** Units billed this occurrence — per-unit payments only. */
   units: number | null;
   /** Price of one unit — per-unit payments only. */
   rate: Money | null;
+  /** The records this amount is the sum of — group payments only. */
+  lineItems: OccurrenceLineItem[] | null;
+  /** Files attached to the payment (series-level, shown on every occurrence). */
+  attachments: OccurrenceAttachment[];
   recurrence: 'one_time' | 'monthly' | 'quarterly' | 'annual';
   isOneTime: boolean;
   isSubscription: boolean;
@@ -82,12 +107,27 @@ export interface DayGroup {
   currency: string;
 }
 
+/** A `group` record as the form edits it (value is a typed string). */
+export interface EditableLineItem {
+  id: string;
+  name: string;
+  value: string;
+  currency: string;
+  iconKey: string | null;
+  logoUrl: string | null;
+  color: string | null;
+}
+
 export interface EditablePayment {
   id: string;
   name: string;
-  amountKind: 'fixed' | 'per_unit';
+  amountKind: 'fixed' | 'per_unit' | 'group';
   /** Fixed: the charge. Per-unit: the price of one unit. Major units as typed. */
   amount: string;
+  /** The records — group payments only (empty otherwise). */
+  lineItems: EditableLineItem[];
+  /** Attachments already saved against this payment (edit mode). */
+  attachments: OccurrenceAttachment[];
   unitName: string | null;
   defaultUnits: string;
   /** `none` | `fixed` | `percent` surcharge on top of the amount. */

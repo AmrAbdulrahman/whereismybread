@@ -28,7 +28,7 @@ test('a subscription logo can be uploaded by hand', async ({ page }) => {
   await page.getByRole('button', { name: 'Monthly', exact: true }).click();
 
   await page
-    .locator('input[type="file"]')
+    .locator('#provider-logo')
     .setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG_1PX });
 
   // the preview swaps from the placeholder icon to the uploaded image

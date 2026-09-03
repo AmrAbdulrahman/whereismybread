@@ -22,6 +22,7 @@ import {
   listFilterCount,
   type ListFilterValue,
 } from './list-filters';
+import { ListMinimap } from './list-minimap';
 import { MonthIncomeEditor } from './month-income-editor';
 import { OccurrenceItem } from './occurrence-item';
 
@@ -84,12 +85,12 @@ function monthTotals(
   return { paidMinor, remainingMinor: totalMinor - paidMinor, totalMinor };
 }
 
-function monthLabel(monthKey: string, todayYear: string): string {
-  const opts: Intl.DateTimeFormatOptions = { month: 'long', timeZone: 'UTC' };
-  if (monthKey.slice(0, 4) !== todayYear) opts.year = 'numeric';
-  return new Intl.DateTimeFormat('en-GB', opts).format(
-    new Date(`${monthKey}-01T00:00:00Z`),
-  );
+function monthLabel(monthKey: string): string {
+  const name = new Intl.DateTimeFormat('en-GB', {
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(new Date(`${monthKey}-01T00:00:00Z`));
+  return `${name}, ${monthKey.slice(0, 4)}`;
 }
 
 /** Fold earlier / later board slices onto the server-rendered window. */
@@ -145,10 +146,13 @@ function mergeBoards(
 export function PaymentList({
   board: baseBoard,
   filter = EMPTY_LIST_FILTER,
+  stickyTop = 0,
   onEdit,
 }: {
   board: PaymentBoard;
   filter?: ListFilterValue;
+  /** Px offset for the sticky month headers — the height of the sticky panel. */
+  stickyTop?: number;
   onEdit: (paymentId: string, dueDate: string) => void;
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
@@ -174,14 +178,42 @@ export function PaymentList({
   const board = mergeBoards(baseBoard, pastBoard, futureBoard);
   const { displayCurrency, rates } = board;
 
+  // Occurrences the user just ticked/unticked: keeps them sorted (paid → bottom
+  // of their day) with a slide animation, before the board round-trips back.
+  const [locallyPaid, setLocallyPaid] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    // Drop optimistic entries the server board has caught up on.
+    setLocallyPaid((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      const next: Record<string, boolean> = {};
+      for (const b of [baseBoard, pastBoard, futureBoard])
+        for (const g of b?.groups ?? [])
+          for (const o of g.occurrences) {
+            const p = prev[o.key];
+            if (p !== undefined && p !== (o.status === 'paid')) next[o.key] = p;
+          }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [baseBoard, pastBoard, futureBoard]);
+  const isPaid = (o: BoardOccurrence) =>
+    locallyPaid[o.key] ?? o.status === 'paid';
+  const setLocalPaid = (key: string, paid: boolean) => {
+    const apply = () => setLocallyPaid((p) => ({ ...p, [key]: paid }));
+    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+      document.startViewTransition(() => flushSync(apply));
+    } else {
+      apply();
+    }
+  };
+
   const startedFloor = baseBoard.startedMonth
     ? `${baseBoard.startedMonth}-01`
     : null;
   const earliestLoaded = pastBoard?.window.from ?? baseBoard.window.from;
   const atStart = !startedFloor || earliestLoaded <= startedFloor;
 
-  // Keep already-loaded slices in sync when the server board itself changes
-  // (an edit / add / delete triggers a soft refresh).
+  // Keep already-loaded slices in sync when the server board changes under us
+  // (an edit / add / delete / mark-paid triggers a `router.refresh()`).
   const firstRun = useRef(true);
   useEffect(() => {
     if (firstRun.current) {
@@ -232,6 +264,50 @@ export function PaymentList({
     }
     return key;
   };
+
+  // Timeline "jump to month": scroll if it's already rendered, otherwise load
+  // the slice that contains it and scroll once it lands.
+  const pendingScrollKey = useRef<string | null>(null);
+  const scrollToSection = (key: string) => {
+    const el = headerRefs.current.get(key)?.parentElement;
+    if (!el) return false;
+    const y = window.scrollY + el.getBoundingClientRect().top - stickyTop - 8;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    return true;
+  };
+  const jumpToMonth = (key: string) => {
+    if (scrollToSection(key)) return;
+    const first = `${key}-01`;
+    if (startedFloor && first < startedFloor) return;
+    pendingScrollKey.current = key;
+    if (first < earliestLoaded) {
+      void loadListWindowAction({
+        from: first,
+        to: addDays(baseBoard.window.from, -1),
+      }).then((r) => {
+        if (r.ok) {
+          setPastBoard(r.board);
+          setPastFrom(first);
+        }
+      });
+    } else {
+      const to = endOfMonth(addMonths(first, 1));
+      void loadListWindowAction({
+        from: addDays(baseBoard.window.to, 1),
+        to,
+      }).then((r) => {
+        if (r.ok) {
+          setFutureBoard(r.board);
+          setFutureTo(to);
+        }
+      });
+    }
+  };
+  useEffect(() => {
+    const key = pendingScrollKey.current;
+    if (key && scrollToSection(key)) pendingScrollKey.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- retry once the slice renders
+  }, [pastBoard, futureBoard, baseBoard]);
 
   const loadPast = () => {
     if (loadingPast || pastPending.current || atStart) return;
@@ -385,18 +461,14 @@ export function PaymentList({
     return true;
   };
 
-  // Today and later show as normal; earlier days inside the server window keep
-  // only unpaid stragglers; months scrolled back into view show full history.
-  const baseFrom = baseBoard.window.from;
+  // Show everything that isn't skipped — paid occurrences stay in place with
+  // their checkbox ticked (earlier this month, or in months scrolled back in).
   const upcoming = board.groups
     .map((g) => ({
       ...g,
-      occurrences: g.occurrences.filter((o) => {
-        if (!matchesFilter(o)) return false;
-        if (g.date >= board.today) return o.status !== 'skipped';
-        if (g.date >= baseFrom) return o.status === 'scheduled';
-        return o.status !== 'skipped';
-      }),
+      occurrences: g.occurrences.filter(
+        (o) => matchesFilter(o) && o.status !== 'skipped',
+      ),
     }))
     .filter((g) => g.occurrences.length > 0);
   const todayHasPayments = upcoming.some((g) => g.date === board.today);
@@ -413,7 +485,6 @@ export function PaymentList({
     bucket.groups.push(group);
   }
 
-  const todayYear = board.today.slice(0, 4);
   const todayMonth = board.today.slice(0, 7);
   const defaultKey =
     months.find((m) => m.key === todayMonth)?.key ?? months[0]?.key ?? '';
@@ -428,6 +499,28 @@ export function PaymentList({
       ? scrolledKey
       : defaultKey;
 
+  // Timeline rail bounds: the start of history through a little past the last
+  // loaded month (or the furthest one, once there's nothing more to load).
+  const loadedMonthKeys = new Set(months.map((m) => m.key));
+  const minimapFrom = (
+    startedFloor ??
+    `${months[0]?.key ?? todayMonth}-01`
+  ).slice(0, 7);
+  const lastLoadedKey = months.at(-1)?.key ?? todayMonth;
+  const sixOut = addMonths(`${todayMonth}-01`, 6).slice(0, 7);
+  const minimapTo = futureExhausted
+    ? lastLoadedKey
+    : lastLoadedKey > sixOut
+      ? lastLoadedKey
+      : sixOut;
+  const minimapSpan =
+    (Number(minimapTo.slice(0, 4)) - Number(minimapFrom.slice(0, 4))) * 12 +
+    Number(minimapTo.slice(5, 7)) -
+    Number(minimapFrom.slice(5, 7)) +
+    1;
+  const showMinimap = minimapSpan >= 3;
+  const goToday = () => jumpToMonth(todayMonth);
+
   useEffect(() => {
     const order = monthKeys ? monthKeys.split(',') : [];
     if (order.length === 0) return;
@@ -440,7 +533,7 @@ export function PaymentList({
         const section = headerRefs.current.get(key)?.parentElement;
         if (!section) continue;
         const r = section.getBoundingClientRect();
-        const visible = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+        const visible = Math.min(r.bottom, vh) - Math.max(r.top, stickyTop);
         if (visible > bestVisible) {
           bestVisible = visible;
           best = key;
@@ -462,7 +555,7 @@ export function PaymentList({
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [monthKeys]);
+  }, [monthKeys, stickyTop]);
 
   if (upcoming.length === 0) {
     return (
@@ -480,7 +573,7 @@ export function PaymentList({
   const editing = editingMonth
     ? {
         key: editingMonth,
-        label: monthLabel(editingMonth, todayYear),
+        label: monthLabel(editingMonth),
         effective: board.incomeRawByMonth[editingMonth] ?? {
           minor: board.globalIncomeMinor,
           currency: board.incomeCurrency,
@@ -491,7 +584,21 @@ export function PaymentList({
     : null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div
+      className={cn('flex flex-col gap-8', showMinimap && 'pr-14 sm:pr-16')}
+    >
+      {showMinimap ? (
+        <ListMinimap
+          fromKey={minimapFrom}
+          toKey={minimapTo}
+          loaded={loadedMonthKeys}
+          activeKey={activeKey}
+          todayKey={todayMonth}
+          stickyTop={stickyTop}
+          onJump={jumpToMonth}
+          onToday={goToday}
+        />
+      ) : null}
       {atStart ? (
         <StartMarker />
       ) : (
@@ -537,7 +644,8 @@ export function PaymentList({
                 else headerRefs.current.delete(mo.key);
               }}
               data-month-key={mo.key}
-              className="sticky top-0 z-20 flex flex-col gap-2 bg-ground pb-2 pt-1"
+              style={{ top: stickyTop }}
+              className="sticky z-20 flex flex-col gap-2 bg-ground pb-2 pt-1"
             >
               <div
                 className={cn(
@@ -551,7 +659,7 @@ export function PaymentList({
                     isActive ? 'text-ink' : 'text-ink-soft',
                   )}
                 >
-                  {monthLabel(mo.key, todayYear)}
+                  {monthLabel(mo.key)}
                 </h3>
                 <span className="font-mono text-sm font-semibold tabular-nums text-ink">
                   {formatMoney(money(totalMinor, displayCurrency))}
@@ -676,16 +784,30 @@ export function PaymentList({
                       </span>
                     </span>
                   </div>
-                  {group.occurrences.map((occ) => (
-                    <OccurrenceItem
-                      key={occ.key}
-                      occ={occ}
-                      onEdit={onEdit}
-                      displayCurrency={displayCurrency}
-                      rates={rates}
-                      today={board.today}
-                    />
-                  ))}
+                  <div className="flex flex-col gap-1.5">
+                    {[...group.occurrences]
+                      .sort((a, b) => Number(isPaid(a)) - Number(isPaid(b)))
+                      .map((occ) => (
+                        <div
+                          key={occ.key}
+                          style={{
+                            viewTransitionName: `o-${occ.key.replace(
+                              /[^\w-]/g,
+                              '_',
+                            )}`,
+                          }}
+                        >
+                          <OccurrenceItem
+                            occ={occ}
+                            onEdit={onEdit}
+                            onToggle={(paid) => setLocalPaid(occ.key, paid)}
+                            displayCurrency={displayCurrency}
+                            rates={rates}
+                            today={board.today}
+                          />
+                        </div>
+                      ))}
+                  </div>
                 </div>
               );
             })}

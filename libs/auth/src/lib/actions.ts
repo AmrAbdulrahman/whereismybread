@@ -112,17 +112,13 @@ export async function loginAction(
 // --- sign up -----------------------------------------------------------------
 
 export async function registerAction(
-  input: SignUpInput & { timezone?: string },
+  input: SignUpInput,
 ): Promise<FormState> {
   const parsed = signUpSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
   }
   const { name, email, password } = parsed.data;
-  const timezone =
-    typeof input.timezone === 'string' && input.timezone.length <= 64
-      ? input.timezone
-      : undefined;
 
   const limit = rateLimit(`signup:${await clientIp()}`, 20, 60 * 60 * 1000);
   if (!limit.ok) {
@@ -145,7 +141,6 @@ export async function registerAction(
       name,
       email,
       passwordHash: await hashPassword(password),
-      timezone,
     });
   } catch (error) {
     // Unique-violation race between the check above and the insert.
@@ -305,7 +300,7 @@ export async function updatePreferencesAction(
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
   }
 
-  const { income, hourlyRate, monthlyHours, ...prefs } = parsed.data;
+  const { income, hourlyRate, monthlyHours, timezone, ...prefs } = parsed.data;
   const num = (v: string) => Number(String(v).replace(/[, ]/g, '') || '0');
   const toMinor = (v: string) => {
     try {
@@ -329,6 +324,8 @@ export async function updatePreferencesAction(
 
   await updateUserPreferences(id, {
     ...prefs,
+    // Empty → auto-detect from the browser.
+    timezone: timezone.trim() || null,
     incomeMinor,
     hourlyRateMinor,
     monthlyHours: num(monthlyHours),

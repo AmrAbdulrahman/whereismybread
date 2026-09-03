@@ -127,6 +127,27 @@
       "when": 1788394397969,
       "tag": "0017_board_query_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788401544593,
+      "tag": "0018_timezone_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788432041249,
+      "tag": "0019_payment_line_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788433125414,
+      "tag": "0020_payment_attachments",
+      "breakpoints": true
     }
   ]
 }

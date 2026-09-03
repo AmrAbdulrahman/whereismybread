@@ -16,9 +16,22 @@ export {
   resetOccurrenceAction,
   setMonthIncomeAction,
   resetMonthIncomeAction,
+  uploadAttachmentAction,
+  removeAttachmentAction,
+  discardBlobsAction,
+  type AttachmentDraft,
   type EditScope,
   type ScopeInput,
 } from './lib/actions';
+
+export {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_MAX_BYTES,
+  attachmentKind,
+  formatBytes,
+  resolveAttachmentType,
+  type AttachmentKind,
+} from './lib/attachments';
 
 export { paymentFormSchema, type PaymentFormValues } from './lib/schema';
 export { methodFormSchema, type MethodFormValues } from './lib/method-schema';
@@ -37,6 +50,7 @@ export type {
   DayGroup,
   EditablePayment,
   OccurrenceAccount,
+  OccurrenceAttachment,
   OccurrenceBank,
   OccurrenceRecipientMethod,
 } from './lib/types';

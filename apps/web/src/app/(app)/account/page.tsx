@@ -33,6 +33,7 @@ export default async function AccountPage() {
         <h2 className="font-display text-base font-semibold">Preferences</h2>
         <PreferencesForm
           timezone={user.timezone}
+          timezoneAuto={user.timezoneAuto}
           defaultCurrency={user.defaultCurrency}
           displayCurrency={user.displayCurrency}
           incomeMode={user.incomeMode}

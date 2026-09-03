@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type {
   Account,
@@ -45,6 +45,18 @@ function applyOverride(
       ov.amountMinor != null ? (ov.amountMinor / 100).toFixed(2) : base.amount,
     defaultUnits:
       ov.units != null ? String(ov.units) : base.defaultUnits,
+    lineItems:
+      'lineItems' in ov && ov.lineItems
+        ? ov.lineItems.map((li) => ({
+            id: li.id,
+            name: li.name,
+            value: (li.valueMinor / 100).toFixed(2),
+            currency: li.currency,
+            iconKey: li.iconKey,
+            logoUrl: li.logoUrl,
+            color: li.color,
+          }))
+        : base.lineItems,
     currency: ov.currency ?? base.currency,
     methodId: 'methodId' in ov ? (ov.methodId ?? null) : base.methodId,
     accountId: 'accountId' in ov ? (ov.accountId ?? null) : base.accountId,
@@ -121,10 +133,22 @@ export function PaymentsView({
     }
   };
 
-  const close = () => {
-    setSheet({ mode: 'closed' });
-    router.refresh();
-  };
+  // The form's own mutation action calls `revalidatePath('/plan')`, which
+  // re-renders this page — so closing the modal just needs to hide it.
+  const close = () => setSheet({ mode: 'closed' });
+
+  // The top panel (summary + New payment + view switch + filters) is sticky.
+  // Measure it so the list's month headers can stick just beneath it.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelH, setPanelH] = useState(0);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPanelH(el.offsetHeight));
+    ro.observe(el);
+    setPanelH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, []);
 
   const openEdit = (paymentId: string, occurrenceDate?: string) => {
     const base = board.editable[paymentId];
@@ -196,6 +220,7 @@ export function PaymentsView({
           defaultCurrency={defaultCurrency}
           today={board.today}
           usedCurrencies={usedCurrencies}
+          rates={board.rates}
           initial={sheet.mode === 'edit' ? sheet.payment : undefined}
           occurrenceDate={
             sheet.mode === 'edit' ? sheet.occurrenceDate : undefined
@@ -226,67 +251,71 @@ export function PaymentsView({
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Upcoming payments</h1>
-          <p className="mt-1 text-sm text-ink-soft">
-            {formatConverted(
-              money(scopeTotalMinor, summary.currency),
-              board.displayCurrency,
-              board.rates,
-            )}{' '}
-            due {isThisMonth ? 'this month' : `in ${scopeMonthLabel}`}
-            {' · '}
-            {inScope.length} scheduled
-          </p>
-          {scopeRisk.level !== 'none' ? (
-            <p
-              className={cn(
-                'mt-1 flex items-center gap-1.5 text-xs font-medium',
-                scopeRisk.text,
-              )}
-            >
-              <span
-                className={cn('h-1.5 w-1.5 rounded-full', scopeRisk.bar)}
-              />
-              {formatMoney(
-                money(
-                  scopeIncomeMinor - scopeSpentDisplayMinor,
-                  board.displayCurrency,
-                ),
+      <div
+        ref={panelRef}
+        className="sticky top-0 z-30 -mx-4 flex flex-col gap-3 border-b border-line/60 bg-ground/95 px-4 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:px-6"
+      >
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold">Upcoming payments</h1>
+            <p className="mt-1 text-sm text-ink-soft">
+              {formatConverted(
+                money(scopeTotalMinor, summary.currency),
+                board.displayCurrency,
+                board.rates,
               )}{' '}
-              left of{' '}
-              {formatMoney(money(scopeIncomeMinor, board.displayCurrency))}{' '}
-              income · {scopeRisk.label}
+              due {isThisMonth ? 'this month' : `in ${scopeMonthLabel}`}
+              {' · '}
+              {inScope.length} scheduled
             </p>
-          ) : null}
-        </div>
-        <Button onClick={() => setSheet({ mode: 'new' })}>
-          <Plus size={16} strokeWidth={3} />
-          New payment
-        </Button>
-      </header>
+            {scopeRisk.level !== 'none' ? (
+              <p
+                className={cn(
+                  'mt-1 flex items-center gap-1.5 text-xs font-medium',
+                  scopeRisk.text,
+                )}
+              >
+                <span
+                  className={cn('h-1.5 w-1.5 rounded-full', scopeRisk.bar)}
+                />
+                {formatMoney(
+                  money(
+                    scopeIncomeMinor - scopeSpentDisplayMinor,
+                    board.displayCurrency,
+                  ),
+                )}{' '}
+                left of{' '}
+                {formatMoney(money(scopeIncomeMinor, board.displayCurrency))}{' '}
+                income · {scopeRisk.label}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <Button onClick={() => setSheet({ mode: 'new' })}>
+              <Plus size={16} strokeWidth={3} />
+              New payment
+            </Button>
+            <div className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-ground p-1">
+              {(['list', 'calendar'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setParam('view', v)}
+                  className={cn(
+                    'rounded-sm px-3 py-1 text-[13px] font-medium capitalize transition-colors',
+                    view === v
+                      ? 'bg-surface-2 text-ink'
+                      : 'text-muted hover:text-ink',
+                  )}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+        </header>
 
-      <div className="inline-flex w-fit items-center gap-1 rounded-md border border-line-strong bg-ground p-1">
-        {(['list', 'calendar'] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setParam('view', v)}
-            className={cn(
-              'rounded-sm px-3 py-1.5 text-[13px] font-medium capitalize transition-colors',
-              view === v
-                ? 'bg-surface-2 text-ink'
-                : 'text-muted hover:text-ink',
-            )}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
-
-      {view === 'list' ? (
-        <div className="flex flex-col gap-5">
+        {view === 'list' ? (
           <ListFilters
             value={listFilter}
             onChange={setListFilter}
@@ -294,12 +323,16 @@ export function PaymentsView({
             banks={banks}
             tags={tags}
           />
-          <PaymentList
-            board={board}
-            filter={listFilter}
-            onEdit={openEdit}
-          />
-        </div>
+        ) : null}
+      </div>
+
+      {view === 'list' ? (
+        <PaymentList
+          board={board}
+          filter={listFilter}
+          stickyTop={panelH}
+          onEdit={openEdit}
+        />
       ) : (
         <PaymentCalendar
           board={board}

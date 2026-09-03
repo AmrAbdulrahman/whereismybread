@@ -58,7 +58,8 @@ const nonNegNumber = z
   );
 
 export const preferencesSchema = z.object({
-  timezone: z.string().trim().min(1).max(64),
+  /** IANA zone, or empty for auto-detect. */
+  timezone: z.string().trim().max(64),
   defaultCurrency: currencyCode,
   displayCurrency: currencyCode,
   /** How income is worked out. */

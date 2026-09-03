@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { cn } from '@wib/ui';
 
 export interface TagOption {
@@ -18,11 +18,15 @@ export function TagInput({
   options: TagOption[];
 }) {
   const [draft, setDraft] = useState('');
+  // Set while a suggestion is being pressed, so the input's blur handler knows
+  // not to commit the half-typed draft first (it would add "eg", not "egypt").
+  const pickingSuggestion = useRef(false);
   const colorFor = (name: string) =>
     options.find((o) => o.name.toLowerCase() === name.toLowerCase())?.color ??
     '#6321d6';
 
   const add = (raw: string) => {
+    pickingSuggestion.current = false;
     const name = raw.trim();
     if (!name) return;
     if (!value.some((v) => v.toLowerCase() === name.toLowerCase())) {
@@ -75,7 +79,13 @@ export function TagInput({
               onChange(value.slice(0, -1));
             }
           }}
-          onBlur={() => add(draft)}
+          onBlur={() => {
+            if (pickingSuggestion.current) {
+              pickingSuggestion.current = false;
+              return;
+            }
+            add(draft);
+          }}
           placeholder={value.length ? '' : 'Add tags…'}
           className="min-w-[6rem] flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         />
@@ -86,6 +96,12 @@ export function TagInput({
             <button
               key={o.name}
               type="button"
+              // Flag before the input's blur fires so it skips the draft commit;
+              // `preventDefault` also keeps focus so the tap still lands here.
+              onPointerDown={() => {
+                pickingSuggestion.current = true;
+              }}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => add(o.name)}
               className={cn(
                 'rounded-full border border-line px-2 py-0.5 text-[11px] text-muted hover:border-line-strong hover:text-ink',

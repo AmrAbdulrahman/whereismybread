@@ -103,6 +103,44 @@ describe('paymentFormSchema', () => {
     }
   });
 
+  it('requires at least one record for a group amount', () => {
+    const parsed = paymentFormSchema.safeParse({
+      ...base,
+      amount: '',
+      amountKind: 'group',
+      lineItems: [],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts a group amount with records and ignores the amount field', () => {
+    const parsed = paymentFormSchema.safeParse({
+      ...base,
+      amount: '',
+      amountKind: 'group',
+      lineItems: [
+        { id: 'a', name: 'Netflix', value: '12.99', currency: 'GBP' },
+        { id: 'b', name: 'Spotify', value: '11', currency: 'EUR' },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.lineItems).toHaveLength(2);
+      expect(parsed.data.lineItems[0]?.currency).toBe('GBP');
+      expect(parsed.data.lineItems[1]?.iconKey).toBeNull();
+    }
+  });
+
+  it('rejects a record with a non-positive value', () => {
+    const parsed = paymentFormSchema.safeParse({
+      ...base,
+      amount: '',
+      amountKind: 'group',
+      lineItems: [{ id: 'a', name: 'Bad', value: '0', currency: 'EUR' }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('defaults to no fee', () => {
     const parsed = paymentFormSchema.safeParse(base);
     expect(parsed.success).toBe(true);

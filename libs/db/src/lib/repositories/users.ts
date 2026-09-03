@@ -30,7 +30,7 @@ export async function createUser(input: {
   email: string;
   passwordHash: string;
   name: string;
-  timezone?: string;
+  timezone?: string | null;
 }): Promise<User> {
   const values: NewUser = {
     email: normalizeEmail(input.email),
@@ -61,7 +61,7 @@ export async function updateUserProfile(
 export async function updateUserPreferences(
   id: string,
   patch: Partial<{
-    timezone: string;
+    timezone: string | null;
     defaultCurrency: string;
     displayCurrency: string;
     incomeMode: string;

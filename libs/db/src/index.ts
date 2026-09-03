@@ -11,6 +11,8 @@ export type {
   Payment,
   NewPayment,
   PaymentEvent,
+  PaymentLineItem,
+  PaymentAttachment,
 } from './lib/schema/payments';
 
 export {
@@ -51,10 +53,14 @@ export {
 
 export {
   listTags,
+  listTagsWithUsage,
   createTag,
+  updateTag,
   getOrCreateTags,
+  getTagByName,
   deleteTag,
   tagsByIds,
+  type TagWithUsage,
 } from './lib/repositories/tags';
 
 export {
@@ -93,6 +99,20 @@ export {
   type PaymentInput,
   type DeletePaymentResult,
 } from './lib/repositories/payments';
+
+export {
+  getBoardBundle,
+  type BoardBundle,
+  type PaymentWithTags,
+} from './lib/repositories/board-bundle';
+
+export {
+  listAttachments,
+  addAttachment,
+  deleteAttachment,
+  reconcileAttachments,
+  type AttachmentInput,
+} from './lib/repositories/attachments';
 
 export {
   listPaymentEvents,

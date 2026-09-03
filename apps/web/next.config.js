@@ -16,13 +16,19 @@ const nextConfig = {
     '@wib/db',
     '@wib/auth',
     '@wib/feature-payments',
+    '@wib/feature-tags',
   ],
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
     BUILD_TIMESTAMP: new Date().toISOString(),
   },
+  experimental: {
+    // Payment attachments (images / PDFs / text) are uploaded through a server
+    // action; the default 1 MB cap is too small for a scanned PDF.
+    serverActions: { bodySizeLimit: '12mb' },
+  },
   // Server-only / native packages — keep them out of the client & edge bundles.
-  serverExternalPackages: ['postgres', '@node-rs/argon2'],
+  serverExternalPackages: ['postgres', '@node-rs/argon2', '@vercel/blob'],
 };
 
 module.exports = nextConfig;
