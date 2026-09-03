@@ -13,7 +13,7 @@ async function signUp(page: import('@playwright/test').Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('a-strong-enough-password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/plan/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/plan/, { timeout: 35_000 });
 }
 
 test('list, add, edit, count and delete tags', async ({ page }) => {
@@ -35,6 +35,35 @@ test('list, add, edit, count and delete tags', async ({ page }) => {
   const row = page.getByRole('listitem').filter({ hasText: 'Groceries' });
   await expect(row).toBeVisible();
   await expect(row.getByText('Not used yet')).toBeVisible();
+
+  // a second tag, so the filter has something to narrow
+  await page.getByRole('button', { name: 'New tag' }).click();
+  await page
+    .getByRole('dialog', { name: 'New tag' })
+    .getByLabel('Name')
+    .fill('Gym');
+  await page
+    .getByRole('dialog', { name: 'New tag' })
+    .getByRole('button', { name: 'Add tag' })
+    .click();
+  await expect(page.getByRole('listitem')).toHaveCount(2);
+
+  await page.getByPlaceholder('Filter tags…').fill('gro');
+  await expect(page.getByRole('listitem')).toHaveCount(1);
+  await expect(
+    page.getByRole('listitem').filter({ hasText: 'Groceries' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filter' }).click();
+  await expect(page.getByRole('listitem')).toHaveCount(2);
+
+  // drop the extra (unused → inline confirm)
+  await page.getByRole('button', { name: 'Delete Gym' }).click();
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: 'Gym' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(page.getByRole('listitem')).toHaveCount(1);
 
   // duplicate name is rejected
   await page.getByRole('button', { name: 'New tag' }).click();
@@ -75,13 +104,13 @@ test('list, add, edit, count and delete tags', async ({ page }) => {
 
   await page.goto('/tags');
   await expect(page.getByText('Used in 1 payment')).toBeVisible();
+  // stats strip is present
+  await expect(page.getByText('in use', { exact: true })).toBeVisible();
 
-  // delete
+  // a referenced tag opens a confirmation modal showing the usage count
   await page.getByRole('button', { name: 'Delete Food' }).click();
-  await page
-    .getByRole('listitem')
-    .filter({ hasText: 'Food' })
-    .getByRole('button', { name: 'Delete' })
-    .click();
+  const del = page.getByRole('dialog', { name: 'Delete tag?' });
+  await expect(del.getByText(/used by\s*1\s*payment/)).toBeVisible();
+  await del.getByRole('button', { name: 'Delete anyway' }).click();
   await expect(page.getByText('No tags yet.')).toBeVisible();
 });

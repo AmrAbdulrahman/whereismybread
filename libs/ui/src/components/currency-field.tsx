@@ -43,21 +43,6 @@ export function CurrencyField({
     setQuery('');
   };
 
-  const Row = ({ c }: { c: CurrencyMeta }) => (
-    <button
-      type="button"
-      onClick={() => pick(c.code)}
-      className={cn(
-        'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-surface-2',
-        c.code === value && 'bg-surface-2',
-      )}
-    >
-      <span className="w-8 shrink-0 text-center text-muted">{c.symbol}</span>
-      <span className="font-mono text-xs font-semibold text-ink">{c.code}</span>
-      <span className="truncate text-ink-soft">{c.name}</span>
-    </button>
-  );
-
   return (
     <>
       <button
@@ -92,7 +77,12 @@ export function CurrencyField({
                   Used
                 </p>
                 {used.map((c) => (
-                  <Row key={`u-${c.code}`} c={c} />
+                  <CurrencyRow
+                    key={`u-${c.code}`}
+                    c={c}
+                    selected={c.code === value}
+                    onPick={pick}
+                  />
                 ))}
               </>
             ) : null}
@@ -100,7 +90,12 @@ export function CurrencyField({
               All currencies
             </p>
             {rest.map((c) => (
-              <Row key={c.code} c={c} />
+              <CurrencyRow
+                key={c.code}
+                c={c}
+                selected={c.code === value}
+                onPick={pick}
+              />
             ))}
             {used.length === 0 && rest.length === 0 ? (
               <p className="px-2 py-3 text-sm text-muted">
@@ -111,5 +106,31 @@ export function CurrencyField({
         </div>
       </ResponsiveModal>
     </>
+  );
+}
+
+/** Module-level so the rows keep their identity across a re-filter (no remount). */
+function CurrencyRow({
+  c,
+  selected,
+  onPick,
+}: {
+  c: CurrencyMeta;
+  selected: boolean;
+  onPick: (code: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(c.code)}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-surface-2',
+        selected && 'bg-surface-2',
+      )}
+    >
+      <span className="w-8 shrink-0 text-center text-muted">{c.symbol}</span>
+      <span className="font-mono text-xs font-semibold text-ink">{c.code}</span>
+      <span className="truncate text-ink-soft">{c.name}</span>
+    </button>
   );
 }

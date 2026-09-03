@@ -24,11 +24,19 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
+/**
+ * The end-to-end suite signs up dozens of throwaway users from one IP in a few
+ * minutes — well past any sane per-IP ceiling. Loosen (never disable) the guard
+ * for those runs so the flows don't flake on a 429. Never set in production.
+ */
+const TEST_LIMIT_MULTIPLIER = process.env['AUTH_E2E'] === '1' ? 50 : 1;
+
 export function rateLimit(
   key: string,
   limit: number,
   windowMs: number,
 ): RateLimitResult {
+  limit *= TEST_LIMIT_MULTIPLIER;
   const now = Date.now();
   sweep(now);
 

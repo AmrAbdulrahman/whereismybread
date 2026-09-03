@@ -46,6 +46,12 @@ test('the list view search + day total span currencies', async ({ page }) => {
     await page.getByLabel('Day of the month').fill('12');
     await page.getByRole('button', { name: 'Add payment' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
+    // Wait for the board to settle into the "has payments" layout before the
+    // next call — the post-save re-render swaps the whole view and briefly
+    // remounts the form modal.
+    await expect(
+      page.getByRole('button', { name: 'New payment' }),
+    ).toBeVisible();
   };
 
   await addMonthly('Rent', '1000', 'EUR', 'Home');

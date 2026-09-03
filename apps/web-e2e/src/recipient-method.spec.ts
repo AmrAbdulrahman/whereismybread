@@ -27,7 +27,11 @@ test('a manual payment can pick a recipient method, added on the fly', async ({
   await page.getByLabel('Description').fill('Rent to landlord');
   await page.getByLabel('Amount').fill('900');
 
-  // no recipient method field until a manual method is chosen
+  // recipient method shows only for a manual transfer — not cash, not cards
+  await expect(
+    page.getByText('Recipient method', { exact: true }),
+  ).toBeHidden();
+  await page.getByRole('button', { name: 'Cash' }).click();
   await expect(
     page.getByText('Recipient method', { exact: true }),
   ).toBeHidden();

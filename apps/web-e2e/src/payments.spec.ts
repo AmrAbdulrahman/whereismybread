@@ -33,7 +33,7 @@ test('create a recurring payment, see it, mark it paid, edit it', async ({
   await page.getByRole('button', { name: 'Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Direct debit' }).click();
 
-  // Direct debit reveals the Bank field — add one on the fly and pick it
+  // the Bank field is always shown — add one on the fly and pick it
   await expect(page.getByText('Bank', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New bank' }).click();
   await page.getByLabel('Name').fill('Monzo');

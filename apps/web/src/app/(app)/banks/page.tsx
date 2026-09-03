@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
+import { LabelManager } from '@wib/ui';
 import {
-  LabelManager,
   deleteBankAction,
   listBanksAction,
   saveBankAction,
@@ -20,13 +20,15 @@ export default async function BanksPage() {
     <LabelManager
       title="Banks"
       noun="bank"
-      description="The bank behind a direct-debit or card payment. Deleting one just unlinks it from its payments."
+      usageNoun="payment"
+      deleteImpact="unlink"
+      description="The bank behind a direct-debit or card payment."
       namePlaceholder="Monzo, Barclays, Revolut…"
       items={banks.map((b) => ({
         id: b.id,
         name: b.name,
         color: b.color,
-        paymentCount: b.paymentCount,
+        usageCount: b.paymentCount,
       }))}
       onSave={saveBankAction}
       onDelete={deleteBankAction}

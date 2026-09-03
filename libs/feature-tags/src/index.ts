@@ -1,11 +1,9 @@
-// Client-safe surface. Server queries live in @wib/feature-tags/server.
+// Client-callable server actions for the /tags management page (the UI comes
+// from @wib/ui's <LabelManager>). Server queries live in @wib/feature-tags/server.
 
-export { TagsManager } from './components/tags-manager';
-export { TagForm } from './components/tag-form';
 export {
-  createTagAction,
-  updateTagAction,
+  saveTagAction,
   deleteTagAction,
   listTagsAction,
+  type TagRow,
 } from './lib/actions';
-export { tagFormSchema, type TagFormValues } from './lib/schema';

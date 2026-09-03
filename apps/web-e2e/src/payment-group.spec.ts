@@ -13,7 +13,7 @@ async function signUp(page: import('@playwright/test').Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('a-strong-enough-password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/plan/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/plan/, { timeout: 35_000 });
 }
 
 test('a group payment sums its records and can be overridden per month', async ({

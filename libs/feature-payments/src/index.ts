@@ -2,7 +2,6 @@
 
 export { PaymentsView } from './components/payments-view';
 export { PaymentForm, type PaymentFormProps } from './components/payment-form';
-export { LabelManager } from './components/label-manager';
 
 export {
   savePaymentAction,

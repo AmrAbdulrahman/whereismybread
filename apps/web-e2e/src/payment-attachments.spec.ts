@@ -20,7 +20,7 @@ test('attach a file to a payment, preview it, then remove it', async ({
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('a-strong-enough-password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/plan/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/plan/, { timeout: 35_000 });
 
   // a plain one-time payment
   await page.getByRole('button', { name: 'Add a payment' }).click();

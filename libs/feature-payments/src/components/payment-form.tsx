@@ -47,9 +47,6 @@ import { RecipientMethodForm } from './recipient-method-form';
 import { MethodForm } from './method-form';
 import { TagInput } from './tag-input';
 
-/** Method kinds for which a bank makes sense. */
-const BANK_KINDS = new Set(['direct_debit', 'credit_card']);
-
 const RECURRENCE_LABELS: Record<(typeof RECURRENCES)[number], string> = {
   one_time: 'One-time',
   monthly: 'Monthly',
@@ -280,20 +277,15 @@ export function PaymentForm({
 
   const methodId = watch('methodId');
   const selectedMethod = methods.find((m) => m.id === methodId) ?? null;
-  const showBank =
-    selectedMethod != null && BANK_KINDS.has(selectedMethod.kind);
-  /** A "manual" payment — one you send yourself, so a recipient method makes sense. */
+  /** Only a manual transfer needs "how did it reach the recipient". */
   const showRecipientMethod =
-    selectedMethod != null && !BANK_KINDS.has(selectedMethod.kind);
+    selectedMethod?.kind === 'manual_transfer';
 
-  /** Select a method, and drop the bank / recipient method if they no longer apply. */
+  /** Select a method, dropping the recipient method when it no longer applies. */
   const pickMethod = (id: string | null) => {
     setValue('methodId', id, { shouldDirty: true });
     const kind = methods.find((m) => m.id === id)?.kind;
-    if (!kind || !BANK_KINDS.has(kind)) {
-      setValue('bankId', null, { shouldDirty: true });
-    }
-    if (!kind || BANK_KINDS.has(kind)) {
+    if (kind !== 'manual_transfer') {
       setValue('recipientMethodId', null, { shouldDirty: true });
     }
   };
@@ -749,58 +741,56 @@ export function PaymentForm({
         />
       </ResponsiveModal>
 
-      {showBank ? (
-        <Field>
-          <Label>Bank</Label>
-          <div className="flex flex-wrap gap-1.5">
+      <Field>
+        <Label>Bank</Label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setValue('bankId', null, { shouldDirty: true })}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-medium',
+              watch('bankId') == null
+                ? 'border-accent bg-accent/15 text-accent'
+                : 'border-line-strong text-muted hover:text-ink',
+            )}
+          >
+            None
+          </button>
+          {banks.map((b) => (
             <button
+              key={b.id}
               type="button"
-              onClick={() => setValue('bankId', null, { shouldDirty: true })}
+              onClick={() => setValue('bankId', b.id, { shouldDirty: true })}
               className={cn(
-                'rounded-full border px-3 py-1.5 text-xs font-medium',
-                watch('bankId') == null
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
+                watch('bankId') === b.id
                   ? 'border-accent bg-accent/15 text-accent'
                   : 'border-line-strong text-muted hover:text-ink',
               )}
             >
-              None
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: b.color }}
+              />
+              {b.name}
             </button>
-            {banks.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setValue('bankId', b.id, { shouldDirty: true })}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
-                  watch('bankId') === b.id
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-line-strong text-muted hover:text-ink',
-                )}
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: b.color }}
-                />
-                {b.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setAddingBank(true)}
-              className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:text-ink"
-            >
-              <Plus size={13} strokeWidth={3} />
-              New bank
-            </button>
-          </div>
-        </Field>
-      ) : null}
+          ))}
+          <button
+            type="button"
+            onClick={() => setAddingBank(true)}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:text-ink"
+          >
+            <Plus size={13} strokeWidth={3} />
+            New bank
+          </button>
+        </div>
+      </Field>
 
       <ResponsiveModal
         open={addingBank}
         onOpenChange={setAddingBank}
         title="New bank"
-        description="The bank behind this direct debit or card."
+        description="The bank this payment goes through."
       >
         <BankForm
           onCancel={() => setAddingBank(false)}

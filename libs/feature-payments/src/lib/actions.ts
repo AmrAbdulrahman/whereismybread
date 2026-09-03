@@ -334,7 +334,7 @@ export interface LabelRow {
   id: string;
   name: string;
   color: string;
-  paymentCount: number;
+  usageCount: number;
 }
 
 const toLabelRows = (
@@ -344,7 +344,7 @@ const toLabelRows = (
     id: r.id,
     name: r.name,
     color: r.color,
-    paymentCount: r.paymentCount,
+    usageCount: r.paymentCount,
   }));
 
 export async function saveAccountAction(
@@ -369,7 +369,7 @@ export async function saveAccountAction(
     revalidatePath('/plan');
     return {
       ok: true,
-      item: { id: account.id, name: account.name, color: account.color, paymentCount: 0 },
+      item: { id: account.id, name: account.name, color: account.color, usageCount: 0 },
     };
   }
 
@@ -384,7 +384,7 @@ export async function saveAccountAction(
   revalidatePath('/plan');
   return {
     ok: true,
-    item: { id: account.id, name: account.name, color: account.color, paymentCount: 0 },
+    item: { id: account.id, name: account.name, color: account.color, usageCount: 0 },
   };
 }
 
@@ -426,7 +426,7 @@ export async function saveBankAction(
     revalidatePath('/plan');
     return {
       ok: true,
-      item: { id: bank.id, name: bank.name, color: bank.color, paymentCount: 0 },
+      item: { id: bank.id, name: bank.name, color: bank.color, usageCount: 0 },
     };
   }
 
@@ -441,7 +441,7 @@ export async function saveBankAction(
   revalidatePath('/plan');
   return {
     ok: true,
-    item: { id: bank.id, name: bank.name, color: bank.color, paymentCount: 0 },
+    item: { id: bank.id, name: bank.name, color: bank.color, usageCount: 0 },
   };
 }
 

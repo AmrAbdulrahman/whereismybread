@@ -48,6 +48,12 @@ export { CurrencyField } from './components/currency-field';
 export { AmountField, type AmountFieldProps } from './components/amount-field';
 export { ColorPicker, type ColorPickerProps } from './components/color-picker';
 export {
+  LabelManager,
+  type LabelManagerProps,
+  type LabelItem,
+  type LabelSaveResult,
+} from './components/label-manager';
+export {
   COLOR_PALETTE,
   randomPaletteColor,
   type PaletteColor,

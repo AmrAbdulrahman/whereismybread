@@ -332,21 +332,12 @@ importers:
 
   libs/feature-tags:
     dependencies:
-      '@hookform/resolvers':
-        specifier: ^5.9.1
-        version: 5.9.1(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.87.0(react@19.2.8))(zod@4.5.4)
       '@wib/auth':
         specifier: workspace:*
         version: link:../auth
       '@wib/db':
         specifier: workspace:*
         version: link:../db
-      '@wib/ui':
-        specifier: workspace:*
-        version: link:../ui
-      react-hook-form:
-        specifier: ^7.87.0
-        version: 7.87.0(react@19.2.8)
       zod:
         specifier: ^4.5.4
         version: 4.5.4

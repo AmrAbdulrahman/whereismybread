@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
+import { LabelManager } from '@wib/ui';
 import {
-  LabelManager,
   deleteAccountAction,
   listAccountsAction,
   saveAccountAction,
@@ -20,13 +20,15 @@ export default async function AccountsPage() {
     <LabelManager
       title="Accounts"
       noun="account"
-      description="What a payment is for — a company, a household bill group, taxes. Deleting one just unlinks it from its payments."
+      usageNoun="payment"
+      deleteImpact="unlink"
+      description="What a payment is for — a company, a household bill group, taxes."
       namePlaceholder="Company, Utilities, Taxes…"
       items={accounts.map((a) => ({
         id: a.id,
         name: a.name,
         color: a.color,
-        paymentCount: a.paymentCount,
+        usageCount: a.paymentCount,
       }))}
       onSave={saveAccountAction}
       onDelete={deleteAccountAction}
