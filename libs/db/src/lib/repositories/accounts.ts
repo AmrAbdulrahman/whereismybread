@@ -1,6 +1,9 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { getDb } from '../client';
-import { accounts, type Account } from '../schema/payments';
+import { accounts, payments, type Account } from '../schema/payments';
+
+/** An account plus how many of the user's active payments point at it. */
+export type AccountWithUsage = Account & { paymentCount: number };
 
 const ACCOUNT_PALETTE = [
   '#6321d6',
@@ -50,15 +53,82 @@ export async function createAccount(
   return found[0];
 }
 
+export async function listAccountsWithUsage(
+  userId: string,
+): Promise<AccountWithUsage[]> {
+  const rows = await getDb()
+    .select({
+      id: accounts.id,
+      userId: accounts.userId,
+      name: accounts.name,
+      color: accounts.color,
+      sortOrder: accounts.sortOrder,
+      createdAt: accounts.createdAt,
+      updatedAt: accounts.updatedAt,
+      paymentCount: sql<number>`count(${payments.id})`,
+    })
+    .from(accounts)
+    .leftJoin(
+      payments,
+      and(
+        eq(payments.accountId, accounts.id),
+        sql`${payments.archivedAt} is null`,
+      ),
+    )
+    .where(eq(accounts.userId, userId))
+    .groupBy(accounts.id)
+    .orderBy(asc(accounts.sortOrder), asc(sql`lower(${accounts.name})`));
+
+  return rows.map((r) => ({ ...r, paymentCount: Number(r.paymentCount) }));
+}
+
+export async function getAccountByName(
+  userId: string,
+  name: string,
+): Promise<Account | null> {
+  const rows = await getDb()
+    .select()
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.userId, userId),
+        sql`lower(${accounts.name}) = lower(${name.trim()})`,
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateAccount(
   userId: string,
   id: string,
   patch: Partial<{ name: string; color: string; sortOrder: number }>,
-): Promise<void> {
-  await getDb()
+): Promise<Account | null> {
+  if (patch.name != null) {
+    const clash = await getDb()
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.userId, userId),
+          sql`lower(${accounts.name}) = lower(${patch.name.trim()})`,
+          sql`${accounts.id} <> ${id}`,
+        ),
+      )
+      .limit(1);
+    if (clash[0]) return null;
+  }
+
+  const rows = await getDb()
     .update(accounts)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(accounts.id, id), eq(accounts.userId, userId)));
+    .set({
+      ...patch,
+      ...(patch.name != null ? { name: patch.name.trim() } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(accounts.id, id), eq(accounts.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
 }
 
 export async function deleteAccount(userId: string, id: string): Promise<void> {

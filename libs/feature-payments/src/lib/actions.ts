@@ -12,19 +12,29 @@ import {
   createPayment,
   createPaymentMethod,
   createRecipientMethod,
+  deleteAccount,
   deleteAttachment,
+  deleteBank,
   deletePaymentFrom,
+  getAccountByName,
+  getBankByName,
   getOrCreateTags,
   getPaymentRow,
   getRates,
+  listAccountsWithUsage,
+  listBanksWithUsage,
   markOccurrence,
   reconcileAttachments,
   setMonthIncome,
   setOccurrenceOverride,
   splitPaymentForward,
+  updateAccount,
+  updateBank,
   updatePayment,
   type Account,
+  type AccountWithUsage,
   type Bank,
+  type BankWithUsage,
   type PaymentAttachment,
   type PaymentLineItem,
   type PaymentMethod,
@@ -315,6 +325,140 @@ export async function createBankAction(
   const bank = await createBank(userId, parsed.data);
   revalidatePath('/plan');
   return { ok: true, bank };
+}
+
+// --- Account / bank management (the /accounts + /banks pages) --------------
+
+/** The `{id,name,color}` a manager row needs, plus its payment count. */
+export interface LabelRow {
+  id: string;
+  name: string;
+  color: string;
+  paymentCount: number;
+}
+
+const toLabelRows = (
+  rows: AccountWithUsage[] | BankWithUsage[],
+): LabelRow[] =>
+  rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    paymentCount: r.paymentCount,
+  }));
+
+export async function saveAccountAction(
+  id: string | null,
+  values: AccountFormValues,
+): Promise<FormState & { item?: LabelRow }> {
+  const userId = await requireUserId();
+  const parsed = accountFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+
+  if (!id) {
+    if (await getAccountByName(userId, parsed.data.name)) {
+      return {
+        ok: false,
+        fieldErrors: { name: ['You already have an account with that name'] },
+      };
+    }
+    const account = await createAccount(userId, parsed.data);
+    revalidatePath('/accounts');
+    revalidatePath('/plan');
+    return {
+      ok: true,
+      item: { id: account.id, name: account.name, color: account.color, paymentCount: 0 },
+    };
+  }
+
+  const account = await updateAccount(userId, id, parsed.data);
+  if (!account) {
+    return {
+      ok: false,
+      fieldErrors: { name: ['You already have an account with that name'] },
+    };
+  }
+  revalidatePath('/accounts');
+  revalidatePath('/plan');
+  return {
+    ok: true,
+    item: { id: account.id, name: account.name, color: account.color, paymentCount: 0 },
+  };
+}
+
+export async function deleteAccountAction(id: string): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof id !== 'string' || !id) {
+    return { ok: false, error: 'That account no longer exists.' };
+  }
+  await deleteAccount(userId, id);
+  revalidatePath('/accounts');
+  revalidatePath('/plan');
+  return { ok: true };
+}
+
+export async function listAccountsAction(): Promise<LabelRow[]> {
+  const userId = await requireUserId();
+  return toLabelRows(await listAccountsWithUsage(userId));
+}
+
+export async function saveBankAction(
+  id: string | null,
+  values: BankFormValues,
+): Promise<FormState & { item?: LabelRow }> {
+  const userId = await requireUserId();
+  const parsed = bankFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+
+  if (!id) {
+    if (await getBankByName(userId, parsed.data.name)) {
+      return {
+        ok: false,
+        fieldErrors: { name: ['You already have a bank with that name'] },
+      };
+    }
+    const bank = await createBank(userId, parsed.data);
+    revalidatePath('/banks');
+    revalidatePath('/plan');
+    return {
+      ok: true,
+      item: { id: bank.id, name: bank.name, color: bank.color, paymentCount: 0 },
+    };
+  }
+
+  const bank = await updateBank(userId, id, parsed.data);
+  if (!bank) {
+    return {
+      ok: false,
+      fieldErrors: { name: ['You already have a bank with that name'] },
+    };
+  }
+  revalidatePath('/banks');
+  revalidatePath('/plan');
+  return {
+    ok: true,
+    item: { id: bank.id, name: bank.name, color: bank.color, paymentCount: 0 },
+  };
+}
+
+export async function deleteBankAction(id: string): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof id !== 'string' || !id) {
+    return { ok: false, error: 'That bank no longer exists.' };
+  }
+  await deleteBank(userId, id);
+  revalidatePath('/banks');
+  revalidatePath('/plan');
+  return { ok: true };
+}
+
+export async function listBanksAction(): Promise<LabelRow[]> {
+  const userId = await requireUserId();
+  return toLabelRows(await listBanksWithUsage(userId));
 }
 
 export async function fetchBrandingAction(

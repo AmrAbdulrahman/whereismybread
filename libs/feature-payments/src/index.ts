@@ -2,6 +2,7 @@
 
 export { PaymentsView } from './components/payments-view';
 export { PaymentForm, type PaymentFormProps } from './components/payment-form';
+export { LabelManager } from './components/label-manager';
 
 export {
   savePaymentAction,
@@ -9,6 +10,12 @@ export {
   createRecipientMethodAction,
   createAccountAction,
   createBankAction,
+  saveAccountAction,
+  deleteAccountAction,
+  listAccountsAction,
+  saveBankAction,
+  deleteBankAction,
+  listBanksAction,
   deletePaymentAction,
   loadListWindowAction,
   markOccurrenceAction,
@@ -20,6 +27,7 @@ export {
   removeAttachmentAction,
   discardBlobsAction,
   type AttachmentDraft,
+  type LabelRow,
   type EditScope,
   type ScopeInput,
 } from './lib/actions';

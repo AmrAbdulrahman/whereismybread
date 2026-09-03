@@ -1,6 +1,9 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { getDb } from '../client';
-import { banks, type Bank } from '../schema/payments';
+import { banks, payments, type Bank } from '../schema/payments';
+
+/** A bank plus how many of the user's active payments point at it. */
+export type BankWithUsage = Bank & { paymentCount: number };
 
 const BANK_PALETTE = [
   '#6321d6',
@@ -49,15 +52,79 @@ export async function createBank(
   return found[0];
 }
 
+export async function listBanksWithUsage(
+  userId: string,
+): Promise<BankWithUsage[]> {
+  const rows = await getDb()
+    .select({
+      id: banks.id,
+      userId: banks.userId,
+      name: banks.name,
+      color: banks.color,
+      sortOrder: banks.sortOrder,
+      createdAt: banks.createdAt,
+      updatedAt: banks.updatedAt,
+      paymentCount: sql<number>`count(${payments.id})`,
+    })
+    .from(banks)
+    .leftJoin(
+      payments,
+      and(eq(payments.bankId, banks.id), sql`${payments.archivedAt} is null`),
+    )
+    .where(eq(banks.userId, userId))
+    .groupBy(banks.id)
+    .orderBy(asc(banks.sortOrder), asc(sql`lower(${banks.name})`));
+
+  return rows.map((r) => ({ ...r, paymentCount: Number(r.paymentCount) }));
+}
+
+export async function getBankByName(
+  userId: string,
+  name: string,
+): Promise<Bank | null> {
+  const rows = await getDb()
+    .select()
+    .from(banks)
+    .where(
+      and(
+        eq(banks.userId, userId),
+        sql`lower(${banks.name}) = lower(${name.trim()})`,
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateBank(
   userId: string,
   id: string,
   patch: Partial<{ name: string; color: string; sortOrder: number }>,
-): Promise<void> {
-  await getDb()
+): Promise<Bank | null> {
+  if (patch.name != null) {
+    const clash = await getDb()
+      .select({ id: banks.id })
+      .from(banks)
+      .where(
+        and(
+          eq(banks.userId, userId),
+          sql`lower(${banks.name}) = lower(${patch.name.trim()})`,
+          sql`${banks.id} <> ${id}`,
+        ),
+      )
+      .limit(1);
+    if (clash[0]) return null;
+  }
+
+  const rows = await getDb()
     .update(banks)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(banks.id, id), eq(banks.userId, userId)));
+    .set({
+      ...patch,
+      ...(patch.name != null ? { name: patch.name.trim() } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(banks.id, id), eq(banks.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
 }
 
 export async function deleteBank(userId: string, id: string): Promise<void> {

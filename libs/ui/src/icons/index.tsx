@@ -57,6 +57,8 @@ export const icons = {
   checklist: ListChecks,
   debts: Scale,
   tags: Tag,
+  accounts: Briefcase,
+  banks: Landmark,
   methods: Wallet,
   settings: Settings,
   overview: Menu,

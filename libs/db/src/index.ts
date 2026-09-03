@@ -65,16 +65,22 @@ export {
 
 export {
   listAccounts,
+  listAccountsWithUsage,
   createAccount,
   updateAccount,
+  getAccountByName,
   deleteAccount,
+  type AccountWithUsage,
 } from './lib/repositories/accounts';
 
 export {
   listBanks,
+  listBanksWithUsage,
   createBank,
   updateBank,
+  getBankByName,
   deleteBank,
+  type BankWithUsage,
 } from './lib/repositories/banks';
 
 export {

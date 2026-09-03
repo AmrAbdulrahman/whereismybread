@@ -2,9 +2,13 @@ import {
   ensureDefaultMethods,
   getBoardBundle,
   getRates,
+  listAccountsWithUsage,
+  listBanksWithUsage,
   listPaymentMethods,
   type Account,
+  type AccountWithUsage,
   type Bank,
+  type BankWithUsage,
   type BoardBundle,
   type PaymentMethod,
   type PaymentOverrides,
@@ -23,7 +27,11 @@ import {
   type IsoDate,
   type RateMap,
 } from '@wib/domain';
-import { requireUser, type SessionUser } from '@wib/auth/server';
+import {
+  requireUser,
+  requireUserId,
+  type SessionUser,
+} from '@wib/auth/server';
 import { feeMinor, type FeeKind } from './fees';
 import type {
   BoardOccurrence,
@@ -106,6 +114,16 @@ export async function getBoardData(opts?: {
     tags: bundle.tags,
   };
   return { context, board };
+}
+
+/** Every account the signed-in user owns, with per-account payment counts. */
+export async function getAccounts(): Promise<AccountWithUsage[]> {
+  return listAccountsWithUsage(await requireUserId());
+}
+
+/** Every bank the signed-in user owns, with per-bank payment counts. */
+export async function getBanks(): Promise<BankWithUsage[]> {
+  return listBanksWithUsage(await requireUserId());
 }
 
 /** Assemble a `PaymentBoard` from an already-loaded bundle — pure, no I/O. */

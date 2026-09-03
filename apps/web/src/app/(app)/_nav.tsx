@@ -13,6 +13,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/checklist', label: 'Checklist', icon: icons.checklist },
   { href: '/debts', label: 'Debts', icon: icons.debts },
   { href: '/tags', label: 'Tags', icon: icons.tags },
+  { href: '/accounts', label: 'Accounts', icon: icons.accounts },
+  { href: '/banks', label: 'Banks', icon: icons.banks },
   { href: '/methods', label: 'Methods', icon: icons.methods },
   { href: '/account', label: 'Account', icon: icons.settings },
 ];

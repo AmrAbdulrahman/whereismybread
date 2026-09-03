@@ -1,4 +1,9 @@
-export { getBoardData, type PaymentsContext } from './lib/queries';
+export {
+  getBoardData,
+  getAccounts,
+  getBanks,
+  type PaymentsContext,
+} from './lib/queries';
 export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_ALLOWED_TYPES,
