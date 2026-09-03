@@ -77,7 +77,7 @@ export function PaymentsView({
   recipientMethods,
   tags,
   defaultCurrency,
-  view,
+  view: viewProp,
   month,
 }: {
   board: PaymentBoard;
@@ -110,6 +110,18 @@ export function PaymentsView({
     const next = new URLSearchParams(params);
     next.set(key, value);
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+
+  // List ↔ calendar is a pure client switch — both views render from the same
+  // already-loaded `board`, so there is nothing to fetch. The URL is kept in
+  // sync (for refresh / share) without a server round trip.
+  const [view, setView] = useState<View>(viewProp);
+  useEffect(() => setView(viewProp), [viewProp]);
+  const changeView = (v: View) => {
+    setView(v);
+    const next = new URLSearchParams(params);
+    next.set('view', v);
+    window.history.replaceState(null, '', `${pathname}?${next.toString()}`);
   };
 
   // The calendar's visible month. Paging within the already-loaded board window
@@ -300,7 +312,7 @@ export function PaymentsView({
                 <button
                   key={v}
                   type="button"
-                  onClick={() => setParam('view', v)}
+                  onClick={() => changeView(v)}
                   className={cn(
                     'rounded-sm px-3 py-1 text-[13px] font-medium capitalize transition-colors',
                     view === v
