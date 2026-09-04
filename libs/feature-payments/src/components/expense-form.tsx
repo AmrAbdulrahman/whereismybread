@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import type { Expense } from '@wib/db';
-import { AmountField, Button, Field, Input, Label } from '@wib/ui';
+import { AmountField, Button, Field, Input, Label, ResponsiveModal } from '@wib/ui';
 import { discardBlobsAction } from '../lib/actions';
 import {
+  deleteExpenseAction,
   removeExpenseAttachmentAction,
   saveExpenseAction,
   uploadExpenseAttachmentAction,
@@ -26,8 +27,9 @@ export interface ExpenseFormBudgetOption {
 
 export interface ExpenseFormInitial {
   id: string;
-  budgetId: string;
+  budgetId: string | null;
   name: string;
+  date: string;
   amountMinor: number;
   currency: string;
   notes: string | null;
@@ -36,24 +38,32 @@ export interface ExpenseFormInitial {
 
 export function ExpenseForm({
   budgets,
-  budgetId,
+  budgetId = null,
+  date,
   initial,
   usedCurrencies = [],
   onDone,
+  onDeleted,
   onCancel,
 }: {
   budgets: ExpenseFormBudgetOption[];
-  /** Which budget to preselect — the one the "Add expense" button was on. */
-  budgetId: string;
+  /** Which budget to preselect (e.g. the one "Add expense" was opened from). */
+  budgetId?: string | null;
+  /** The date to preselect (e.g. from a day separator's quick-add). */
+  date: string;
   initial?: ExpenseFormInitial;
   usedCurrencies?: string[];
   onDone: (expense: Expense) => void;
+  /** Editing only — called once a delete has gone through. */
+  onDeleted?: () => void;
   onCancel: () => void;
 }) {
   const [formError, setFormError] = useState<string>();
   const [savedAttachments, setSavedAttachments] = useState<
     OccurrenceAttachment[]
   >(() => initial?.attachments ?? []);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     register,
@@ -69,16 +79,18 @@ export function ExpenseForm({
     mode: 'onTouched',
     defaultValues: initial
       ? {
-          budgetId: initial.budgetId,
+          budgetId: initial.budgetId ?? '',
           name: initial.name,
+          date: initial.date,
           amount: (initial.amountMinor / 100).toFixed(2),
           currency: initial.currency,
           notes: initial.notes ?? '',
           attachments: [],
         }
       : {
-          budgetId,
+          budgetId: budgetId ?? '',
           name: '',
+          date,
           amount: '',
           currency:
             budgets.find((b) => b.id === budgetId)?.currency ?? 'EUR',
@@ -103,6 +115,18 @@ export function ExpenseForm({
     setFormError(result.error);
   });
 
+  const runDelete = async () => {
+    if (!initial) return;
+    setDeleting(true);
+    try {
+      await deleteExpenseAction(initial.id);
+      setConfirmDelete(false);
+      onDeleted?.();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {formError ? (
@@ -111,14 +135,22 @@ export function ExpenseForm({
         </p>
       ) : null}
 
-      {budgets.length > 1 ? (
-        <Field>
-          <Label htmlFor="expense-budget">Budget</Label>
+      <div className="flex gap-3">
+        <Field className="flex-1">
+          <Label htmlFor="expense-date">Date</Label>
+          <Input id="expense-date" type="date" {...register('date')} />
+          {errors.date?.message ? (
+            <p className="text-xs text-danger">{errors.date.message}</p>
+          ) : null}
+        </Field>
+        <Field className="flex-1">
+          <Label htmlFor="expense-budget">Budget (optional)</Label>
           <select
             id="expense-budget"
             {...register('budgetId')}
             className="h-10 w-full rounded-md border border-line-strong bg-ground px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
+            <option value="">No budget</option>
             {budgets.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -126,7 +158,7 @@ export function ExpenseForm({
             ))}
           </select>
         </Field>
-      ) : null}
+      </div>
 
       <Field>
         <Label htmlFor="expense-name">Name</Label>
@@ -197,30 +229,70 @@ export function ExpenseForm({
         />
       </Field>
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => {
-            const staged = (getValues('attachments') ?? [])
-              .map((a) => a.url)
-              .filter(Boolean);
-            if (!initial && staged.length > 0) {
-              void discardBlobsAction(staged);
-            }
-            onCancel();
-          }}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting
-            ? 'Saving…'
-            : initial
-              ? 'Save changes'
-              : 'Add expense'}
-        </Button>
+      <div className="flex items-center justify-between gap-2 pt-2">
+        {initial ? (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="text-xs font-medium text-danger hover:underline"
+          >
+            Delete expense
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              const staged = (getValues('attachments') ?? [])
+                .map((a) => a.url)
+                .filter(Boolean);
+              if (!initial && staged.length > 0) {
+                void discardBlobsAction(staged);
+              }
+              onCancel();
+            }}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting
+              ? 'Saving…'
+              : initial
+                ? 'Save changes'
+                : 'Add expense'}
+          </Button>
+        </div>
       </div>
+
+      <ResponsiveModal
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete expense?"
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-ink-soft">This can&apos;t be undone.</p>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={deleting}
+              onClick={() => void runDelete()}
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </ResponsiveModal>
     </form>
   );
 }

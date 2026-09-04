@@ -262,6 +262,8 @@ export interface PaymentBoard {
 export interface BudgetExpenseView {
   id: string;
   name: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
   /** In its own currency — converted into the budget's for totals. */
   amount: Money;
   notes: string | null;
@@ -286,4 +288,23 @@ export interface BudgetSummary {
   /** `spent / limit` — can exceed 1. `0` when the limit is 0. */
   progress: number;
   expenses: BudgetExpenseView[];
+}
+
+/**
+ * A recorded spend on its own date, for the plan board. Tracking it against a
+ * budget is optional: budgeted expenses show but are excluded from the
+ * day/month totals (the budget's reserved amount already counts once);
+ * unbudgeted ones count directly, like a one-time payment.
+ */
+export interface ExpenseLine {
+  id: string;
+  name: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  amount: Money;
+  notes: string | null;
+  budgetId: string | null;
+  budgetName: string | null;
+  budgetColor: string | null;
+  attachments: OccurrenceAttachment[];
 }

@@ -61,7 +61,7 @@ export async function getBudgetsBundle(
             select jsonb_agg(
               jsonb_build_object(
                 'id', e.id, 'userId', e.user_id, 'budgetId', e.budget_id,
-                'name', e.name, 'amountMinor', e.amount_minor,
+                'name', e.name, 'date', e.date, 'amountMinor', e.amount_minor,
                 'currency', e.currency, 'notes', e.notes,
                 'createdAt', e.created_at, 'updatedAt', e.updated_at,
                 'attachments', coalesce((
@@ -74,7 +74,7 @@ export async function getBudgetsBundle(
                   where a.expense_id = e.id
                 ), '[]'::jsonb)
               )
-              order by e.created_at, e.id
+              order by e.date, e.created_at
             )
             from expenses e
             where e.budget_id = b.id

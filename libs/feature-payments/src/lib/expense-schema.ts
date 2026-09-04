@@ -6,8 +6,13 @@ const blankToNull = (v: unknown): unknown =>
 
 /** Shared by the expense form (zodResolver) and its server action. */
 export const expenseFormSchema = z.object({
-  budgetId: z.string().uuid('Pick a budget'),
+  /** `null` (or blank) — this expense isn't tracked against any budget. */
+  budgetId: z.preprocess(
+    blankToNull,
+    z.string().uuid().nullable().default(null),
+  ),
   name: z.string().trim().min(1, 'Give it a name').max(120),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a date'),
   amount: z
     .string()
     .trim()

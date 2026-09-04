@@ -46,7 +46,12 @@ export const budgets = pgTable(
   (t) => [index('budgets_user_range_idx').on(t.userId, t.startDate, t.endDate)],
 );
 
-/** A single spend, always assigned to a budget (its timespan is the budget's). */
+/**
+ * A single spend, on its own date. Assigning it to a budget is optional —
+ * budgeted expenses are tracked against that budget's reserved amount and
+ * excluded from the day/month totals (the budget already counts once);
+ * unbudgeted ones count directly, like a one-time payment.
+ */
 export const expenses = pgTable(
   'expenses',
   {
@@ -54,16 +59,20 @@ export const expenses = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    budgetId: uuid('budget_id')
-      .notNull()
-      .references(() => budgets.id, { onDelete: 'cascade' }),
+    budgetId: uuid('budget_id').references(() => budgets.id, {
+      onDelete: 'set null',
+    }),
     name: text('name').notNull(),
+    date: date('date').notNull(),
     amountMinor: integer('amount_minor').notNull(),
     currency: text('currency').notNull().default('EUR'),
     notes: text('notes'),
     ...audit,
   },
-  (t) => [index('expenses_budget_idx').on(t.budgetId)],
+  (t) => [
+    index('expenses_budget_idx').on(t.budgetId),
+    index('expenses_user_date_idx').on(t.userId, t.date),
+  ],
 );
 
 /** A file (image / PDF / text) attached to an expense, stored in Vercel Blob. */

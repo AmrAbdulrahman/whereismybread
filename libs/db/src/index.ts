@@ -157,7 +157,10 @@ export {
   updateExpense,
   getExpense,
   deleteExpense,
+  listExpenses,
   type ExpenseInput,
+  type ExpenseLine,
+  type ExpenseLineAttachment,
 } from './lib/repositories/expenses';
 
 export {

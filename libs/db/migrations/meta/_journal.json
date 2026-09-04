@@ -169,6 +169,13 @@
       "when": 1788530759275,
       "tag": "0023_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788538347022,
+      "tag": "0024_expense_date_optional_budget",
+      "breakpoints": true
     }
   ]
 }

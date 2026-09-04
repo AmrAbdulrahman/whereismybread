@@ -68,6 +68,7 @@ export type {
   AttachmentDraft,
   BudgetExpenseView,
   BudgetSummary,
+  ExpenseLine,
 } from './lib/types';
 
 export {

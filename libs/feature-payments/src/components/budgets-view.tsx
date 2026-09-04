@@ -27,6 +27,14 @@ function periodLabel(b: BudgetSummary): string {
   return `${fmt(b.startDate, false)} – ${fmt(b.endDate, true)}`;
 }
 
+function formatShortDate(d: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${d}T00:00:00Z`));
+}
+
 function ProgressBar({
   progress,
   color,
@@ -70,6 +78,7 @@ function toExpenseFormInitial(
     id: e.id,
     budgetId,
     name: e.name,
+    date: e.date,
     amountMinor: e.amount.minorUnits,
     currency: e.amount.currency,
     notes: e.notes,
@@ -287,11 +296,10 @@ export function BudgetsView({
                                     />
                                   ) : null}
                                 </div>
-                                {e.notes ? (
-                                  <p className="truncate text-[11px] text-muted">
-                                    {e.notes}
-                                  </p>
-                                ) : null}
+                                <p className="truncate text-[11px] text-muted">
+                                  {formatShortDate(e.date)}
+                                  {e.notes ? ` · ${e.notes}` : ''}
+                                </p>
                               </div>
                               <span className="shrink-0 text-sm font-medium text-ink">
                                 {formatMoney(e.amount)}
@@ -378,6 +386,9 @@ export function BudgetsView({
           <ExpenseForm
             budgets={budgetOptions}
             budgetId={expenseOpen.budgetId}
+            date={
+              expenseOpen.mode === 'edit' ? expenseOpen.expense.date : today
+            }
             initial={
               expenseOpen.mode === 'edit'
                 ? toExpenseFormInitial(
@@ -388,6 +399,7 @@ export function BudgetsView({
             }
             usedCurrencies={usedCurrencies}
             onDone={() => setExpenseOpen({ mode: 'closed' })}
+            onDeleted={() => setExpenseOpen({ mode: 'closed' })}
             onCancel={() => setExpenseOpen({ mode: 'closed' })}
           />
         ) : null}

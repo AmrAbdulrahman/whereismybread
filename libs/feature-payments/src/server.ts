@@ -14,6 +14,7 @@ export {
   getBudgetsData,
   budgetsOverlapping,
 } from './lib/budgets';
+export { getExpensesData } from './lib/expenses';
 export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_ALLOWED_TYPES,

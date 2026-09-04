@@ -12,7 +12,6 @@ import type {
 } from '@wib/db';
 import {
   endOfMonth,
-  formatConverted,
   formatMoney,
   money,
   startOfMonth,
@@ -20,7 +19,9 @@ import {
 } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
 import { Plus } from '@wib/ui/icons';
+import { BudgetForm, type BudgetFormInitial } from './budget-form';
 import { BudgetStrip } from './budget-strip';
+import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
 import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
 import { PaymentForm } from './payment-form';
@@ -31,7 +32,12 @@ import {
   type ListFilterValue,
 } from './list-filters';
 import { riskFor, sumInDisplay } from '../lib/risk';
-import type { BudgetSummary, EditablePayment, PaymentBoard } from '../lib/types';
+import type {
+  BudgetSummary,
+  EditablePayment,
+  ExpenseLine,
+  PaymentBoard,
+} from '../lib/types';
 
 type View = 'list' | 'calendar';
 
@@ -71,6 +77,32 @@ function applyOverride(
   };
 }
 
+function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
+  return {
+    id: b.id,
+    name: b.name,
+    period: b.period,
+    startDate: b.startDate,
+    endDate: b.endDate,
+    amountMinor: b.limit.minorUnits,
+    currency: b.limit.currency,
+    color: b.color,
+  };
+}
+
+function toExpenseFormInitial(e: ExpenseLine): ExpenseFormInitial {
+  return {
+    id: e.id,
+    budgetId: e.budgetId,
+    name: e.name,
+    date: e.date,
+    amountMinor: e.amount.minorUnits,
+    currency: e.amount.currency,
+    notes: e.notes,
+    attachments: e.attachments,
+  };
+}
+
 export function PaymentsView({
   board,
   methods,
@@ -82,6 +114,7 @@ export function PaymentsView({
   view: viewProp,
   month,
   budgets = [],
+  expenses = [],
 }: {
   board: PaymentBoard;
   methods: PaymentMethod[];
@@ -93,6 +126,7 @@ export function PaymentsView({
   view: View;
   month: IsoDate;
   budgets?: BudgetSummary[];
+  expenses?: ExpenseLine[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -106,6 +140,16 @@ export function PaymentsView({
         occurrenceDate?: string;
         hasOverride: boolean;
       }
+  >({ mode: 'closed' });
+  const [budgetSheet, setBudgetSheet] = useState<
+    | { mode: 'closed' }
+    | { mode: 'new' }
+    | { mode: 'edit'; budget: BudgetSummary }
+  >({ mode: 'closed' });
+  const [expenseSheet, setExpenseSheet] = useState<
+    | { mode: 'closed' }
+    | { mode: 'new'; date: string; budgetId: string | null }
+    | { mode: 'edit'; expense: ExpenseLine }
   >({ mode: 'closed' });
   const [listFilter, setListFilter] =
     useState<ListFilterValue>(EMPTY_LIST_FILTER);
@@ -196,7 +240,6 @@ export function PaymentsView({
     });
   };
 
-  const { summary } = board;
   const usedCurrencies = [
     ...new Set([
       ...board.usedCurrencies,
@@ -204,6 +247,11 @@ export function PaymentsView({
       defaultCurrency,
     ]),
   ];
+  const budgetCurrencyOptions = budgets.map((b) => ({
+    id: b.id,
+    name: b.name,
+    currency: b.limit.currency,
+  }));
 
   // Header stats follow whatever month the calendar is showing; the list has
   // no single month, so it stays on the current one.
@@ -216,21 +264,31 @@ export function PaymentsView({
       o.dueDate >= scopeStart &&
       o.dueDate <= scopeEnd,
   );
-  const scopeTotalMinor = inScope
-    .filter((o) => o.amount.currency === summary.currency)
-    .reduce((sum, o) => sum + o.amount.minorUnits, 0);
+  const scopeBudgets = budgets.filter(
+    (b) => b.startDate <= scopeEnd && b.endDate >= scopeStart,
+  );
+  // A budget's reserved amount counts toward the month like a payment would;
+  // an expense tied to a budget doesn't count separately (its budget already
+  // does) — only unbudgeted ones add on top, same as a one-time payment.
+  const scopeUnbudgetedExpenses = expenses.filter(
+    (e) => !e.budgetId && e.date >= scopeStart && e.date <= scopeEnd,
+  );
+  const scopeExtra = [
+    ...scopeBudgets.map((b) => b.limit),
+    ...scopeUnbudgetedExpenses.map((e) => e.amount),
+  ];
   const scopeIncomeMinor =
     board.incomeByMonth[scopeStart.slice(0, 7)] ?? board.defaultIncomeMinor;
+  // Everything committed this month — payments due, budgets reserved,
+  // unbudgeted expenses already spent — converted into one currency. Powers
+  // both the "due this month" headline and the risk line below it.
   const scopeSpentDisplayMinor = sumInDisplay(
-    inScope.map((o) => o.amount),
+    [...inScope.map((o) => o.amount), ...scopeExtra],
     board.displayCurrency,
     board.rates,
   );
   const scopeRisk = riskFor(scopeSpentDisplayMinor, scopeIncomeMinor);
   const isThisMonth = scopeStart === startOfMonth(board.today);
-  const scopeBudgets = budgets.filter(
-    (b) => b.startDate <= scopeEnd && b.endDate >= scopeStart,
-  );
   const scopeMonthLabel = new Intl.DateTimeFormat('en-GB', {
     month: 'long',
     ...(scopeStart.slice(0, 4) === board.today.slice(0, 4)
@@ -267,6 +325,62 @@ export function PaymentsView({
     </ResponsiveModal>
   );
 
+  const budgetModal = (
+    <ResponsiveModal
+      open={budgetSheet.mode !== 'closed'}
+      onOpenChange={(o) => !o && setBudgetSheet({ mode: 'closed' })}
+      title={budgetSheet.mode === 'edit' ? 'Edit budget' : 'New budget'}
+    >
+      {budgetSheet.mode !== 'closed' ? (
+        <BudgetForm
+          // Defaults the month picker to whichever month is currently in
+          // view, not necessarily today.
+          today={scopeStart}
+          initial={
+            budgetSheet.mode === 'edit'
+              ? toBudgetFormInitial(budgetSheet.budget)
+              : undefined
+          }
+          defaultCurrency={defaultCurrency}
+          usedCurrencies={usedCurrencies}
+          onDone={() => setBudgetSheet({ mode: 'closed' })}
+          onCancel={() => setBudgetSheet({ mode: 'closed' })}
+        />
+      ) : null}
+    </ResponsiveModal>
+  );
+
+  const expenseModal = (
+    <ResponsiveModal
+      open={expenseSheet.mode !== 'closed'}
+      onOpenChange={(o) => !o && setExpenseSheet({ mode: 'closed' })}
+      title={expenseSheet.mode === 'edit' ? 'Edit expense' : 'New expense'}
+    >
+      {expenseSheet.mode !== 'closed' ? (
+        <ExpenseForm
+          budgets={budgetCurrencyOptions}
+          budgetId={
+            expenseSheet.mode === 'new' ? expenseSheet.budgetId : null
+          }
+          date={
+            expenseSheet.mode === 'new'
+              ? expenseSheet.date
+              : expenseSheet.expense.date
+          }
+          initial={
+            expenseSheet.mode === 'edit'
+              ? toExpenseFormInitial(expenseSheet.expense)
+              : undefined
+          }
+          usedCurrencies={usedCurrencies}
+          onDone={() => setExpenseSheet({ mode: 'closed' })}
+          onDeleted={() => setExpenseSheet({ mode: 'closed' })}
+          onCancel={() => setExpenseSheet({ mode: 'closed' })}
+        />
+      ) : null}
+    </ResponsiveModal>
+  );
+
   if (!board.hasPayments) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
@@ -280,11 +394,22 @@ export function PaymentsView({
           Add your first payment to see it on the calendar and in your upcoming
           list.
         </p>
-        <Button size="lg" onClick={() => setSheet({ mode: 'new' })}>
-          <Plus size={18} strokeWidth={3} />
-          Add a payment
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button size="lg" onClick={() => setSheet({ mode: 'new' })}>
+            <Plus size={18} strokeWidth={3} />
+            Add a payment
+          </Button>
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={() => setBudgetSheet({ mode: 'new' })}
+          >
+            <Plus size={18} strokeWidth={3} />
+            Add a budget
+          </Button>
+        </div>
         {formModal}
+        {budgetModal}
       </div>
     );
   }
@@ -302,10 +427,8 @@ export function PaymentsView({
               <span className="hidden sm:inline">Upcoming payments</span>
             </h1>
             <p className="mt-0.5 text-[13px] text-ink-soft sm:mt-1 sm:text-sm">
-              {formatConverted(
-                money(scopeTotalMinor, summary.currency),
-                board.displayCurrency,
-                board.rates,
+              {formatMoney(
+                money(scopeSpentDisplayMinor, board.displayCurrency),
               )}{' '}
               due {isThisMonth ? 'this month' : `in ${scopeMonthLabel}`}
               {' · '}
@@ -341,14 +464,42 @@ export function PaymentsView({
             ) : null}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <Button
-              size="sm"
-              className="sm:h-10 sm:px-4"
-              onClick={() => setSheet({ mode: 'new' })}
-            >
-              <Plus size={16} strokeWidth={3} />
-              New payment
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                className="sm:h-10 sm:px-4"
+                onClick={() => setSheet({ mode: 'new' })}
+              >
+                <Plus size={16} strokeWidth={3} />
+                New payment
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="sm:h-10 sm:px-3"
+                onClick={() => setBudgetSheet({ mode: 'new' })}
+              >
+                <Plus size={16} strokeWidth={3} />
+                <span className="hidden sm:inline">Add budget</span>
+                <span className="sm:hidden">Budget</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="sm:h-10 sm:px-3"
+                onClick={() =>
+                  setExpenseSheet({
+                    mode: 'new',
+                    date: board.today,
+                    budgetId: null,
+                  })
+                }
+              >
+                <Plus size={16} strokeWidth={3} />
+                <span className="hidden sm:inline">Add expense</span>
+                <span className="sm:hidden">Expense</span>
+              </Button>
+            </div>
             <div className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-ground p-1">
               {(['list', 'calendar'] as const).map((v) => (
                 <button
@@ -387,10 +538,17 @@ export function PaymentsView({
       {view === 'list' ? (
         <PaymentList
           board={board}
+          budgets={budgets}
+          expenses={expenses}
           filter={listFilter}
           stickyTop={panelH}
           onEdit={openEdit}
           onFlag={openFlag}
+          onEditBudget={(b) => setBudgetSheet({ mode: 'edit', budget: b })}
+          onEditExpense={(e) => setExpenseSheet({ mode: 'edit', expense: e })}
+          onAddExpense={(date) =>
+            setExpenseSheet({ mode: 'new', date, budgetId: null })
+          }
         />
       ) : (
         <PaymentCalendar
@@ -403,6 +561,8 @@ export function PaymentsView({
       )}
 
       {formModal}
+      {budgetModal}
+      {expenseModal}
       <FlagModal target={flagTarget} onDone={() => setFlagTarget(null)} />
     </div>
   );

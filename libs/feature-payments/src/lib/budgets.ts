@@ -15,6 +15,7 @@ export async function getBudgetsData(): Promise<BudgetSummary[]> {
     const expenses: BudgetExpenseView[] = b.expenses.map((e) => ({
       id: e.id,
       name: e.name,
+      date: e.date,
       amount: money(e.amountMinor, e.currency),
       notes: e.notes,
       attachments: e.attachments,

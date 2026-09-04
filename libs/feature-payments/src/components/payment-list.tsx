@@ -15,8 +15,16 @@ import {
 import { cn, Progress, Spinner } from '@wib/ui';
 import { Pencil } from '@wib/ui/icons';
 import { loadListWindowAction } from '../lib/actions';
-import { riskFor } from '../lib/risk';
-import type { BoardOccurrence, DayGroup, PaymentBoard } from '../lib/types';
+import { riskFor, sumInDisplay } from '../lib/risk';
+import type {
+  BoardOccurrence,
+  BudgetSummary,
+  DayGroup,
+  ExpenseLine,
+  PaymentBoard,
+} from '../lib/types';
+import { BudgetMonthLine } from './budget-month-line';
+import { ExpenseListItem } from './expense-list-item';
 import {
   EMPTY_LIST_FILTER,
   listFilterCount,
@@ -145,17 +153,27 @@ function mergeBoards(
 
 export function PaymentList({
   board: baseBoard,
+  budgets = [],
+  expenses = [],
   filter = EMPTY_LIST_FILTER,
   stickyTop = 0,
   onEdit,
   onFlag,
+  onEditBudget,
+  onEditExpense,
+  onAddExpense,
 }: {
   board: PaymentBoard;
+  budgets?: BudgetSummary[];
+  expenses?: ExpenseLine[];
   filter?: ListFilterValue;
   /** Px offset for the sticky month headers — the height of the sticky panel. */
   stickyTop?: number;
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
+  onEditBudget: (budget: BudgetSummary) => void;
+  onEditExpense: (expense: ExpenseLine) => void;
+  onAddExpense: (date: string) => void;
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
@@ -467,17 +485,48 @@ export function PaymentList({
     return true;
   };
 
+  // Budgets/expenses are unrelated to the payment filter fields (account,
+  // bank, tag) — rather than show them against a narrowed, unrelated view,
+  // they're hidden for as long as a filter is active.
+  const showBudgetsAndExpenses = !filterActive;
+  const expensesByDate = new Map<string, ExpenseLine[]>();
+  for (const e of expenses) {
+    if (e.date < board.window.from || e.date > board.window.to) continue;
+    const arr = expensesByDate.get(e.date);
+    if (arr) arr.push(e);
+    else expensesByDate.set(e.date, [e]);
+  }
+
   // Show everything that isn't skipped — paid occurrences stay in place with
   // their checkbox ticked (earlier this month, or in months scrolled back in).
-  const upcoming = board.groups
-    .map((g) => ({
-      ...g,
-      occurrences: g.occurrences.filter(
-        (o) => matchesFilter(o) && o.status !== 'skipped',
-      ),
-    }))
-    .filter((g) => g.occurrences.length > 0);
-  const todayHasPayments = upcoming.some((g) => g.date === board.today);
+  const upcoming = (() => {
+    const base = board.groups
+      .map((g) => ({
+        ...g,
+        occurrences: g.occurrences.filter(
+          (o) => matchesFilter(o) && o.status !== 'skipped',
+        ),
+      }))
+      .filter((g) => g.occurrences.length > 0);
+    if (!showBudgetsAndExpenses) return base;
+    // A date with an expense but no payment still needs its own day section.
+    const seen = new Set(base.map((g) => g.date));
+    const extra: DayGroup[] = [...expensesByDate.keys()]
+      .filter((d) => !seen.has(d))
+      .map((d) => ({
+        date: d,
+        relativeLabel: '',
+        occurrences: [],
+        totalMinor: 0,
+        currency: displayCurrency,
+      }));
+    return [...base, ...extra].sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+    );
+  })();
+  const todayHasPayments = upcoming.some(
+    (g) => g.date === board.today && g.occurrences.length > 0,
+  );
 
   // Bucket the day groups by calendar month, in order.
   const months: { key: string; groups: DayGroup[] }[] = [];
@@ -621,11 +670,39 @@ export function PaymentList({
       {months.map((mo) => {
         const isActive = mo.key === activeKey;
         const occs = mo.groups.flatMap((g) => g.occurrences);
-        const { paidMinor, remainingMinor, totalMinor } = monthTotals(
-          occs,
+        const monthStart = `${mo.key}-01`;
+        const monthEnd = endOfMonth(monthStart);
+        // A budget counts toward the month like a payment would (it's money
+        // reserved); an unbudgeted expense counts too (money already spent).
+        // A budgeted expense doesn't count separately — its budget already
+        // does — it's shown but excluded here.
+        const monthBudgets = showBudgetsAndExpenses
+          ? budgets.filter(
+              (b) => b.startDate <= monthEnd && b.endDate >= monthStart,
+            )
+          : [];
+        const monthUnbudgetedExpenses = showBudgetsAndExpenses
+          ? expenses.filter(
+              (e) => e.date.slice(0, 7) === mo.key && !e.budgetId,
+            )
+          : [];
+        const extraMinor = sumInDisplay(
+          [
+            ...monthBudgets.map((b) => b.limit),
+            ...monthUnbudgetedExpenses.map((e) => e.amount),
+          ],
           displayCurrency,
           rates,
         );
+        const {
+          paidMinor,
+          remainingMinor: paymentsRemainingMinor,
+          totalMinor: paymentsTotalMinor,
+        } = monthTotals(occs, displayCurrency, rates);
+        // Reserved/spent amounts have no paid state of their own — they only
+        // ever sit on the "remaining" side of the split.
+        const totalMinor = paymentsTotalMinor + extraMinor;
+        const remainingMinor = paymentsRemainingMinor + extraMinor;
         const paidPct = totalMinor > 0 ? (paidMinor / totalMinor) * 100 : 0;
 
         const incomeMinor =
@@ -739,19 +816,42 @@ export function PaymentList({
               ) : null}
             </div>
 
+            {monthBudgets.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                {monthBudgets.map((b) => (
+                  <BudgetMonthLine
+                    key={b.id}
+                    budget={b}
+                    onEdit={() => onEditBudget(b)}
+                  />
+                ))}
+              </div>
+            ) : null}
+
             {mo.key === todayMonth && !todayHasPayments ? (
               <TodayMarker label="Nothing due today" />
             ) : null}
 
             {mo.groups.map((group) => {
               const isToday = group.date === board.today;
+              const dayExpenses = showBudgetsAndExpenses
+                ? (expensesByDate.get(group.date) ?? [])
+                : [];
+              const dayUnbudgetedExpenses = dayExpenses.filter(
+                (e) => !e.budgetId,
+              );
               // Recompute from the (filtered) occurrences, in the display
-              // currency — so a mixed-currency day adds up correctly.
-              const dayTotalMinor = monthTotals(
-                group.occurrences,
-                displayCurrency,
-                rates,
-              ).totalMinor;
+              // currency — so a mixed-currency day adds up correctly. An
+              // unbudgeted expense adds on top, like a one-time payment; a
+              // budgeted one doesn't (its budget already counts, monthly).
+              const dayTotalMinor =
+                monthTotals(group.occurrences, displayCurrency, rates)
+                  .totalMinor +
+                sumInDisplay(
+                  dayUnbudgetedExpenses.map((e) => e.amount),
+                  displayCurrency,
+                  rates,
+                );
               return (
                 <div key={group.date} className="flex flex-col gap-2">
                   <div
@@ -785,9 +885,20 @@ export function PaymentList({
                       ) ? (
                         <span>{group.relativeLabel}</span>
                       ) : null}
-                      <span className="font-mono tabular-nums">
-                        {formatMoney(money(dayTotalMinor, displayCurrency))}
-                      </span>
+                      {showBudgetsAndExpenses ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddExpense(group.date)}
+                          className="font-medium text-ink-soft hover:text-ink hover:underline"
+                        >
+                          + expense
+                        </button>
+                      ) : null}
+                      {dayTotalMinor > 0 ? (
+                        <span className="font-mono tabular-nums">
+                          {formatMoney(money(dayTotalMinor, displayCurrency))}
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -814,6 +925,13 @@ export function PaymentList({
                           />
                         </div>
                       ))}
+                    {dayExpenses.map((e) => (
+                      <ExpenseListItem
+                        key={e.id}
+                        expense={e}
+                        onEdit={() => onEditExpense(e)}
+                      />
+                    ))}
                   </div>
                 </div>
               );

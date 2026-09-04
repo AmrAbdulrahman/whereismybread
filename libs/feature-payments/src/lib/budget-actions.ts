@@ -138,14 +138,16 @@ export async function saveExpenseAction(
   const input = {
     budgetId: parsed.data.budgetId,
     name: parsed.data.name,
+    date: parsed.data.date,
     amountMinor,
     currency: parsed.data.currency,
     notes: parsed.data.notes,
   };
+  const budgetGoneError = 'That budget no longer exists.';
 
   if (!id) {
     const expense = await createExpense(userId, input);
-    if (!expense) return { ok: false, error: 'That budget no longer exists.' };
+    if (!expense) return { ok: false, error: budgetGoneError };
     // Files staged while creating — attach them to the fresh expense.
     const drafts = validAttachmentDrafts(parsed.data.attachments);
     if (drafts.length > 0) {
@@ -158,7 +160,12 @@ export async function saveExpenseAction(
   }
 
   const expense = await updateExpense(userId, id, input);
-  if (!expense) return { ok: false, error: 'That expense no longer exists.' };
+  if (!expense) {
+    return {
+      ok: false,
+      error: parsed.data.budgetId ? budgetGoneError : 'That expense no longer exists.',
+    };
+  }
   revalidateBudgets();
   return { ok: true, item: expense };
 }
