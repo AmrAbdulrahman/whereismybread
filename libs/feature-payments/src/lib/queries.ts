@@ -5,15 +5,10 @@ import {
   listAccountsWithUsage,
   listBanksWithUsage,
   listPaymentMethods,
-  type Account,
   type AccountWithUsage,
-  type Bank,
   type BankWithUsage,
   type BoardBundle,
-  type PaymentMethod,
   type PaymentOverrides,
-  type RecipientMethod,
-  type Tag,
 } from '@wib/db';
 import {
   addMonths,
@@ -39,6 +34,7 @@ import type {
   EditablePayment,
   OccurrenceLineItem,
   PaymentBoard,
+  PaymentsContext,
 } from './types';
 
 function relativeLabel(today: IsoDate, date: IsoDate): string {
@@ -60,13 +56,7 @@ function relativeLabel(today: IsoDate, date: IsoDate): string {
   );
 }
 
-export interface PaymentsContext {
-  methods: PaymentMethod[];
-  accounts: Account[];
-  banks: Bank[];
-  recipientMethods: RecipientMethod[];
-  tags: Tag[];
-}
+export type { PaymentsContext };
 
 /**
  * The board and its lookup lists in a **single** DB round trip (+ a memoised

@@ -63,11 +63,11 @@ test('budgets: create month budget, add/edit/delete expense, progress tracked, s
   await editExpense.getByRole('button', { name: 'Save changes' }).click();
   await expect(card.getByText(/20\.00\s*spent/i)).toBeVisible();
 
-  // The budget shows up on the plan page's sticky header as a progress chip.
+  // The budget shows up pinned to the sticky month header in the plan list.
   await page.goto('/plan');
-  const chip = page.getByRole('link').filter({ hasText: 'Groceries' });
-  await expect(chip).toBeVisible();
-  await expect(chip.getByText(/20\.00/)).toBeVisible();
+  const budgetRow = page.getByRole('group', { name: 'Groceries budget' });
+  await expect(budgetRow).toBeVisible();
+  await expect(budgetRow.getByText(/20\.00\s*\/\s*.*200\.00/)).toBeVisible();
 
   // Delete the expense, then the budget.
   await page.goto('/budgets');

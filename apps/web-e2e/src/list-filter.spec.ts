@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openNewPayment } from './helpers';
 
 // eslint-disable-next-line playwright/no-skipped-test -- env-gated: needs a live DB
 test.skip(
@@ -22,9 +23,7 @@ test('the list view search + day total span currencies', async ({ page }) => {
     currency: string,
     account?: string,
   ) => {
-    await page
-      .getByRole('button', { name: /^(Add a payment|New payment)$/ })
-      .click();
+    await openNewPayment(page);
     await page.getByRole('button', { name: 'Monthly', exact: true }).click();
     await page.getByLabel('Description').fill(name);
     await page.getByLabel('Amount').fill(amount);
@@ -49,9 +48,7 @@ test('the list view search + day total span currencies', async ({ page }) => {
     // Wait for the board to settle into the "has payments" layout before the
     // next call — the post-save re-render swaps the whole view and briefly
     // remounts the form modal.
-    await expect(
-      page.getByRole('button', { name: 'New payment' }),
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'list' })).toBeVisible();
   };
 
   await addMonthly('Rent', '1000', 'EUR', 'Home');

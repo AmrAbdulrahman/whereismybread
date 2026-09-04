@@ -38,12 +38,16 @@ export function ListFilters({
   accounts,
   banks,
   tags,
+  unpaidOnly,
+  onUnpaidOnlyChange,
 }: {
   value: ListFilterValue;
   onChange: (next: ListFilterValue) => void;
   accounts: Account[];
   banks: Bank[];
   tags: Tag[];
+  unpaidOnly: boolean;
+  onUnpaidOnlyChange: (next: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const count = listFilterCount(value);
@@ -119,6 +123,20 @@ export function ListFilters({
             </button>
           ) : null}
         </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={unpaidOnly}
+          onClick={() => onUnpaidOnlyChange(!unpaidOnly)}
+          className={cn(
+            'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium',
+            unpaidOnly
+              ? 'border-accent bg-accent/15 text-accent'
+              : 'border-line-strong text-muted hover:text-ink',
+          )}
+        >
+          Unpaid only
+        </button>
         {hasChips ? (
           <button
             type="button"

@@ -156,6 +156,7 @@ export function PaymentList({
   budgets = [],
   expenses = [],
   filter = EMPTY_LIST_FILTER,
+  unpaidOnly = false,
   stickyTop = 0,
   onEdit,
   onFlag,
@@ -167,6 +168,8 @@ export function PaymentList({
   budgets?: BudgetSummary[];
   expenses?: ExpenseLine[];
   filter?: ListFilterValue;
+  /** Hide paid occurrences; days left with nothing to show drop out entirely. */
+  unpaidOnly?: boolean;
   /** Px offset for the sticky month headers — the height of the sticky panel. */
   stickyTop?: number;
   onEdit: (paymentId: string, dueDate: string) => void;
@@ -498,13 +501,18 @@ export function PaymentList({
   }
 
   // Show everything that isn't skipped — paid occurrences stay in place with
-  // their checkbox ticked (earlier this month, or in months scrolled back in).
+  // their checkbox ticked (earlier this month, or in months scrolled back in),
+  // unless "unpaid only" is on, in which case they drop out (and days left
+  // with nothing at all — no unpaid occurrences, no expenses — drop too).
   const upcoming = (() => {
     const base = board.groups
       .map((g) => ({
         ...g,
         occurrences: g.occurrences.filter(
-          (o) => matchesFilter(o) && o.status !== 'skipped',
+          (o) =>
+            matchesFilter(o) &&
+            o.status !== 'skipped' &&
+            (!unpaidOnly || !isPaid(o)),
         ),
       }))
       .filter((g) => g.occurrences.length > 0);
@@ -529,16 +537,38 @@ export function PaymentList({
   );
 
   // Bucket the day groups by calendar month, in order.
-  const months: { key: string; groups: DayGroup[] }[] = [];
+  const monthsByKey = new Map<string, { key: string; groups: DayGroup[] }>();
   for (const group of upcoming) {
     const key = group.date.slice(0, 7);
-    let bucket = months.at(-1);
-    if (!bucket || bucket.key !== key) {
+    let bucket = monthsByKey.get(key);
+    if (!bucket) {
       bucket = { key, groups: [] };
-      months.push(bucket);
+      monthsByKey.set(key, bucket);
     }
     bucket.groups.push(group);
   }
+  // A month with only a budget (no payments, no expenses) still needs its
+  // own bucket, so the budget's sticky line has a header to pin to — add an
+  // empty one for any budget month within the loaded window that isn't
+  // already covered by a day group.
+  if (showBudgetsAndExpenses) {
+    for (const b of budgets) {
+      let monthCursor = startOfMonth(
+        b.startDate < board.window.from ? board.window.from : b.startDate,
+      );
+      const lastMonth = startOfMonth(
+        b.endDate > board.window.to ? board.window.to : b.endDate,
+      );
+      while (monthCursor <= lastMonth) {
+        const key = monthCursor.slice(0, 7);
+        if (!monthsByKey.has(key)) monthsByKey.set(key, { key, groups: [] });
+        monthCursor = startOfMonth(addMonths(monthCursor, 1));
+      }
+    }
+  }
+  const months = [...monthsByKey.values()].sort((a, b) =>
+    a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+  );
 
   const todayMonth = board.today.slice(0, 7);
   const defaultKey =
@@ -686,11 +716,8 @@ export function PaymentList({
               (e) => e.date.slice(0, 7) === mo.key && !e.budgetId,
             )
           : [];
-        const extraMinor = sumInDisplay(
-          [
-            ...monthBudgets.map((b) => b.limit),
-            ...monthUnbudgetedExpenses.map((e) => e.amount),
-          ],
+        const unbudgetedExpensesMinor = sumInDisplay(
+          monthUnbudgetedExpenses.map((e) => e.amount),
           displayCurrency,
           rates,
         );
@@ -699,10 +726,11 @@ export function PaymentList({
           remainingMinor: paymentsRemainingMinor,
           totalMinor: paymentsTotalMinor,
         } = monthTotals(occs, displayCurrency, rates);
-        // Reserved/spent amounts have no paid state of their own — they only
-        // ever sit on the "remaining" side of the split.
-        const totalMinor = paymentsTotalMinor + extraMinor;
-        const remainingMinor = paymentsRemainingMinor + extraMinor;
+        // Budgets get their own sticky display and are excluded here — this
+        // total is payments due plus unbudgeted expenses (money already
+        // spent outside any budget), not the reserved budget amounts.
+        const totalMinor = paymentsTotalMinor + unbudgetedExpensesMinor;
+        const remainingMinor = paymentsRemainingMinor + unbudgetedExpensesMinor;
         const paidPct = totalMinor > 0 ? (paidMinor / totalMinor) * 100 : 0;
 
         const incomeMinor =
@@ -814,19 +842,18 @@ export function PaymentList({
                   </button>
                 </>
               ) : null}
+              {monthBudgets.length > 0 ? (
+                <div className="flex flex-col gap-1 border-t border-line pt-1.5">
+                  {monthBudgets.map((b) => (
+                    <BudgetMonthLine
+                      key={b.id}
+                      budget={b}
+                      onEdit={() => onEditBudget(b)}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </div>
-
-            {monthBudgets.length > 0 ? (
-              <div className="flex flex-col gap-1.5">
-                {monthBudgets.map((b) => (
-                  <BudgetMonthLine
-                    key={b.id}
-                    budget={b}
-                    onEdit={() => onEditBudget(b)}
-                  />
-                ))}
-              </div>
-            ) : null}
 
             {mo.key === todayMonth && !todayHasPayments ? (
               <TodayMarker label="Nothing due today" />

@@ -1,13 +1,25 @@
-import { requireUserId } from '@wib/auth/server';
-import { getBudgetsBundle, getRates } from '@wib/db';
-import { convertMoney, money } from '@wib/domain';
+import { requireUser } from '@wib/auth/server';
+import { getBudgetsBundle, getRates, materializeRecurringBudgets } from '@wib/db';
+import {
+  addMonths,
+  convertMoney,
+  endOfMonth,
+  money,
+  todayIn,
+} from '@wib/domain';
 import type { BudgetExpenseView, BudgetSummary } from './types';
 
 /** Every budget the signed-in user owns, with its spend computed. */
 export async function getBudgetsData(): Promise<BudgetSummary[]> {
-  const userId = await requireUserId();
+  const user = await requireUser();
+  const today = todayIn(user.timezone);
+  // Catch a recurring budget up through the same forward window the plan
+  // board itself defaults to, so browsing a few months ahead always finds
+  // one already materialized instead of a gap.
+  const through = endOfMonth(addMonths(today, 3));
   // Sequential — the Supabase transaction pooler punishes concurrent reads.
-  const bundle = await getBudgetsBundle(userId);
+  await materializeRecurringBudgets(user.id, through);
+  const bundle = await getBudgetsBundle(user.id);
   const rates = await getRates();
 
   return bundle.map((b) => {
@@ -34,6 +46,7 @@ export async function getBudgetsData(): Promise<BudgetSummary[]> {
       startDate: b.startDate,
       endDate: b.endDate,
       color: b.color,
+      recurring: b.recurring,
       limit: money(b.amountMinor, settleCurrency),
       spentMinor,
       remainingMinor: b.amountMinor - spentMinor,

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openNewPayment } from './helpers';
 
 // eslint-disable-next-line playwright/no-skipped-test -- env-gated: needs a live DB
 test.skip(
@@ -27,7 +28,7 @@ test('clicking a tag suggestion adds the full tag, not the typed draft', async (
   await expect(page.getByLabel('Amount')).toBeHidden();
 
   // second payment: type a prefix, then click the suggestion
-  await page.getByRole('button', { name: 'New payment' }).click();
+  await openNewPayment(page);
   await page.getByLabel('Description').fill('Hotel');
   await page.getByLabel('Amount').fill('250');
   await page.getByPlaceholder('Add tags…').fill('eg');

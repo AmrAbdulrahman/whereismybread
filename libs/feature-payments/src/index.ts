@@ -5,7 +5,6 @@ export { PaymentForm, type PaymentFormProps } from './components/payment-form';
 export { BankManager } from './components/bank-manager';
 export { ChecklistView } from './components/checklist-view';
 export { BudgetsView } from './components/budgets-view';
-export { BudgetStrip } from './components/budget-strip';
 
 export {
   savePaymentAction,

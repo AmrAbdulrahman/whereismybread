@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { formatMoney, money, type IsoDate } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
-import { FileText, Pencil, Plus, Trash2 } from '@wib/ui/icons';
+import { FileText, Pencil, Plus, Repeat, Trash2 } from '@wib/ui/icons';
 import { deleteBudgetAction, deleteExpenseAction } from '../lib/budget-actions';
 import type { BudgetExpenseView, BudgetSummary } from '../lib/types';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
+import { BudgetProgressBar } from './budget-progress-bar';
 import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
 
 function periodLabel(b: BudgetSummary): string {
@@ -35,28 +36,6 @@ function formatShortDate(d: string): string {
   }).format(new Date(`${d}T00:00:00Z`));
 }
 
-function ProgressBar({
-  progress,
-  color,
-}: {
-  progress: number;
-  color: string;
-}) {
-  const pct = Math.min(progress, 1) * 100;
-  const over = progress > 1;
-  return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
-      <div
-        className="h-full rounded-full transition-[width]"
-        style={{
-          width: `${pct}%`,
-          background: over ? 'var(--wib-danger)' : color,
-        }}
-      />
-    </div>
-  );
-}
-
 function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
   return {
     id: b.id,
@@ -67,6 +46,7 @@ function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
     amountMinor: b.limit.minorUnits,
     currency: b.limit.currency,
     color: b.color,
+    recurring: b.recurring,
   };
 }
 
@@ -147,6 +127,7 @@ export function BudgetsView({
     id: b.id,
     name: b.name,
     currency: b.limit.currency,
+    startDate: b.startDate,
   }));
 
   const emptyState = budgets.length === 0;
@@ -210,6 +191,14 @@ export function BudgetsView({
                         <span className="shrink-0 rounded-full border border-line-strong px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                           {b.period}
                         </span>
+                        {b.recurring ? (
+                          <Repeat
+                            size={12}
+                            strokeWidth={2}
+                            className="shrink-0 text-muted"
+                            aria-label="Repeats monthly"
+                          />
+                        ) : null}
                       </div>
                       <p className="mt-0.5 text-xs text-ink-soft">
                         {periodLabel(b)}
@@ -236,7 +225,7 @@ export function BudgetsView({
                   </div>
 
                   <div className="mt-3 flex flex-col gap-1.5">
-                    <ProgressBar progress={b.progress} color={b.color} />
+                    <BudgetProgressBar progress={b.progress} color={b.color} />
                     <div className="flex items-center justify-between text-xs">
                       <span
                         className={cn(

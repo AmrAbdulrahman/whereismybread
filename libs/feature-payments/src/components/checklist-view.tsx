@@ -2,25 +2,40 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { formatMoney, money, type RateMap } from '@wib/domain';
-import { cn } from '@wib/ui';
+import { ResponsiveModal, cn } from '@wib/ui';
 import { ChevronDown } from '@wib/ui/icons';
-import type { ChecklistMonth } from '../lib/types';
+import type { PaymentOverrides } from '@wib/db';
+import type {
+  ChecklistMonth,
+  EditablePayment,
+  PaymentsContext,
+} from '../lib/types';
 import { OccurrenceItem } from './occurrence-item';
+import { PaymentForm } from './payment-form';
+import { applyOverride } from './payments-view';
 
 export function ChecklistView({
   months,
   currentMonthKey,
   today,
   displayCurrency,
+  defaultCurrency,
   rates,
   empty,
+  context,
+  editable,
+  overrides,
 }: {
   months: ChecklistMonth[];
   currentMonthKey: string;
   today: string;
   displayCurrency: string;
+  defaultCurrency: string;
   rates: RateMap;
   empty: boolean;
+  context: PaymentsContext;
+  editable: Record<string, EditablePayment>;
+  overrides: Record<string, PaymentOverrides>;
 }) {
   // Only the current month is open to start; keep the user's choices across the
   // server re-render that follows ticking a box.
@@ -38,6 +53,26 @@ export function ChecklistView({
       else next.add(key);
       return next;
     });
+
+  const [sheet, setSheet] = useState<
+    | { mode: 'closed' }
+    | { mode: 'edit'; payment: EditablePayment; occurrenceDate: string; hasOverride: boolean }
+  >({ mode: 'closed' });
+  const close = () => setSheet({ mode: 'closed' });
+  const openEdit = (paymentId: string, occurrenceDate: string) => {
+    const base = editable[paymentId];
+    if (!base) return;
+    const ov = overrides[`${paymentId}:${occurrenceDate}`];
+    setSheet({
+      mode: 'edit',
+      payment: ov ? applyOverride(base, ov) : base,
+      occurrenceDate,
+      hasOverride: ov != null,
+    });
+  };
+  const usedCurrencies = [
+    ...new Set([displayCurrency, defaultCurrency]),
+  ];
 
   const current = useMemo(
     () => months.find((m) => m.key === currentMonthKey),
@@ -163,6 +198,7 @@ export function ChecklistView({
                         <OccurrenceItem
                           key={occ.key}
                           occ={occ}
+                          onEdit={openEdit}
                           displayCurrency={displayCurrency}
                           rates={rates}
                           today={today}
@@ -176,6 +212,30 @@ export function ChecklistView({
           })}
         </div>
       )}
+
+      <ResponsiveModal
+        open={sheet.mode !== 'closed'}
+        onOpenChange={(o) => !o && close()}
+        title="Edit payment"
+      >
+        {sheet.mode !== 'closed' ? (
+          <PaymentForm
+            methods={context.methods}
+            accounts={context.accounts}
+            banks={context.banks}
+            recipientMethods={context.recipientMethods}
+            tags={context.tags}
+            defaultCurrency={defaultCurrency}
+            today={today}
+            usedCurrencies={usedCurrencies}
+            rates={rates}
+            initial={sheet.payment}
+            occurrenceDate={sheet.occurrenceDate}
+            hasOverride={sheet.hasOverride}
+            onDone={close}
+          />
+        ) : null}
+      </ResponsiveModal>
     </div>
   );
 }

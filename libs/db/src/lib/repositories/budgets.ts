@@ -1,4 +1,5 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { addMonths, endOfMonth, startOfMonth, type IsoDate } from '@wib/domain';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { getDb, getSql } from '../client';
 import { budgets, type Budget } from '../schema/budgets';
 import type { Expense, ExpenseAttachment } from '../schema/budgets';
@@ -35,6 +36,8 @@ export interface BudgetInput {
   amountMinor: number;
   currency: string;
   color?: string;
+  /** Month budgets only — an ongoing monthly series. */
+  recurring?: boolean;
 }
 
 export async function listBudgets(userId: string): Promise<Budget[]> {
@@ -106,6 +109,7 @@ export async function createBudget(
       amountMinor: input.amountMinor,
       currency: input.currency,
       color: input.color ?? '#6321d6',
+      recurring: input.period === 'month' ? (input.recurring ?? false) : false,
     })
     .returning();
   if (!rows[0]) throw new Error('createBudget: no row');
@@ -127,6 +131,7 @@ export async function updateBudget(
       amountMinor: input.amountMinor,
       currency: input.currency,
       ...(input.color ? { color: input.color } : {}),
+      recurring: input.period === 'month' ? (input.recurring ?? false) : false,
       updatedAt: new Date(),
     })
     .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
@@ -138,4 +143,57 @@ export async function deleteBudget(userId: string, id: string): Promise<void> {
   await getDb()
     .delete(budgets)
     .where(and(eq(budgets.id, id), eq(budgets.userId, userId)));
+}
+
+/**
+ * Make sure every recurring monthly budget has an instance covering
+ * `through` — walking forward month by month from whichever row is
+ * currently the latest for that name, cloning its name/amount/currency/
+ * colour into each new month. A no-op once everything's caught up.
+ */
+export async function materializeRecurringBudgets(
+  userId: string,
+  through: string,
+): Promise<void> {
+  const rows = await getDb()
+    .select()
+    .from(budgets)
+    .where(
+      and(
+        eq(budgets.userId, userId),
+        eq(budgets.recurring, true),
+        eq(budgets.period, 'month'),
+      ),
+    )
+    .orderBy(desc(budgets.startDate));
+
+  const latestByName = new Map<string, Budget>();
+  for (const row of rows) {
+    if (!latestByName.has(row.name)) latestByName.set(row.name, row);
+  }
+
+  for (const latest of latestByName.values()) {
+    let cursor = latest;
+    while (cursor.endDate < through) {
+      const nextStart = startOfMonth(addMonths(cursor.startDate as IsoDate, 1));
+      const nextEnd = endOfMonth(nextStart);
+      const inserted = await getDb()
+        .insert(budgets)
+        .values({
+          userId,
+          name: cursor.name,
+          period: 'month',
+          startDate: nextStart,
+          endDate: nextEnd,
+          amountMinor: cursor.amountMinor,
+          currency: cursor.currency,
+          color: cursor.color,
+          recurring: true,
+        })
+        .returning();
+      const next = inserted[0];
+      if (!next) break;
+      cursor = next;
+    }
+  }
 }

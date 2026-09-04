@@ -25,7 +25,7 @@ test('the list lazy-loads later months on scroll; start marker stays hidden', as
   await page.getByLabel('Day of the month').fill('12');
   await page.getByRole('button', { name: 'Add payment' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'New payment' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'list' })).toBeVisible();
 
   // the "this is where you started" marker only appears once the reader has
   // scrolled up looking for earlier months — never on the initial render.

@@ -17,10 +17,16 @@ import {
   startOfMonth,
   type IsoDate,
 } from '@wib/domain';
-import { Button, ResponsiveModal, cn } from '@wib/ui';
-import { Plus } from '@wib/ui/icons';
+import {
+  Button,
+  ResponsiveModal,
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  cn,
+} from '@wib/ui';
+import { CalendarDays, PiggyBank, Plus, Receipt } from '@wib/ui/icons';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
-import { BudgetStrip } from './budget-strip';
 import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
 import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
@@ -42,7 +48,7 @@ import type {
 type View = 'list' | 'calendar';
 
 /** Fold a per-occurrence override onto the payment's editable defaults. */
-function applyOverride(
+export function applyOverride(
   base: EditablePayment,
   ov: PaymentOverrides,
 ): EditablePayment {
@@ -87,6 +93,7 @@ function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
     amountMinor: b.limit.minorUnits,
     currency: b.limit.currency,
     color: b.color,
+    recurring: b.recurring,
   };
 }
 
@@ -153,6 +160,10 @@ export function PaymentsView({
   >({ mode: 'closed' });
   const [listFilter, setListFilter] =
     useState<ListFilterValue>(EMPTY_LIST_FILTER);
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
+  // Mobile keeps one "Add" button that opens a sheet of the three options —
+  // desktop shows all three inline instead.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -251,6 +262,7 @@ export function PaymentsView({
     id: b.id,
     name: b.name,
     currency: b.limit.currency,
+    startDate: b.startDate,
   }));
 
   // Header stats follow whatever month the calendar is showing; the list has
@@ -288,6 +300,17 @@ export function PaymentsView({
     board.rates,
   );
   const scopeRisk = riskFor(scopeSpentDisplayMinor, scopeIncomeMinor);
+  // "Left" comes in two layers: the conservative figure treats every budget's
+  // full reserved amount as already spent; the (larger, friendlier) headline
+  // adds back whatever's still unspent in those budgets — money that's set
+  // aside, but not gone yet.
+  const scopeLeftMinor = scopeIncomeMinor - scopeSpentDisplayMinor;
+  const scopeBudgetsRemainingMinor = sumInDisplay(
+    scopeBudgets.map((b) => money(b.remainingMinor, b.limit.currency)),
+    board.displayCurrency,
+    board.rates,
+  );
+  const scopeTotalLeftMinor = scopeLeftMinor + scopeBudgetsRemainingMinor;
   const isThisMonth = scopeStart === startOfMonth(board.today);
   const scopeMonthLabel = new Intl.DateTimeFormat('en-GB', {
     month: 'long',
@@ -381,14 +404,9 @@ export function PaymentsView({
     </ResponsiveModal>
   );
 
-  if (!board.hasPayments) {
+  if (!board.hasPayments && budgets.length === 0) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-        {scopeBudgets.length > 0 ? (
-          <div className="w-full max-w-xs">
-            <BudgetStrip budgets={scopeBudgets} />
-          </div>
-        ) : null}
         <h1 className="text-xl font-semibold">Nothing planned yet</h1>
         <p className="max-w-xs text-sm text-ink-soft">
           Add your first payment to see it on the calendar and in your upcoming
@@ -445,12 +463,23 @@ export function PaymentsView({
                   className={cn('h-1.5 w-1.5 rounded-full', scopeRisk.bar)}
                 />
                 {formatMoney(
-                  money(
-                    scopeIncomeMinor - scopeSpentDisplayMinor,
-                    board.displayCurrency,
-                  ),
+                  money(scopeTotalLeftMinor, board.displayCurrency),
                 )}{' '}
                 left
+                {scopeBudgets.length > 0 ? (
+                  <span className="text-muted">
+                    {' '}
+                    (
+                    {formatMoney(
+                      money(scopeLeftMinor, board.displayCurrency),
+                    )}{' '}
+                    left +{' '}
+                    {formatMoney(
+                      money(scopeBudgetsRemainingMinor, board.displayCurrency),
+                    )}{' '}
+                    budgets)
+                  </span>
+                ) : null}
                 <span className="hidden sm:inline">
                   {' '}
                   of{' '}
@@ -467,7 +496,15 @@ export function PaymentsView({
             <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
-                className="sm:h-10 sm:px-4"
+                className="sm:hidden"
+                onClick={() => setAddMenuOpen(true)}
+              >
+                <Plus size={16} strokeWidth={3} />
+                Add
+              </Button>
+              <Button
+                size="sm"
+                className="hidden sm:inline-flex sm:h-10 sm:px-4"
                 onClick={() => setSheet({ mode: 'new' })}
               >
                 <Plus size={16} strokeWidth={3} />
@@ -476,17 +513,16 @@ export function PaymentsView({
               <Button
                 size="sm"
                 variant="secondary"
-                className="sm:h-10 sm:px-3"
+                className="hidden sm:inline-flex sm:h-10 sm:px-3"
                 onClick={() => setBudgetSheet({ mode: 'new' })}
               >
                 <Plus size={16} strokeWidth={3} />
-                <span className="hidden sm:inline">Add budget</span>
-                <span className="sm:hidden">Budget</span>
+                Add budget
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                className="sm:h-10 sm:px-3"
+                className="hidden sm:inline-flex sm:h-10 sm:px-3"
                 onClick={() =>
                   setExpenseSheet({
                     mode: 'new',
@@ -496,8 +532,7 @@ export function PaymentsView({
                 }
               >
                 <Plus size={16} strokeWidth={3} />
-                <span className="hidden sm:inline">Add expense</span>
-                <span className="sm:hidden">Expense</span>
+                Add expense
               </Button>
             </div>
             <div className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-ground p-1">
@@ -520,10 +555,6 @@ export function PaymentsView({
           </div>
         </header>
 
-        {scopeBudgets.length > 0 ? (
-          <BudgetStrip budgets={scopeBudgets} />
-        ) : null}
-
         {view === 'list' ? (
           <ListFilters
             value={listFilter}
@@ -531,6 +562,8 @@ export function PaymentsView({
             accounts={accounts}
             banks={banks}
             tags={tags}
+            unpaidOnly={unpaidOnly}
+            onUnpaidOnlyChange={setUnpaidOnly}
           />
         ) : null}
       </div>
@@ -541,6 +574,7 @@ export function PaymentsView({
           budgets={budgets}
           expenses={expenses}
           filter={listFilter}
+          unpaidOnly={unpaidOnly}
           stickyTop={panelH}
           onEdit={openEdit}
           onFlag={openFlag}
@@ -564,6 +598,51 @@ export function PaymentsView({
       {budgetModal}
       {expenseModal}
       <FlagModal target={flagTarget} onDone={() => setFlagTarget(null)} />
+
+      <Sheet open={addMenuOpen} onOpenChange={setAddMenuOpen}>
+        <SheetContent side="bottom" className="p-4 pb-6 sm:hidden">
+          <SheetTitle>Add</SheetTitle>
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAddMenuOpen(false);
+                setSheet({ mode: 'new' });
+              }}
+              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-2"
+            >
+              <CalendarDays size={18} strokeWidth={2} className="text-accent" />
+              Payment
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAddMenuOpen(false);
+                setExpenseSheet({
+                  mode: 'new',
+                  date: board.today,
+                  budgetId: null,
+                });
+              }}
+              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-2"
+            >
+              <Receipt size={18} strokeWidth={2} className="text-accent" />
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAddMenuOpen(false);
+                setBudgetSheet({ mode: 'new' });
+              }}
+              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-2"
+            >
+              <PiggyBank size={18} strokeWidth={2} className="text-accent" />
+              Budget
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

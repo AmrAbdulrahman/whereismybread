@@ -28,10 +28,16 @@ export const budgetFormSchema = z
       .trim()
       .regex(/^#[0-9a-fA-F]{6}$/, 'Pick a colour')
       .default('#6321d6'),
+    /** Month budgets only — keep creating next month's envelope automatically. */
+    recurring: z.boolean().default(false),
   })
   .refine((v) => v.endDate >= v.startDate, {
     path: ['endDate'],
     message: 'That period ends before it starts',
+  })
+  .refine((v) => !v.recurring || v.period === 'month', {
+    path: ['recurring'],
+    message: 'Only a whole-month budget can repeat',
   });
 
 export type BudgetFormValues = z.input<typeof budgetFormSchema>;

@@ -1,5 +1,21 @@
-import type { PaymentOverrides } from '@wib/db';
+import type {
+  Account,
+  Bank,
+  PaymentMethod,
+  PaymentOverrides,
+  RecipientMethod,
+  Tag,
+} from '@wib/db';
 import type { Money, PaymentMethodKind, RateMap } from '@wib/domain';
+
+/** The lookup lists a payment form needs — methods, accounts, banks, tags. */
+export interface PaymentsContext {
+  methods: PaymentMethod[];
+  accounts: Account[];
+  banks: Bank[];
+  recipientMethods: RecipientMethod[];
+  tags: Tag[];
+}
 
 export interface OccurrenceTag {
   id: string;
@@ -136,9 +152,16 @@ export interface ChecklistData {
   currentMonthKey: string;
   today: string;
   displayCurrency: string;
+  defaultCurrency: string;
   rates: RateMap;
   /** No manual payments exist at all. */
   empty: boolean;
+  /** Lookup lists the edit form needs (methods, accounts, banks, tags…). */
+  context: PaymentsContext;
+  /** Editable defaults for every payment behind a checklist item. */
+  editable: Record<string, EditablePayment>;
+  /** Per-occurrence overrides, keyed `${paymentId}:${dueDate}`. */
+  overrides: Record<string, PaymentOverrides>;
 }
 
 export interface DayGroup {
@@ -279,6 +302,8 @@ export interface BudgetSummary {
   startDate: string;
   endDate: string;
   color: string;
+  /** Month budgets only — an ongoing monthly series. */
+  recurring: boolean;
   /** The target, in the budget's own (settle) currency. */
   limit: Money;
   /** Sum of expenses converted into the budget's currency. */

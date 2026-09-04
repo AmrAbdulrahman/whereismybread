@@ -43,6 +43,7 @@ export interface BudgetFormInitial {
   amountMinor: number;
   currency: string;
   color: string;
+  recurring: boolean;
 }
 
 export function BudgetForm({
@@ -84,6 +85,7 @@ export function BudgetForm({
           amount: (initial.amountMinor / 100).toFixed(2),
           currency: initial.currency,
           color: initial.color,
+          recurring: initial.recurring,
         }
       : {
           name: '',
@@ -93,6 +95,7 @@ export function BudgetForm({
           amount: '',
           currency: defaultCurrency,
           color: COLOR_PALETTE[0],
+          recurring: false,
         },
   });
 
@@ -101,6 +104,7 @@ export function BudgetForm({
   const endDate = watch('endDate');
   const color = watch('color');
   const currency = watch('currency');
+  const recurring = watch('recurring');
 
   const setPeriod = (v: 'month' | 'week') => {
     setValue('period', v, { shouldDirty: true });
@@ -108,6 +112,7 @@ export function BudgetForm({
       setValue('startDate', startOfMonth(pickerMonth), { shouldDirty: true });
       setValue('endDate', endOfMonth(pickerMonth), { shouldDirty: true });
     } else {
+      setValue('recurring', false, { shouldDirty: true });
       const first = weeksInMonth(pickerMonth)[0];
       if (first) {
         setValue('startDate', first.start, { shouldDirty: true });
@@ -203,6 +208,20 @@ export function BudgetForm({
           onChange={(e) => onPickerMonthChange(e.target.value)}
         />
       </Field>
+
+      {period === 'month' ? (
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={recurring ?? false}
+            onChange={(e) =>
+              setValue('recurring', e.target.checked, { shouldDirty: true })
+            }
+            className="h-4 w-4 rounded border-line-strong accent-accent"
+          />
+          Repeat this budget every month
+        </label>
+      ) : null}
 
       {period === 'week' ? (
         <Field>

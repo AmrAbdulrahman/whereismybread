@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openNewPayment } from './helpers';
 
 // eslint-disable-next-line playwright/no-skipped-test -- env-gated: needs a live DB
 test.skip(
@@ -22,9 +23,7 @@ async function addMonthly(
   amount: string,
   method: 'Manual transfer' | 'Direct debit',
 ) {
-  await page
-    .getByRole('button', { name: /^(Add a payment|New payment)$/ })
-    .click();
+  await openNewPayment(page);
   const form = page.getByRole('dialog', { name: 'New payment' });
   await form.getByLabel('Description').fill(name);
   await form.getByLabel('Amount').fill(amount);
@@ -33,7 +32,6 @@ async function addMonthly(
   await form.getByRole('button', { name: method }).click();
   await form.getByRole('button', { name: 'Add payment' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'New payment' })).toBeVisible();
 }
 
 test('checklist shows manual payments month-by-month, current month open', async ({
@@ -73,4 +71,54 @@ test('checklist shows manual payments month-by-month, current month open', async
   await expect(
     page.getByRole('button', { name: 'Mark Cleaner unpaid' }),
   ).toBeVisible();
+});
+
+test('clicking a checklist item opens the payment details form', async ({
+  page,
+}) => {
+  await signUp(page);
+  await addMonthly(page, 'Cleaner', '60', 'Manual transfer');
+
+  await page.goto('/checklist');
+  await page.getByRole('button', { name: 'Edit Cleaner' }).click();
+
+  const form = page.getByRole('dialog', { name: 'Edit payment' });
+  await expect(form.getByLabel('Amount')).toHaveValue('60.00');
+  await form.getByLabel('Amount').fill('75');
+  await form.getByRole('button', { name: 'Save changes' }).click();
+  // a recurring payment confirms its scope (default: this & following)
+  await page
+    .getByRole('dialog', { name: 'Save changes' })
+    .getByRole('button', { name: 'Save changes' })
+    .click();
+
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByText('€75.00').first()).toBeVisible();
+});
+
+test('editing one month of a recurring manual transfer to a different method excludes just that month', async ({
+  page,
+}) => {
+  await signUp(page);
+  await addMonthly(page, 'Rent share', '90', 'Manual transfer');
+
+  // Change November specifically to Direct debit, "this month only".
+  await page.goto('/plan');
+  const novEdit = page.getByRole('button', { name: 'Edit Rent share' }).nth(2);
+  await novEdit.scrollIntoViewIfNeeded();
+  await novEdit.click();
+  const editForm = page.getByRole('dialog', { name: 'Edit payment' });
+  await editForm.getByRole('button', { name: 'Direct debit' }).click();
+  await editForm.getByRole('button', { name: 'Save changes' }).click();
+  const scopeDialog = page.getByRole('dialog', { name: 'Save changes' });
+  await scopeDialog.getByText('This month only').click();
+  await scopeDialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page.goto('/checklist');
+  // Every other loaded month still lists it — just not the overridden one.
+  await expect(page.getByText('September 2026')).toBeVisible();
+  await expect(page.getByText('October 2026')).toBeVisible();
+  await expect(page.getByText('November 2026')).toHaveCount(0);
+  await expect(page.getByText('December 2026')).toBeVisible();
 });

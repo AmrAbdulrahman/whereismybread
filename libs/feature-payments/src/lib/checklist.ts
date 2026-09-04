@@ -39,7 +39,7 @@ export async function getChecklistData(): Promise<ChecklistData> {
 
   const from = startOfMonth(addMonths(today, -6));
   const to = endOfMonth(addMonths(today, 12));
-  const { board } = await getBoardData({ from, to });
+  const { context, board } = await getBoardData({ from, to });
 
   const display = board.displayCurrency;
   const rates = board.rates;
@@ -87,5 +87,16 @@ export async function getChecklistData(): Promise<ChecklistData> {
     });
 
   const empty = manual.length === 0;
-  return { months, currentMonthKey, today, displayCurrency: display, rates, empty };
+  return {
+    months,
+    currentMonthKey,
+    today,
+    displayCurrency: display,
+    defaultCurrency: user.defaultCurrency,
+    rates,
+    empty,
+    context,
+    editable: board.editable,
+    overrides: board.overrides,
+  };
 }

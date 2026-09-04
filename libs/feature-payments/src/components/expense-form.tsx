@@ -23,6 +23,31 @@ export interface ExpenseFormBudgetOption {
   id: string;
   name: string;
   currency: string;
+  /** `YYYY-MM-DD` — a recurring budget has one instance per month, sharing
+   * a name, so the option label disambiguates with this. */
+  startDate: string;
+}
+
+/** "Groceries" once, "Groceries — Sep 2026" when its name isn't unique. */
+function budgetOptionLabels(
+  budgets: ExpenseFormBudgetOption[],
+): Map<string, string> {
+  const counts = new Map<string, number>();
+  for (const b of budgets) counts.set(b.name, (counts.get(b.name) ?? 0) + 1);
+  const labels = new Map<string, string>();
+  for (const b of budgets) {
+    if ((counts.get(b.name) ?? 0) <= 1) {
+      labels.set(b.id, b.name);
+      continue;
+    }
+    const month = new Intl.DateTimeFormat('en-GB', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${b.startDate}T00:00:00Z`));
+    labels.set(b.id, `${b.name} — ${month}`);
+  }
+  return labels;
 }
 
 export interface ExpenseFormInitial {
@@ -127,6 +152,8 @@ export function ExpenseForm({
     }
   };
 
+  const budgetLabels = budgetOptionLabels(budgets);
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {formError ? (
@@ -153,7 +180,7 @@ export function ExpenseForm({
             <option value="">No budget</option>
             {budgets.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.name}
+                {budgetLabels.get(b.id) ?? b.name}
               </option>
             ))}
           </select>

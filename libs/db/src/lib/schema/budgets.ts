@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   integer,
@@ -26,6 +27,13 @@ const audit = {
  * Monday–Sunday week within it. `startDate`/`endDate` are the resolved,
  * inclusive range (a week may spill a few days into the neighbouring month);
  * `period` is kept alongside just to label the UI correctly.
+ *
+ * `recurring` (month budgets only) marks it as an ongoing monthly series —
+ * each calendar month gets its own row (its own reserved amount and its own
+ * linked expenses), lazily created the next time the series is read past its
+ * latest existing month. There's no separate "series" id: the latest
+ * `recurring` row for a given name **is** the series' current state, and
+ * turning `recurring` off on it is what stops the series continuing.
  */
 export const budgets = pgTable(
   'budgets',
@@ -41,6 +49,7 @@ export const budgets = pgTable(
     amountMinor: integer('amount_minor').notNull(),
     currency: text('currency').notNull().default('EUR'),
     color: text('color').notNull().default('#6321d6'),
+    recurring: boolean('recurring').notNull().default(false),
     ...audit,
   },
   (t) => [index('budgets_user_range_idx').on(t.userId, t.startDate, t.endDate)],

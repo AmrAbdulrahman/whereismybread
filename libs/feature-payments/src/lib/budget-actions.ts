@@ -64,6 +64,7 @@ export async function saveBudgetAction(
     amountMinor,
     currency: parsed.data.currency,
     color: parsed.data.color,
+    recurring: parsed.data.recurring,
   };
 
   const budget = id

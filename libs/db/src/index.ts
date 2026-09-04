@@ -146,6 +146,7 @@ export {
   createBudget,
   updateBudget,
   deleteBudget,
+  materializeRecurringBudgets,
   type BudgetInput,
   type BudgetExpense,
   type BudgetExpenseAttachment,
