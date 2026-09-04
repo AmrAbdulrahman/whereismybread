@@ -37,3 +37,15 @@
     border-radius: 3px;
   }
 }
+
+/* iOS Safari zooms the page in whenever a focused field is under 16px. Force
+   every editable control to 16px on phones — unlayered so it beats Tailwind's
+   `text-sm` utility; the design's smaller size still applies from `sm:` up. */
+@media (max-width: 639.98px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: 16px;
+  }
+}

@@ -1,11 +1,14 @@
 import type { ElementType, ReactNode } from 'react';
 import type { LucideIcon } from '../icons';
 import { cn } from '../lib/cn';
+import { MobileNav } from './mobile-nav';
 import { Wordmark } from './wordmark';
 
 export interface NavItem {
   href: string;
   label: string;
+  /** A tighter label for the mobile tab bar (falls back to `label`). */
+  shortLabel?: string;
   icon: LucideIcon;
 }
 
@@ -30,12 +33,10 @@ export function AppShell({
   navItems,
   currentPath,
   linkComponent: Link = 'a',
-  mobilePrimaryCount = 5,
+  mobilePrimaryCount = 4,
   footerSlot,
   children,
 }: AppShellProps) {
-  const primary = navItems.slice(0, mobilePrimaryCount);
-
   return (
     <div className="min-h-[100dvh] bg-ground text-ink">
       {/* Sidebar — lg and up */}
@@ -72,32 +73,18 @@ export function AppShell({
 
       {/* Content */}
       <div className="lg:pl-56">
-        <main className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
+        <main className="mx-auto max-w-5xl px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6 lg:pb-10">
           {children}
         </main>
       </div>
 
-      {/* Bottom tab bar — below lg */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {primary.map((item) => {
-          const active = isActive(currentPath, item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium',
-                active ? 'text-accent' : 'text-muted',
-              )}
-              aria-current={active ? 'page' : undefined}
-            >
-              <Icon size={20} strokeWidth={2} />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <MobileNav
+        navItems={navItems}
+        currentPath={currentPath}
+        linkComponent={Link}
+        primaryCount={mobilePrimaryCount}
+        footerSlot={footerSlot}
+      />
     </div>
   );
 }

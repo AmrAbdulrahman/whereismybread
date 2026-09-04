@@ -14,6 +14,13 @@ export type {
   PaymentLineItem,
   PaymentAttachment,
 } from './lib/schema/payments';
+export type {
+  Budget,
+  NewBudget,
+  Expense,
+  NewExpense,
+  ExpenseAttachment,
+} from './lib/schema/budgets';
 
 export {
   normalizeEmail,
@@ -132,3 +139,30 @@ export {
 } from './lib/repositories/payment-events';
 
 export { getRates } from './lib/repositories/rates';
+
+export {
+  listBudgets,
+  getBudgetsBundle,
+  createBudget,
+  updateBudget,
+  deleteBudget,
+  type BudgetInput,
+  type BudgetExpense,
+  type BudgetExpenseAttachment,
+  type BudgetWithExpenses,
+} from './lib/repositories/budgets';
+
+export {
+  createExpense,
+  updateExpense,
+  getExpense,
+  deleteExpense,
+  type ExpenseInput,
+} from './lib/repositories/expenses';
+
+export {
+  addExpenseAttachment,
+  deleteExpenseAttachment,
+  reconcileExpenseAttachments,
+  type ExpenseAttachmentInput,
+} from './lib/repositories/expense-attachments';

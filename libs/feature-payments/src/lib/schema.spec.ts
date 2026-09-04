@@ -88,6 +88,29 @@ describe('paymentFormSchema', () => {
     ).toBe(false);
   });
 
+  it('requires a month for an annual payment, but not monthly/quarterly', () => {
+    expect(
+      paymentFormSchema.safeParse({ ...base, recurrence: 'annual' }).success,
+    ).toBe(false);
+    expect(
+      paymentFormSchema.safeParse({
+        ...base,
+        recurrence: 'annual',
+        monthOfYear: '3',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a month outside 1–12', () => {
+    expect(
+      paymentFormSchema.safeParse({
+        ...base,
+        recurrence: 'annual',
+        monthOfYear: '13',
+      }).success,
+    ).toBe(false);
+  });
+
   it('keeps the unit name and quantity for a per-unit amount', () => {
     const parsed = paymentFormSchema.safeParse({
       ...base,

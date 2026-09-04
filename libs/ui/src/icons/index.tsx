@@ -57,6 +57,7 @@ export const icons = {
   installments: Layers,
   checklist: ListChecks,
   debts: Scale,
+  budgets: PiggyBank,
   tags: Tag,
   accounts: Briefcase,
   banks: Landmark,

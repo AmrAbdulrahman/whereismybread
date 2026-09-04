@@ -11,6 +11,10 @@ export {
   type ChecklistMonth,
 } from './lib/checklist';
 export {
+  getBudgetsData,
+  budgetsOverlapping,
+} from './lib/budgets';
+export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_ALLOWED_TYPES,
   ATTACHMENT_MAX_BYTES,

@@ -591,7 +591,7 @@ export function PaymentList({
 
   return (
     <div
-      className={cn('flex flex-col gap-8', showMinimap && 'pr-14 sm:pr-16')}
+      className={cn('flex flex-col gap-8', showMinimap && 'sm:pr-16')}
     >
       {showMinimap ? (
         <ListMinimap

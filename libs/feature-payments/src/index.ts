@@ -4,6 +4,8 @@ export { PaymentsView } from './components/payments-view';
 export { PaymentForm, type PaymentFormProps } from './components/payment-form';
 export { BankManager } from './components/bank-manager';
 export { ChecklistView } from './components/checklist-view';
+export { BudgetsView } from './components/budgets-view';
+export { BudgetStrip } from './components/budget-strip';
 
 export {
   savePaymentAction,
@@ -28,7 +30,6 @@ export {
   uploadAttachmentAction,
   removeAttachmentAction,
   discardBlobsAction,
-  type AttachmentDraft,
   type LabelRow,
   type BankMark,
   type EditScope,
@@ -64,4 +65,19 @@ export type {
   OccurrenceAttachment,
   OccurrenceBank,
   OccurrenceRecipientMethod,
+  AttachmentDraft,
+  BudgetExpenseView,
+  BudgetSummary,
 } from './lib/types';
+
+export {
+  saveBudgetAction,
+  deleteBudgetAction,
+  saveExpenseAction,
+  deleteExpenseAction,
+  uploadExpenseAttachmentAction,
+  removeExpenseAttachmentAction,
+} from './lib/budget-actions';
+
+export { budgetFormSchema, type BudgetFormValues } from './lib/budget-schema';
+export { expenseFormSchema, type ExpenseFormValues } from './lib/expense-schema';

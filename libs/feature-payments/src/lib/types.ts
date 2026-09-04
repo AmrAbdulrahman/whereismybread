@@ -48,6 +48,15 @@ export interface OccurrenceAttachment {
   pathname: string;
 }
 
+/** A file already uploaded to Blob but not yet attached to anything saved. */
+export interface AttachmentDraft {
+  name: string;
+  contentType: string;
+  size: number;
+  url: string;
+  pathname: string;
+}
+
 /** One record of a `group` payment, resolved for display. */
 export interface OccurrenceLineItem {
   id: string;
@@ -178,6 +187,8 @@ export interface EditablePayment {
   anchorDate: string;
   /** For recurring payments — the day it lands each period, as typed ('' if none). */
   dayOfMonth: string;
+  /** For annual payments — the month (1–12) it lands each year, as typed ('' if none). */
+  monthOfYear: string;
   endsOn: string | null;
   url: string | null;
   logoUrl: string | null;
@@ -245,4 +256,34 @@ export interface PaymentBoard {
     oneTimeMinor: number;
     count: number;
   };
+}
+
+/** One expense against a budget, resolved for display. */
+export interface BudgetExpenseView {
+  id: string;
+  name: string;
+  /** In its own currency — converted into the budget's for totals. */
+  amount: Money;
+  notes: string | null;
+  attachments: OccurrenceAttachment[];
+}
+
+/** A budget with its spend computed — the shape the UI renders directly. */
+export interface BudgetSummary {
+  id: string;
+  name: string;
+  period: 'month' | 'week';
+  /** Inclusive `YYYY-MM-DD` range. */
+  startDate: string;
+  endDate: string;
+  color: string;
+  /** The target, in the budget's own (settle) currency. */
+  limit: Money;
+  /** Sum of expenses converted into the budget's currency. */
+  spentMinor: number;
+  /** `limit - spent`, in the budget's currency (negative when over). */
+  remainingMinor: number;
+  /** `spent / limit` — can exceed 1. `0` when the limit is 0. */
+  progress: number;
+  expenses: BudgetExpenseView[];
 }

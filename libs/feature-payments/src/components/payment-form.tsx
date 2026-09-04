@@ -11,6 +11,7 @@ import type {
   Tag,
 } from '@wib/db';
 import {
+  anchorForAnnualDate,
   anchorForDayOfMonth,
   RECURRENCES,
   type RateMap,
@@ -32,8 +33,10 @@ import {
   deletePaymentAction,
   discardBlobsAction,
   fetchBrandingAction,
+  removeAttachmentAction,
   resetOccurrenceAction,
   savePaymentAction,
+  uploadAttachmentAction,
 } from '../lib/actions';
 import { readLastCurrency, writeLastCurrency } from '../lib/last-currency';
 import { fileToLogoDataUrl } from '../lib/logo-file';
@@ -53,6 +56,21 @@ const RECURRENCE_LABELS: Record<(typeof RECURRENCES)[number], string> = {
   quarterly: 'Quarterly',
   annual: 'Annual',
 };
+
+const MONTH_LABELS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 export interface PaymentFormProps {
   methods: PaymentMethod[];
@@ -174,6 +192,11 @@ export function PaymentForm({
       dayOfMonth:
         initial?.dayOfMonth ||
         (initial?.anchorDate ?? today).slice(8, 10).replace(/^0/, ''),
+      monthOfYear:
+        initial?.monthOfYear ||
+        (initial?.recurrence === 'annual'
+          ? (initial?.anchorDate ?? today).slice(5, 7).replace(/^0/, '')
+          : ''),
       endsOn: initial?.endsOn ?? '',
       url: initial?.url ?? '',
       logoUrl: initial?.logoUrl ?? '',
@@ -185,7 +208,9 @@ export function PaymentForm({
 
   const recurrence = watch('recurrence');
   const isRecurring = recurrence !== 'one_time';
+  const isAnnual = recurrence === 'annual';
   const dayOfMonth = watch('dayOfMonth');
+  const monthOfYear = watch('monthOfYear');
   const amountKind = watch('amountKind');
   const perUnit = amountKind === 'per_unit';
   const isGroup = amountKind === 'group';
@@ -198,17 +223,34 @@ export function PaymentForm({
   const url = watch('url');
   const logoUrl = watch('logoUrl');
 
-  // Recurring payments choose a day of the month; the anchor date (series
-  // start) is synthesized from it so the rest of the pipeline is unchanged.
+  // Recurring payments choose a day of the month (annual ones also a month);
+  // the anchor date (series start) is synthesized from it so the rest of the
+  // pipeline is unchanged.
   useEffect(() => {
     if (!isRecurring) return;
     const day = Number(dayOfMonth);
     if (!Number.isInteger(day) || day < 1 || day > 31) return;
-    const next = anchorForDayOfMonth(day, today, initial?.anchorDate ?? null);
+    let next: string;
+    if (isAnnual) {
+      const month = Number(monthOfYear);
+      if (!Number.isInteger(month) || month < 1 || month > 12) return;
+      next = anchorForAnnualDate(day, month, today, initial?.anchorDate ?? null);
+    } else {
+      next = anchorForDayOfMonth(day, today, initial?.anchorDate ?? null);
+    }
     if (next !== getValues('anchorDate')) {
       setValue('anchorDate', next, { shouldValidate: true });
     }
-  }, [isRecurring, dayOfMonth, today, initial?.anchorDate, getValues, setValue]);
+  }, [
+    isRecurring,
+    isAnnual,
+    dayOfMonth,
+    monthOfYear,
+    today,
+    initial?.anchorDate,
+    getValues,
+    setValue,
+  ]);
 
   // Live branding: when a URL is entered, pull the logo + brand colour in.
   const [brandingBusy, setBrandingBusy] = useState(false);
@@ -377,6 +419,12 @@ export function PaymentForm({
                   setValue('url', '', { shouldDirty: true });
                   setValue('logoUrl', '', { shouldDirty: true });
                   setValue('brandColor', '', { shouldDirty: true });
+                } else if (r === 'annual' && !getValues('monthOfYear')) {
+                  setValue(
+                    'monthOfYear',
+                    String(Number(today.slice(5, 7))),
+                    { shouldDirty: true },
+                  );
                 }
               }}
               className={cn(
@@ -650,6 +698,28 @@ export function PaymentForm({
       {isRecurring ? (
         <Field>
           <div className="flex flex-wrap items-start gap-3">
+            {isAnnual ? (
+              <Field className="w-36">
+                <Label htmlFor="monthOfYear">Month</Label>
+                <select
+                  id="monthOfYear"
+                  {...register('monthOfYear')}
+                  className="h-10 w-full rounded-md border border-line-strong bg-ground px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <option value="">Pick a month</option>
+                  {MONTH_LABELS.map((label, i) => (
+                    <option key={label} value={i + 1}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                {fieldMessage(errors, 'monthOfYear') ? (
+                  <p className="text-xs text-danger">
+                    {fieldMessage(errors, 'monthOfYear')}
+                  </p>
+                ) : null}
+              </Field>
+            ) : null}
             <Field className="w-24">
               <Label htmlFor="dayOfMonth">Day of the month</Label>
               <Input
@@ -983,13 +1053,16 @@ export function PaymentForm({
           name="attachments"
           render={({ field }) => (
             <AttachmentsField
-              paymentId={initial?.id ?? null}
+              ownerId={initial?.id ?? null}
               saved={savedAttachments}
               onSavedChange={setSavedAttachments}
               drafts={field.value ?? []}
               onDraftsChange={(next) =>
                 field.onChange(next as typeof field.value)
               }
+              upload={uploadAttachmentAction}
+              remove={removeAttachmentAction}
+              discard={discardBlobsAction}
             />
           )}
         />

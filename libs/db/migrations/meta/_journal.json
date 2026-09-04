@@ -162,6 +162,13 @@
       "when": 1788462453342,
       "tag": "0022_bank_icons",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788530759275,
+      "tag": "0023_budgets",
+      "breakpoints": true
     }
   ]
 }

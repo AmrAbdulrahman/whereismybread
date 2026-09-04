@@ -133,7 +133,9 @@ export function OccurrenceItem({
       <div
         className={cn(
           'flex items-center',
-          compact ? 'gap-2 px-2.5 py-2' : 'gap-2.5 px-3 py-2.5',
+          compact
+            ? 'gap-2 px-2.5 py-2'
+            : 'gap-2 px-2.5 py-2.5 sm:gap-2.5 sm:px-3',
         )}
       >
       {skipped ? (
@@ -355,7 +357,12 @@ export function OccurrenceItem({
       ) : null}
 
       {compact ? null : (
-        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted">
+        <span
+          className={cn(
+            'shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted',
+            skipped ? 'inline' : 'hidden sm:inline',
+          )}
+        >
           {skipped ? 'Skipped' : RECURRENCE_LABEL[occ.recurrence]}
         </span>
       )}

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
 import { startOfMonth, todayIn } from '@wib/domain';
 import { PaymentsView } from '@wib/feature-payments';
-import { getBoardData } from '@wib/feature-payments/server';
+import { getBoardData, getBudgetsData } from '@wib/feature-payments/server';
 
 export const metadata = { title: 'Plan' };
 export const dynamic = 'force-dynamic';
@@ -23,6 +23,7 @@ export default async function CalendarPage({
     : startOfMonth(today);
 
   const { context, board } = await getBoardData({ month });
+  const budgets = await getBudgetsData();
 
   return (
     <PaymentsView
@@ -35,6 +36,7 @@ export default async function CalendarPage({
       defaultCurrency={user.defaultCurrency}
       view={view}
       month={month}
+      budgets={budgets}
     />
   );
 }

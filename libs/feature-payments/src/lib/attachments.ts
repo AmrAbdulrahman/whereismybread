@@ -2,6 +2,7 @@
  * Shared attachment rules — imported by the client picker, the upload route
  * handler, and the server actions. No secrets, no I/O.
  */
+import { z } from 'zod';
 
 /** 10 MB — comfortably covers a scanned multi-page PDF or a phone photo. */
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -81,3 +82,16 @@ export function isBlobUrl(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * A file already uploaded to Vercel Blob, staged on a form until its owner
+ * (payment / expense) is saved. Edits manage attachments with their own
+ * immediate actions instead of this staging.
+ */
+export const attachmentDraftSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().min(1).max(120),
+  size: z.number().int().nonnegative(),
+  url: z.string().url().max(2048),
+  pathname: z.string().trim().min(1).max(1024),
+});

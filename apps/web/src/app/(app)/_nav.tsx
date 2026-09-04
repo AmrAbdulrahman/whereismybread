@@ -8,9 +8,20 @@ import { UserMenu } from './_user-menu';
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/plan', label: 'Plan', icon: icons.calendar },
-  { href: '/subscriptions', label: 'Subscriptions', icon: icons.subscriptions },
-  { href: '/installments', label: 'Installments', icon: icons.installments },
-  { href: '/checklist', label: 'Checklist', icon: icons.checklist },
+  {
+    href: '/subscriptions',
+    label: 'Subscriptions',
+    shortLabel: 'Subs',
+    icon: icons.subscriptions,
+  },
+  {
+    href: '/installments',
+    label: 'Installments',
+    shortLabel: 'Instal.',
+    icon: icons.installments,
+  },
+  { href: '/checklist', label: 'Checklist', shortLabel: 'Checks', icon: icons.checklist },
+  { href: '/budgets', label: 'Budgets', icon: icons.budgets },
   { href: '/debts', label: 'Debts', icon: icons.debts },
   { href: '/tags', label: 'Tags', icon: icons.tags },
   { href: '/accounts', label: 'Accounts', icon: icons.accounts },

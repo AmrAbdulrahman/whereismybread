@@ -3,11 +3,14 @@ import { requireUserId } from '@wib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
+/** Every kind of attachment this route is allowed to stream, by blob prefix. */
+const ATTACHMENT_KINDS = ['payments', 'expenses'];
+
 /**
- * Streams a payment attachment back to its owner. The blob store is private, so
- * files can't be linked to directly — this route authenticates the viewer and
- * checks the blob pathname is under their own `payments/<userId>/` prefix
- * before proxying the bytes.
+ * Streams a payment or expense attachment back to its owner. The blob store is
+ * private, so files can't be linked to directly — this route authenticates the
+ * viewer and checks the blob pathname is under their own `<kind>/<userId>/`
+ * prefix before proxying the bytes.
  */
 export async function GET(request: Request): Promise<Response> {
   let userId: string;
@@ -18,7 +21,10 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const path = new URL(request.url).searchParams.get('path') ?? '';
-  if (!path || !path.startsWith(`payments/${userId}/`) || path.includes('..')) {
+  const allowed = ATTACHMENT_KINDS.some((kind) =>
+    path.startsWith(`${kind}/${userId}/`),
+  );
+  if (!path || !allowed || path.includes('..')) {
     return new Response('Not found', { status: 404 });
   }
 

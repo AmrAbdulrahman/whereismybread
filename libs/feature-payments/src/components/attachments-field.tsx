@@ -1,14 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import type { FormState } from '@wib/auth';
 import { Button, Spinner } from '@wib/ui';
 import { FileText, Plus, X } from '@wib/ui/icons';
-import {
-  discardBlobsAction,
-  removeAttachmentAction,
-  uploadAttachmentAction,
-  type AttachmentDraft,
-} from '../lib/actions';
 import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_MAX_BYTES,
@@ -17,26 +12,43 @@ import {
   formatBytes,
   resolveAttachmentType,
 } from '../lib/attachments';
-import type { OccurrenceAttachment } from '../lib/types';
+import type { AttachmentDraft, OccurrenceAttachment } from '../lib/types';
 import { AttachmentViewer } from './attachment-viewer';
 
+export interface AttachmentUploadResult {
+  ok: boolean;
+  draft?: AttachmentDraft;
+  attachment?: OccurrenceAttachment | null;
+  error?: string;
+}
+
 /**
- * Manage a payment's attachments. In **edit** mode (`paymentId` set) each add /
- * remove hits the server immediately; when **creating** (`paymentId` null) the
- * files are uploaded to Blob and staged in the form, then attached on save.
+ * Manage a payment's or expense's attachments. In **edit** mode (`ownerId`
+ * set) each add / remove hits the server immediately; when **creating**
+ * (`ownerId` null) the files are uploaded to Blob and staged in the form,
+ * then attached once the owner row exists.
  */
 export function AttachmentsField({
-  paymentId,
+  ownerId,
   saved,
   onSavedChange,
   drafts,
   onDraftsChange,
+  upload,
+  remove: removeAction,
+  discard,
 }: {
-  paymentId: string | null;
+  ownerId: string | null;
   saved: OccurrenceAttachment[];
   onSavedChange: (next: OccurrenceAttachment[]) => void;
   drafts: AttachmentDraft[];
   onDraftsChange: (next: AttachmentDraft[]) => void;
+  upload: (
+    ownerId: string | null,
+    form: FormData,
+  ) => Promise<AttachmentUploadResult>;
+  remove: (id: string) => Promise<FormState>;
+  discard: (urls: string[]) => Promise<{ ok: true }>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +59,7 @@ export function AttachmentsField({
     contentType: string;
   } | null>(null);
 
-  const items: Array<OccurrenceAttachment | AttachmentDraft> = paymentId
+  const items: Array<OccurrenceAttachment | AttachmentDraft> = ownerId
     ? saved
     : drafts;
 
@@ -70,24 +82,14 @@ export function AttachmentsField({
     try {
       const body = new FormData();
       body.set('file', file);
-      const res = await uploadAttachmentAction(paymentId, body);
+      const res = await upload(ownerId, body);
       if (!res.ok) {
-        setError(res.error);
+        setError(res.error ?? 'Could not upload that file.');
         return;
       }
-      if (paymentId && res.attachment) {
-        onSavedChange([
-          ...saved,
-          {
-            id: res.attachment.id,
-            name: res.attachment.name,
-            contentType: res.attachment.contentType,
-            size: res.attachment.size,
-            url: res.attachment.url,
-            pathname: res.attachment.pathname,
-          },
-        ]);
-      } else {
+      if (ownerId && res.attachment) {
+        onSavedChange([...saved, res.attachment]);
+      } else if (res.draft) {
         onDraftsChange([...drafts, res.draft]);
       }
     } catch (err) {
@@ -102,10 +104,10 @@ export function AttachmentsField({
   const remove = async (a: OccurrenceAttachment | AttachmentDraft) => {
     if ('id' in a) {
       onSavedChange(saved.filter((s) => s.id !== a.id));
-      await removeAttachmentAction(a.id);
+      await removeAction(a.id);
     } else {
       onDraftsChange(drafts.filter((d) => d.pathname !== a.pathname));
-      await discardBlobsAction([a.url]);
+      await discard([a.url]);
     }
   };
 
@@ -181,11 +183,7 @@ export function AttachmentsField({
         disabled={busy}
         onClick={() => fileRef.current?.click()}
       >
-        {busy ? (
-          <Spinner />
-        ) : (
-          <Plus size={15} strokeWidth={2.5} />
-        )}
+        {busy ? <Spinner /> : <Plus size={15} strokeWidth={2.5} />}
         Add a file
       </Button>
 
@@ -197,10 +195,7 @@ export function AttachmentsField({
         </p>
       )}
 
-      <AttachmentViewer
-        attachment={viewing}
-        onClose={() => setViewing(null)}
-      />
+      <AttachmentViewer attachment={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }

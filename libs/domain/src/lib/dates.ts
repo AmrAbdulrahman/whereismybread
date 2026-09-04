@@ -96,6 +96,36 @@ export function anchorForDayOfMonth(
   return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
 }
 
+/**
+ * The start date for an annual payment that lands on `month`/`dayOfMonth`
+ * every year, clamped to that month's length. With no `existing` anchor it
+ * picks the soonest upcoming occurrence (this year if the date hasn't
+ * passed, else next); with one, it keeps that anchor's year and only swaps
+ * the month/day.
+ */
+export function anchorForAnnualDate(
+  dayOfMonth: number,
+  month: number, // 1–12
+  today: IsoDate,
+  existing?: IsoDate | null,
+): IsoDate {
+  const clamp = (ym: string) =>
+    Math.min(dayOfMonth, daysInMonth(`${ym}-01` as IsoDate));
+  const mm = String(month).padStart(2, '0');
+
+  if (existing) {
+    const ym = `${existing.slice(0, 4)}-${mm}`;
+    return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
+  }
+
+  const year = Number(today.slice(0, 4));
+  const thisYearYm = `${year}-${mm}`;
+  const thisYearDate =
+    `${thisYearYm}-${String(clamp(thisYearYm)).padStart(2, '0')}` as IsoDate;
+  const ym = thisYearDate >= today ? thisYearYm : `${year + 1}-${mm}`;
+  return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
+}
+
 /** Whole months from `from` to `to` (negative if `to` is earlier). */
 export function monthsBetween(from: IsoDate, to: IsoDate): number {
   const a = parseIsoDate(from);
@@ -114,4 +144,25 @@ export function weekdayMonday0(date: IsoDate): number {
 export function daysBetween(from: IsoDate, to: IsoDate): number {
   const ms = parseIsoDate(to).getTime() - parseIsoDate(from).getTime();
   return Math.round(ms / 86_400_000);
+}
+
+export interface WeekRange {
+  start: IsoDate;
+  end: IsoDate;
+}
+
+/**
+ * The Monday–Sunday weeks that cover a month, for a "pick a week" budget
+ * picker. The first/last week may spill a few days into the neighbouring
+ * month — a week is always shown whole, never clipped.
+ */
+export function weeksInMonth(month: IsoDate): WeekRange[] {
+  const last = endOfMonth(month);
+  let start = addDays(startOfMonth(month), -weekdayMonday0(startOfMonth(month)));
+  const weeks: WeekRange[] = [];
+  while (start <= last) {
+    weeks.push({ start, end: addDays(start, 6) });
+    start = addDays(start, 7);
+  }
+  return weeks;
 }

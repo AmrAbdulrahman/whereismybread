@@ -20,6 +20,7 @@ import {
 } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
 import { Plus } from '@wib/ui/icons';
+import { BudgetStrip } from './budget-strip';
 import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
 import { PaymentForm } from './payment-form';
@@ -30,7 +31,7 @@ import {
   type ListFilterValue,
 } from './list-filters';
 import { riskFor, sumInDisplay } from '../lib/risk';
-import type { EditablePayment, PaymentBoard } from '../lib/types';
+import type { BudgetSummary, EditablePayment, PaymentBoard } from '../lib/types';
 
 type View = 'list' | 'calendar';
 
@@ -80,6 +81,7 @@ export function PaymentsView({
   defaultCurrency,
   view: viewProp,
   month,
+  budgets = [],
 }: {
   board: PaymentBoard;
   methods: PaymentMethod[];
@@ -90,6 +92,7 @@ export function PaymentsView({
   defaultCurrency: string;
   view: View;
   month: IsoDate;
+  budgets?: BudgetSummary[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -225,6 +228,9 @@ export function PaymentsView({
   );
   const scopeRisk = riskFor(scopeSpentDisplayMinor, scopeIncomeMinor);
   const isThisMonth = scopeStart === startOfMonth(board.today);
+  const scopeBudgets = budgets.filter(
+    (b) => b.startDate <= scopeEnd && b.endDate >= scopeStart,
+  );
   const scopeMonthLabel = new Intl.DateTimeFormat('en-GB', {
     month: 'long',
     ...(scopeStart.slice(0, 4) === board.today.slice(0, 4)
@@ -264,6 +270,11 @@ export function PaymentsView({
   if (!board.hasPayments) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+        {scopeBudgets.length > 0 ? (
+          <div className="w-full max-w-xs">
+            <BudgetStrip budgets={scopeBudgets} />
+          </div>
+        ) : null}
         <h1 className="text-xl font-semibold">Nothing planned yet</h1>
         <p className="max-w-xs text-sm text-ink-soft">
           Add your first payment to see it on the calendar and in your upcoming
@@ -282,12 +293,15 @@ export function PaymentsView({
     <div className="flex flex-col gap-5">
       <div
         ref={panelRef}
-        className="sticky top-0 z-30 -mx-4 flex flex-col gap-3 border-b border-line/60 bg-ground/95 px-4 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:px-6"
+        className="sticky top-0 z-30 -mx-4 flex flex-col gap-2.5 border-b border-line/60 bg-ground/95 px-4 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:gap-3 sm:px-6"
       >
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">Upcoming payments</h1>
-            <p className="mt-1 text-sm text-ink-soft">
+        <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold sm:text-2xl">
+              <span className="sm:hidden">Payments</span>
+              <span className="hidden sm:inline">Upcoming payments</span>
+            </h1>
+            <p className="mt-0.5 text-[13px] text-ink-soft sm:mt-1 sm:text-sm">
               {formatConverted(
                 money(scopeTotalMinor, summary.currency),
                 board.displayCurrency,
@@ -313,14 +327,25 @@ export function PaymentsView({
                     board.displayCurrency,
                   ),
                 )}{' '}
-                left of{' '}
-                {formatMoney(money(scopeIncomeMinor, board.displayCurrency))}{' '}
-                income · {scopeRisk.label}
+                left
+                <span className="hidden sm:inline">
+                  {' '}
+                  of{' '}
+                  {formatMoney(
+                    money(scopeIncomeMinor, board.displayCurrency),
+                  )}{' '}
+                  income
+                </span>{' '}
+                · {scopeRisk.label}
               </p>
             ) : null}
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <Button onClick={() => setSheet({ mode: 'new' })}>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Button
+              size="sm"
+              className="sm:h-10 sm:px-4"
+              onClick={() => setSheet({ mode: 'new' })}
+            >
               <Plus size={16} strokeWidth={3} />
               New payment
             </Button>
@@ -343,6 +368,10 @@ export function PaymentsView({
             </div>
           </div>
         </header>
+
+        {scopeBudgets.length > 0 ? (
+          <BudgetStrip budgets={scopeBudgets} />
+        ) : null}
 
         {view === 'list' ? (
           <ListFilters

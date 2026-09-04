@@ -344,6 +344,8 @@ function buildBoard({
       recurrence: p.recurrence,
       anchorDate: p.anchorDate,
       dayOfMonth: p.dayOfMonth == null ? '' : String(p.dayOfMonth),
+      monthOfYear:
+        p.recurrence === 'annual' ? String(Number(p.anchorDate.slice(5, 7))) : '',
       endsOn: p.endsOn,
       url: p.url,
       logoUrl: p.logoUrl,

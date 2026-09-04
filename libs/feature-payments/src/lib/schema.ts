@@ -1,5 +1,6 @@
 import { RECURRENCES } from '@wib/domain';
 import { z } from 'zod';
+import { attachmentDraftSchema } from './attachments';
 
 const blankToNull = (v: unknown): unknown =>
   typeof v === 'string' && v.trim() === '' ? null : v;
@@ -41,19 +42,6 @@ export const lineItemSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .nullable()
     .default(null),
-});
-
-/**
- * A file already uploaded to Vercel Blob, staged on the form until the payment
- * is saved. Only used when creating a payment — edits manage attachments with
- * their own immediate actions.
- */
-export const attachmentDraftSchema = z.object({
-  name: z.string().trim().min(1).max(255),
-  contentType: z.string().trim().min(1).max(120),
-  size: z.number().int().nonnegative(),
-  url: z.string().url().max(2048),
-  pathname: z.string().trim().min(1).max(1024),
 });
 
 /** Shared by the client form (zodResolver) and the server action. */
@@ -139,6 +127,16 @@ export const paymentFormSchema = z
         (v) => v === '' || (Number(v) >= 1 && Number(v) <= 31),
         'Day must be 1–31',
       ),
+    /** Month an annual payment lands in (1–12). */
+    monthOfYear: z
+      .string()
+      .trim()
+      .default('')
+      .refine((v) => v === '' || /^\d{1,2}$/.test(v), 'Pick a month')
+      .refine(
+        (v) => v === '' || (Number(v) >= 1 && Number(v) <= 12),
+        'Month must be 1–12',
+      ),
     // A blank native date input reads back as "" once touched — treat that
     // (and null/undefined) as "not set" rather than a format error.
     endsOn: z.preprocess(
@@ -190,6 +188,10 @@ export const paymentFormSchema = z
     path: ['dayOfMonth'],
     message: 'Pick which day of the month',
   })
+  .refine(
+    (v) => v.recurrence !== 'annual' || /^\d{1,2}$/.test(v.monthOfYear),
+    { path: ['monthOfYear'], message: 'Pick which month' },
+  )
   .refine(
     (v) =>
       v.feeKind === 'none' || Number(v.feeValue.replace(/[,% ]/g, '')) > 0,

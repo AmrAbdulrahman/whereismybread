@@ -44,6 +44,7 @@ import {
   type RecipientMethod,
 } from '@wib/db';
 import {
+  anchorForAnnualDate,
   anchorForDayOfMonth,
   convertMoney,
   money,
@@ -53,7 +54,7 @@ import {
 } from '@wib/domain';
 import { revalidatePath } from 'next/cache';
 import { getBoardData } from './queries';
-import type { PaymentBoard } from './types';
+import type { AttachmentDraft, PaymentBoard } from './types';
 import { paymentFormSchema, type PaymentFormValues } from './schema';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -152,6 +153,15 @@ export async function savePaymentAction(
   const perUnit = v.amountKind === 'per_unit';
   const units = Number(String(v.defaultUnits).replace(/[, ]/g, '') || '1');
   const domDay = Math.min(31, Math.max(1, Number(v.dayOfMonth || '1') || 1));
+  const domMonth = Math.min(
+    12,
+    Math.max(1, Number(v.monthOfYear || '1') || 1),
+  );
+  const annual = v.recurrence === 'annual';
+  const anchorForRecurrence = (existing?: string | null) =>
+    annual
+      ? anchorForAnnualDate(domDay, domMonth, today, existing)
+      : anchorForDayOfMonth(domDay, today, existing);
 
   const feeKind = v.feeKind;
   let feeFixedMinor = 0;
@@ -188,7 +198,7 @@ export async function savePaymentAction(
     recurrence: v.recurrence,
     // Recurring: start on the chosen day of the month (soonest upcoming for a
     // new series; the existing series' month when editing — see below).
-    anchorDate: oneTime ? v.anchorDate : anchorForDayOfMonth(domDay, today),
+    anchorDate: oneTime ? v.anchorDate : anchorForRecurrence(),
     dayOfMonth: oneTime ? null : domDay,
     endsOn: oneTime ? null : v.endsOn,
     // The provider link + its branding belong to the subscription toggle.
@@ -217,9 +227,10 @@ export async function savePaymentAction(
   const original = await getPaymentRow(userId, paymentId);
   if (!original) return { ok: false, error: 'That payment no longer exists.' };
 
-  // Editing a recurring series: keep its start month, just move the day.
+  // Editing a recurring series: keep its start month (or year, for annual),
+  // just move the day (and, for annual, the month).
   if (!oneTime && original.recurrence !== 'one_time') {
-    input.anchorDate = anchorForDayOfMonth(domDay, today, original.anchorDate);
+    input.anchorDate = anchorForRecurrence(original.anchorDate);
   }
 
   const scope = normalizeScope(scopeInput);
@@ -709,14 +720,6 @@ export async function flagPaymentAction(input: {
 }
 
 // --- Attachments -----------------------------------------------------------
-
-export interface AttachmentDraft {
-  name: string;
-  contentType: string;
-  size: number;
-  url: string;
-  pathname: string;
-}
 
 /** Keep only well-formed drafts pointing at our blob store with an allowed type. */
 function validAttachmentDrafts(

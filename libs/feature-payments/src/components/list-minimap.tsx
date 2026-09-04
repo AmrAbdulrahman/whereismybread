@@ -60,7 +60,7 @@ export function ListMinimap({
   return (
     <nav
       aria-label="Timeline"
-      className="fixed right-0 z-20 flex w-14 flex-col items-stretch"
+      className="fixed right-0 z-20 hidden w-14 flex-col items-stretch sm:flex"
       style={{ top: stickyTop + 10, bottom: 18 }}
     >
       <button
