@@ -22,6 +22,12 @@ const NAV_ITEMS: NavItem[] = [
   },
   { href: '/checklist', label: 'Checklist', shortLabel: 'Checks', icon: icons.checklist },
   { href: '/budgets', label: 'Budgets', icon: icons.budgets },
+  {
+    href: '/transactions',
+    label: 'Sync bank',
+    shortLabel: 'Bank',
+    icon: icons.transactions,
+  },
   { href: '/debts', label: 'Debts', icon: icons.debts },
   { href: '/tags', label: 'Tags', icon: icons.tags },
   { href: '/accounts', label: 'Accounts', icon: icons.accounts },

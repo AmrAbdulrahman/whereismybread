@@ -5,10 +5,12 @@ import {
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { accounts, tags } from './payments';
 import { users } from './users';
 
 export const budgetPeriodEnum = pgEnum('budget_period', ['month', 'week']);
@@ -71,8 +73,17 @@ export const expenses = pgTable(
     budgetId: uuid('budget_id').references(() => budgets.id, {
       onDelete: 'set null',
     }),
+    accountId: uuid('account_id').references(() => accounts.id, {
+      onDelete: 'set null',
+    }),
     name: text('name').notNull(),
     date: date('date').notNull(),
+    /**
+     * The precise moment, when this expense came from an imported bank
+     * transaction that carried a time. `null` for manually-added expenses —
+     * the UI then shows the `date` alone.
+     */
+    occurredAt: timestamp('occurred_at', { withTimezone: true }),
     amountMinor: integer('amount_minor').notNull(),
     currency: text('currency').notNull().default('EUR'),
     notes: text('notes'),
@@ -81,7 +92,22 @@ export const expenses = pgTable(
   (t) => [
     index('expenses_budget_idx').on(t.budgetId),
     index('expenses_user_date_idx').on(t.userId, t.date),
+    index('expenses_account_idx').on(t.accountId),
   ],
+);
+
+/** Tags on an expense — same `tags` rows a payment uses. */
+export const expenseTags = pgTable(
+  'expense_tags',
+  {
+    expenseId: uuid('expense_id')
+      .notNull()
+      .references(() => expenses.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.expenseId, t.tagId] })],
 );
 
 /** A file (image / PDF / text) attached to an expense, stored in Vercel Blob. */
@@ -112,3 +138,4 @@ export type NewBudget = typeof budgets.$inferInsert;
 export type Expense = typeof expenses.$inferSelect;
 export type NewExpense = typeof expenses.$inferInsert;
 export type ExpenseAttachment = typeof expenseAttachments.$inferSelect;
+export type ExpenseTag = typeof expenseTags.$inferSelect;

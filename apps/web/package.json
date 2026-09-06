@@ -5,6 +5,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@wib/auth": "workspace:*",
+    "@wib/config": "workspace:*",
     "@wib/db": "workspace:*",
     "@wib/domain": "workspace:*",
     "@wib/feature-payments": "workspace:*",

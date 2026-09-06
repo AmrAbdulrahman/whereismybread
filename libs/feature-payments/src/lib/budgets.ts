@@ -28,8 +28,13 @@ export async function getBudgetsData(): Promise<BudgetSummary[]> {
       id: e.id,
       name: e.name,
       date: e.date,
+      occurredAt: e.occurredAt ? String(e.occurredAt) : null,
       amount: money(e.amountMinor, e.currency),
       notes: e.notes,
+      accountId: e.accountId,
+      accountName: e.accountName,
+      accountColor: e.accountColor,
+      tags: e.tags,
       attachments: e.attachments,
     }));
     const spentMinor = expenses.reduce((sum, e) => {

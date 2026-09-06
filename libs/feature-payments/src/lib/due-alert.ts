@@ -5,12 +5,14 @@ import type { BoardOccurrence } from './types';
 const AUTO_COLLECTED = new Set<PaymentMethodKind>([
   'direct_debit',
   'credit_card',
+  // A standing order runs itself once set up at the bank — nothing to send.
+  'standing_order',
 ]);
 
 /**
  * True only when the payment's method is a **manual transfer** — the ones the
- * user sends by hand and needs a checklist for. Cash, cards, direct debits and
- * payments with no method are excluded.
+ * user sends by hand and needs a checklist for. Cash, cards, direct debits,
+ * standing orders and payments with no method are excluded.
  */
 export function isManualTransfer(
   occ: Pick<BoardOccurrence, 'method'>,

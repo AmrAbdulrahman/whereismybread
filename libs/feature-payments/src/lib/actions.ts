@@ -37,6 +37,7 @@ import {
   type AccountWithUsage,
   type Bank,
   type BankWithUsage,
+  type Payment,
   type PaymentAttachment,
   type PaymentLineItem,
   type PaymentMethod,
@@ -102,7 +103,7 @@ export async function savePaymentAction(
   paymentId: string | null,
   values: PaymentFormValues,
   scopeInput?: ScopeInput,
-): Promise<FormState> {
+): Promise<FormState & { item?: Payment }> {
   const user = await requireUser();
   const userId = user.id;
   const today = todayIn(user.timezone);
@@ -221,7 +222,7 @@ export async function savePaymentAction(
       );
     }
     revalidatePath('/plan');
-    return { ok: true };
+    return { ok: true, item: created };
   }
 
   const original = await getPaymentRow(userId, paymentId);

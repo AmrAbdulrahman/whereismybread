@@ -68,6 +68,9 @@
       "path": "../../libs/db"
     },
     {
+      "path": "../../libs/config"
+    },
+    {
       "path": "../../libs/auth"
     }
   ]

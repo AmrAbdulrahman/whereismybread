@@ -21,6 +21,12 @@ export type {
   NewExpense,
   ExpenseAttachment,
 } from './lib/schema/budgets';
+export type {
+  StatementImport,
+  NewStatementImport,
+  BankTransaction,
+  NewBankTransaction,
+} from './lib/schema/bank-sync';
 
 export {
   normalizeEmail,
@@ -150,6 +156,7 @@ export {
   type BudgetInput,
   type BudgetExpense,
   type BudgetExpenseAttachment,
+  type BudgetExpenseTag,
   type BudgetWithExpenses,
 } from './lib/repositories/budgets';
 
@@ -160,8 +167,10 @@ export {
   deleteExpense,
   listExpenses,
   type ExpenseInput,
+  type ExpenseWithMeta,
   type ExpenseLine,
   type ExpenseLineAttachment,
+  type ExpenseLineTag,
 } from './lib/repositories/expenses';
 
 export {
@@ -170,3 +179,15 @@ export {
   reconcileExpenseAttachments,
   type ExpenseAttachmentInput,
 } from './lib/repositories/expense-attachments';
+
+export {
+  createStatementImport,
+  finalizeStatementImport,
+  latestStatementImport,
+  listStatementImports,
+  insertImportedTransactions,
+  listPendingBankTransactions,
+  markBankTransactionCategorized,
+  markBankTransactionIgnored,
+  type ImportedTransactionInput,
+} from './lib/repositories/bank-sync';

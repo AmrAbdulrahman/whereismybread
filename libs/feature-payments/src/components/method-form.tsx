@@ -22,6 +22,7 @@ const KIND_LABELS: Record<PaymentMethodKind, string> = {
   credit_card: 'Card',
   cash: 'Cash',
   manual_transfer: 'Manual transfer',
+  standing_order: 'Standing order',
 };
 
 export function MethodForm({

@@ -5,10 +5,12 @@ import {
   listAccountsWithUsage,
   listBanksWithUsage,
   listPaymentMethods,
+  listTags,
   type AccountWithUsage,
   type BankWithUsage,
   type BoardBundle,
   type PaymentOverrides,
+  type Tag,
 } from '@wib/db';
 import {
   addMonths,
@@ -114,6 +116,11 @@ export async function getAccounts(): Promise<AccountWithUsage[]> {
 /** Every bank the signed-in user owns, with per-bank payment counts. */
 export async function getBanks(): Promise<BankWithUsage[]> {
   return listBanksWithUsage(await requireUserId());
+}
+
+/** Every tag the signed-in user owns. */
+export async function getTags(): Promise<Tag[]> {
+  return listTags(await requireUserId());
 }
 
 /** Assemble a `PaymentBoard` from an already-loaded bundle — pure, no I/O. */

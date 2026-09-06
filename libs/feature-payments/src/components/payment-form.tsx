@@ -6,6 +6,7 @@ import { Controller, useForm } from 'react-hook-form';
 import type {
   Account,
   Bank,
+  Payment,
   PaymentMethod,
   RecipientMethod,
   Tag,
@@ -72,6 +73,12 @@ const MONTH_LABELS = [
   'December',
 ];
 
+export interface PaymentFormPrefill {
+  name?: string;
+  amount?: string;
+  currency?: string;
+}
+
 export interface PaymentFormProps {
   methods: PaymentMethod[];
   accounts: Account[];
@@ -86,11 +93,14 @@ export interface PaymentFormProps {
   rates?: RateMap;
   /** Present when editing. */
   initial?: Partial<PaymentFormValues> & { id: string };
+  /** New-payment-only defaults (e.g. from a synced bank transaction). Ignored in edit mode. */
+  prefill?: PaymentFormPrefill;
   /** The due date of the occurrence the user opened, for scoped edits. */
   occurrenceDate?: string;
   /** True when that occurrence already carries a per-month override. */
   hasOverride?: boolean;
-  onDone: () => void;
+  /** Called with the saved payment on a fresh create; no argument otherwise (edit, delete, cancel, reset). */
+  onDone: (payment?: Payment) => void;
 }
 
 function fieldMessage(
@@ -112,6 +122,7 @@ export function PaymentForm({
   usedCurrencies = [],
   rates = {},
   initial,
+  prefill,
   occurrenceDate,
   hasOverride = false,
   onDone,
@@ -173,16 +184,20 @@ export function PaymentForm({
     resolver: zodResolver(paymentFormSchema),
     mode: 'onTouched',
     defaultValues: {
-      name: initial?.name ?? '',
+      name: initial?.name ?? prefill?.name ?? '',
       amountKind: initial?.amountKind ?? 'fixed',
-      amount: initial?.amount ?? '',
+      amount: initial?.amount ?? prefill?.amount ?? '',
       lineItems: initial?.lineItems ?? [],
       attachments: [],
       unitName: initial?.unitName ?? '',
       defaultUnits: initial?.defaultUnits ?? '1',
       feeKind: initial?.feeKind ?? 'none',
       feeValue: initial?.feeValue ?? '',
-      currency: initial?.currency ?? readLastCurrency() ?? defaultCurrency,
+      currency:
+        initial?.currency ??
+        prefill?.currency ??
+        readLastCurrency() ??
+        defaultCurrency,
       methodId: initial?.methodId ?? null,
       accountId: initial?.accountId ?? null,
       bankId: initial?.bankId ?? null,
@@ -319,15 +334,17 @@ export function PaymentForm({
 
   const methodId = watch('methodId');
   const selectedMethod = methods.find((m) => m.id === methodId) ?? null;
-  /** Only a manual transfer needs "how did it reach the recipient". */
-  const showRecipientMethod =
-    selectedMethod?.kind === 'manual_transfer';
+  /** A bank transfer to a payee — manual or as a standing order — is the only
+   * kind that needs "which of their accounts did it go to". */
+  const isBankTransferKind = (kind?: string) =>
+    kind === 'manual_transfer' || kind === 'standing_order';
+  const showRecipientMethod = isBankTransferKind(selectedMethod?.kind);
 
   /** Select a method, dropping the recipient method when it no longer applies. */
   const pickMethod = (id: string | null) => {
     setValue('methodId', id, { shouldDirty: true });
     const kind = methods.find((m) => m.id === id)?.kind;
-    if (kind !== 'manual_transfer') {
+    if (!isBankTransferKind(kind)) {
       setValue('recipientMethodId', null, { shouldDirty: true });
     }
   };
@@ -345,7 +362,7 @@ export function PaymentForm({
     );
     if (result.ok) {
       if (values.currency) writeLastCurrency(values.currency);
-      onDone();
+      onDone(result.item);
       return;
     }
     if (result.fieldErrors) {

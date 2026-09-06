@@ -5,6 +5,7 @@ export { PaymentForm, type PaymentFormProps } from './components/payment-form';
 export { BankManager } from './components/bank-manager';
 export { ChecklistView } from './components/checklist-view';
 export { BudgetsView } from './components/budgets-view';
+export { BankTransactionTriage } from './components/bank-transaction-triage';
 
 export {
   savePaymentAction,
@@ -81,3 +82,10 @@ export {
 
 export { budgetFormSchema, type BudgetFormValues } from './lib/budget-schema';
 export { expenseFormSchema, type ExpenseFormValues } from './lib/expense-schema';
+
+export { StatementUpload } from './components/statement-upload';
+export { importStatementAction } from './lib/statement-import-actions';
+export {
+  categorizeBankTransactionAction,
+  ignoreBankTransactionAction,
+} from './lib/bank-transaction-actions';

@@ -1,9 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import type { Account, Bank, Tag } from '@wib/db';
+import type { Account, Bank, PaymentMethod, Tag } from '@wib/db';
 import { cn, Input } from '@wib/ui';
 import { Search, X } from '@wib/ui/icons';
+
+/** Which kinds of list rows to show. Empty array means "all of them". */
+export type ListKind = 'planned' | 'budgeted' | 'unbudgeted';
+
+const KIND_LABELS: Record<ListKind, string> = {
+  planned: 'Planned',
+  budgeted: 'Budgeted',
+  unbudgeted: 'Expenses (no budget)',
+};
 
 export interface ListFilterValue {
   /** Free text — matched against description, notes and provider link. */
@@ -11,6 +20,8 @@ export interface ListFilterValue {
   accountIds: string[];
   bankIds: string[];
   tagIds: string[];
+  methodIds: string[];
+  kinds: ListKind[];
 }
 
 export const EMPTY_LIST_FILTER: ListFilterValue = {
@@ -18,6 +29,8 @@ export const EMPTY_LIST_FILTER: ListFilterValue = {
   accountIds: [],
   bankIds: [],
   tagIds: [],
+  methodIds: [],
+  kinds: [],
 };
 
 export function listFilterCount(v: ListFilterValue): number {
@@ -25,11 +38,33 @@ export function listFilterCount(v: ListFilterValue): number {
     (v.search.trim() ? 1 : 0) +
     v.accountIds.length +
     v.bankIds.length +
-    v.tagIds.length
+    v.tagIds.length +
+    v.methodIds.length +
+    v.kinds.length
   );
 }
 
-const toggle = (list: string[], id: string): string[] =>
+/** Filters that only make sense for planned payments — a bank has no expenses. */
+export function paymentAttrFilterActive(v: ListFilterValue): boolean {
+  return (
+    v.search.trim() !== '' ||
+    v.accountIds.length > 0 ||
+    v.bankIds.length > 0 ||
+    v.tagIds.length > 0 ||
+    v.methodIds.length > 0
+  );
+}
+
+/** Filters an expense can't possibly satisfy (it has no bank / method / link). */
+export function expenseIncompatibleFilterActive(v: ListFilterValue): boolean {
+  return (
+    v.search.trim() !== '' ||
+    v.bankIds.length > 0 ||
+    v.methodIds.length > 0
+  );
+}
+
+const toggle = <T,>(list: T[], id: T): T[] =>
   list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
 export function ListFilters({
@@ -38,6 +73,7 @@ export function ListFilters({
   accounts,
   banks,
   tags,
+  methods,
   unpaidOnly,
   onUnpaidOnlyChange,
 }: {
@@ -46,17 +82,18 @@ export function ListFilters({
   accounts: Account[];
   banks: Bank[];
   tags: Tag[];
+  methods: PaymentMethod[];
   unpaidOnly: boolean;
   onUnpaidOnlyChange: (next: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const count = listFilterCount(value);
-  const hasChips = accounts.length + banks.length + tags.length > 0;
+  const chipCount = count - (value.search.trim() ? 1 : 0);
 
-  const group = (
+  const chipGroup = (
     label: string,
     items: { id: string; name: string; color: string }[],
-    key: 'accountIds' | 'bankIds' | 'tagIds',
+    key: 'accountIds' | 'bankIds' | 'tagIds' | 'methodIds',
   ) => {
     if (items.length === 0) return null;
     const selected = value[key];
@@ -137,33 +174,60 @@ export function ListFilters({
         >
           Unpaid only
         </button>
-        {hasChips ? (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            className={cn(
-              'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium',
-              count - (value.search.trim() ? 1 : 0) > 0 || open
-                ? 'border-accent text-accent'
-                : 'border-line-strong text-muted hover:text-ink',
-            )}
-          >
-            Filters
-            {count - (value.search.trim() ? 1 : 0) > 0 ? (
-              <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg">
-                {count - (value.search.trim() ? 1 : 0)}
-              </span>
-            ) : null}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className={cn(
+            'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium',
+            chipCount > 0 || open
+              ? 'border-accent text-accent'
+              : 'border-line-strong text-muted hover:text-ink',
+          )}
+        >
+          Filters
+          {chipCount > 0 ? (
+            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg">
+              {chipCount}
+            </span>
+          ) : null}
+        </button>
       </div>
 
-      {open && hasChips ? (
+      {open ? (
         <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-3">
-          {group('Account', accounts, 'accountIds')}
-          {group('Bank', banks, 'bankIds')}
-          {group('Tags', tags, 'tagIds')}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
+              Show
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(KIND_LABELS) as ListKind[]).map((k) => {
+                const on = value.kinds.includes(k);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      onChange({ ...value, kinds: toggle(value.kinds, k) })
+                    }
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium',
+                      on
+                        ? 'border-accent bg-accent/15 text-accent'
+                        : 'border-line-strong text-muted hover:text-ink',
+                    )}
+                  >
+                    {KIND_LABELS[k]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {chipGroup('Payment method', methods, 'methodIds')}
+          {chipGroup('Account', accounts, 'accountIds')}
+          {chipGroup('Bank', banks, 'bankIds')}
+          {chipGroup('Tags', tags, 'tagIds')}
         </div>
       ) : null}
 

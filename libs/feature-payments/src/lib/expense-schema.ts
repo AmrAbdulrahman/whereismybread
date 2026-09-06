@@ -11,6 +11,12 @@ export const expenseFormSchema = z.object({
     blankToNull,
     z.string().uuid().nullable().default(null),
   ),
+  /** `null` (or blank) — not assigned to any account. */
+  accountId: z.preprocess(
+    blankToNull,
+    z.string().uuid().nullable().default(null),
+  ),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   name: z.string().trim().min(1, 'Give it a name').max(120),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a date'),
   amount: z

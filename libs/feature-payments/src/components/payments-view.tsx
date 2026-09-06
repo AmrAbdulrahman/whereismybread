@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type {
   Account,
@@ -37,6 +37,15 @@ import {
   ListFilters,
   type ListFilterValue,
 } from './list-filters';
+import {
+  TransactionTriageModal,
+  type TriageSheet,
+} from './transaction-triage-modal';
+import {
+  categorizeBankTransactionAction,
+  ignoreBankTransactionAction,
+} from '../lib/bank-transaction-actions';
+import type { BankTransactionRow } from '../lib/bank-sync-queries';
 import { riskFor, sumInDisplay } from '../lib/risk';
 import type {
   BudgetSummary,
@@ -101,11 +110,13 @@ function toExpenseFormInitial(e: ExpenseLine): ExpenseFormInitial {
   return {
     id: e.id,
     budgetId: e.budgetId,
+    accountId: e.accountId,
     name: e.name,
     date: e.date,
     amountMinor: e.amount.minorUnits,
     currency: e.amount.currency,
     notes: e.notes,
+    tags: e.tags.map((t) => t.name),
     attachments: e.attachments,
   };
 }
@@ -122,6 +133,7 @@ export function PaymentsView({
   month,
   budgets = [],
   expenses = [],
+  reviewTransactions = [],
 }: {
   board: PaymentBoard;
   methods: PaymentMethod[];
@@ -134,6 +146,8 @@ export function PaymentsView({
   month: IsoDate;
   budgets?: BudgetSummary[];
   expenses?: ExpenseLine[];
+  /** Uncategorized imported bank transactions, surfaced per-day in the list. */
+  reviewTransactions?: BankTransactionRow[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -161,6 +175,38 @@ export function PaymentsView({
   const [listFilter, setListFilter] =
     useState<ListFilterValue>(EMPTY_LIST_FILTER);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
+
+  // Per-day "needs review" transactions, with optimistic removal on triage.
+  const [reviewSheet, setReviewSheet] = useState<TriageSheet>({ mode: 'closed' });
+  const [reviewHandled, setReviewHandled] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [, startReviewTransition] = useTransition();
+  useEffect(() => {
+    setReviewHandled((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(reviewTransactions.map((t) => t.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [reviewTransactions]);
+  const settleReview = (id: string, run: () => Promise<unknown>) => {
+    setReviewHandled((prev) => new Set(prev).add(id));
+    startReviewTransition(async () => {
+      await run();
+      router.refresh();
+    });
+  };
+  const visibleReview = reviewTransactions.filter(
+    (t) => !reviewHandled.has(t.id),
+  );
+  const triageContext = {
+    methods,
+    accounts,
+    banks,
+    recipientMethods,
+    tags,
+  };
   // Mobile keeps one "Add" button that opens a sheet of the three options —
   // desktop shows all three inline instead.
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -382,6 +428,8 @@ export function PaymentsView({
       {expenseSheet.mode !== 'closed' ? (
         <ExpenseForm
           budgets={budgetCurrencyOptions}
+          accounts={accounts}
+          tags={tags}
           budgetId={
             expenseSheet.mode === 'new' ? expenseSheet.budgetId : null
           }
@@ -404,7 +452,12 @@ export function PaymentsView({
     </ResponsiveModal>
   );
 
-  if (!board.hasPayments && budgets.length === 0) {
+  if (
+    !board.hasPayments &&
+    budgets.length === 0 &&
+    expenses.length === 0 &&
+    reviewTransactions.length === 0
+  ) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
         <h1 className="text-xl font-semibold">Nothing planned yet</h1>
@@ -562,6 +615,7 @@ export function PaymentsView({
             accounts={accounts}
             banks={banks}
             tags={tags}
+            methods={methods}
             unpaidOnly={unpaidOnly}
             onUnpaidOnlyChange={setUnpaidOnly}
           />
@@ -573,6 +627,7 @@ export function PaymentsView({
           board={board}
           budgets={budgets}
           expenses={expenses}
+          reviewTransactions={visibleReview}
           filter={listFilter}
           unpaidOnly={unpaidOnly}
           stickyTop={panelH}
@@ -582,6 +637,11 @@ export function PaymentsView({
           onEditExpense={(e) => setExpenseSheet({ mode: 'edit', expense: e })}
           onAddExpense={(date) =>
             setExpenseSheet({ mode: 'new', date, budgetId: null })
+          }
+          onReviewExpense={(txn) => setReviewSheet({ mode: 'expense', txn })}
+          onReviewPayment={(txn) => setReviewSheet({ mode: 'payment', txn })}
+          onReviewIgnore={(txn) =>
+            settleReview(txn.id, () => ignoreBankTransactionAction(txn.id))
           }
         />
       ) : (
@@ -598,6 +658,36 @@ export function PaymentsView({
       {budgetModal}
       {expenseModal}
       <FlagModal target={flagTarget} onDone={() => setFlagTarget(null)} />
+
+      <TransactionTriageModal
+        sheet={reviewSheet}
+        context={triageContext}
+        budgets={budgets}
+        today={board.today}
+        defaultCurrency={defaultCurrency}
+        rates={board.rates}
+        onClose={() => setReviewSheet({ mode: 'closed' })}
+        onExpenseDone={(txnId, expense) => {
+          setReviewSheet({ mode: 'closed' });
+          settleReview(txnId, () =>
+            categorizeBankTransactionAction(txnId, {
+              type: 'expense',
+              id: expense.id,
+            }),
+          );
+        }}
+        onPaymentDone={(txnId, payment) => {
+          setReviewSheet({ mode: 'closed' });
+          if (payment) {
+            settleReview(txnId, () =>
+              categorizeBankTransactionAction(txnId, {
+                type: 'payment',
+                id: payment.id,
+              }),
+            );
+          }
+        }}
+      />
 
       <Sheet open={addMenuOpen} onOpenChange={setAddMenuOpen}>
         <SheetContent side="bottom" className="p-4 pb-6 sm:hidden">

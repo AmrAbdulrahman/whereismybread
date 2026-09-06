@@ -3,8 +3,17 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
-import type { Expense } from '@wib/db';
-import { AmountField, Button, Field, Input, Label, ResponsiveModal } from '@wib/ui';
+import type { Account, Expense, Tag } from '@wib/db';
+import {
+  AmountField,
+  Button,
+  cn,
+  Field,
+  Input,
+  Label,
+  ResponsiveModal,
+} from '@wib/ui';
+import { Plus } from '@wib/ui/icons';
 import { discardBlobsAction } from '../lib/actions';
 import {
   deleteExpenseAction,
@@ -17,7 +26,9 @@ import {
   type ExpenseFormValues,
 } from '../lib/expense-schema';
 import type { OccurrenceAttachment } from '../lib/types';
+import { AccountForm } from './account-form';
 import { AttachmentsField } from './attachments-field';
+import { TagInput } from './tag-input';
 
 export interface ExpenseFormBudgetOption {
   id: string;
@@ -53,30 +64,45 @@ function budgetOptionLabels(
 export interface ExpenseFormInitial {
   id: string;
   budgetId: string | null;
+  accountId: string | null;
   name: string;
   date: string;
   amountMinor: number;
   currency: string;
   notes: string | null;
+  tags: string[];
   attachments: OccurrenceAttachment[];
+}
+
+export interface ExpenseFormPrefill {
+  name?: string;
+  amount?: string;
+  currency?: string;
 }
 
 export function ExpenseForm({
   budgets,
+  accounts: initialAccounts = [],
+  tags = [],
   budgetId = null,
   date,
   initial,
+  prefill,
   usedCurrencies = [],
   onDone,
   onDeleted,
   onCancel,
 }: {
   budgets: ExpenseFormBudgetOption[];
+  accounts?: Account[];
+  tags?: Tag[];
   /** Which budget to preselect (e.g. the one "Add expense" was opened from). */
   budgetId?: string | null;
   /** The date to preselect (e.g. from a day separator's quick-add). */
   date: string;
   initial?: ExpenseFormInitial;
+  /** New-expense-only defaults (e.g. from an imported bank transaction). Ignored in edit mode. */
+  prefill?: ExpenseFormPrefill;
   usedCurrencies?: string[];
   onDone: (expense: Expense) => void;
   /** Editing only — called once a delete has gone through. */
@@ -84,6 +110,8 @@ export function ExpenseForm({
   onCancel: () => void;
 }) {
   const [formError, setFormError] = useState<string>();
+  const [accounts, setAccounts] = useState(initialAccounts);
+  const [addingAccount, setAddingAccount] = useState(false);
   const [savedAttachments, setSavedAttachments] = useState<
     OccurrenceAttachment[]
   >(() => initial?.attachments ?? []);
@@ -105,6 +133,8 @@ export function ExpenseForm({
     defaultValues: initial
       ? {
           budgetId: initial.budgetId ?? '',
+          accountId: initial.accountId ?? '',
+          tags: initial.tags,
           name: initial.name,
           date: initial.date,
           amount: (initial.amountMinor / 100).toFixed(2),
@@ -114,11 +144,15 @@ export function ExpenseForm({
         }
       : {
           budgetId: budgetId ?? '',
-          name: '',
+          accountId: '',
+          tags: [],
+          name: prefill?.name ?? '',
           date,
-          amount: '',
+          amount: prefill?.amount ?? '',
           currency:
-            budgets.find((b) => b.id === budgetId)?.currency ?? 'EUR',
+            prefill?.currency ??
+            budgets.find((b) => b.id === budgetId)?.currency ??
+            'EUR',
           notes: '',
           attachments: [],
         },
@@ -216,6 +250,84 @@ export function ExpenseForm({
         {errors.amount?.message ? (
           <p className="text-xs text-danger">{errors.amount.message}</p>
         ) : null}
+      </Field>
+
+      <Field>
+        <Label>Account</Label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setValue('accountId', '', { shouldDirty: true })}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-medium',
+              !watch('accountId')
+                ? 'border-accent bg-accent/15 text-accent'
+                : 'border-line-strong text-muted hover:text-ink',
+            )}
+          >
+            None
+          </button>
+          {accounts.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() =>
+                setValue('accountId', a.id, { shouldDirty: true })
+              }
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
+                watch('accountId') === a.id
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-line-strong text-muted hover:text-ink',
+              )}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: a.color }}
+              />
+              {a.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setAddingAccount(true)}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:text-ink"
+          >
+            <Plus size={13} strokeWidth={3} />
+            New account
+          </button>
+        </div>
+      </Field>
+
+      <ResponsiveModal
+        open={addingAccount}
+        onOpenChange={setAddingAccount}
+        title="New account"
+        description="A group your spending belongs to — a company, a bill type, taxes…"
+      >
+        <AccountForm
+          onCancel={() => setAddingAccount(false)}
+          onCreated={(account) => {
+            setAccounts((prev) => [...prev, account]);
+            setValue('accountId', account.id, { shouldDirty: true });
+            setAddingAccount(false);
+          }}
+        />
+      </ResponsiveModal>
+
+      <Field>
+        <Label>Tags</Label>
+        <Controller
+          control={control}
+          name="tags"
+          render={({ field }) => (
+            <TagInput
+              value={field.value ?? []}
+              onChange={field.onChange}
+              options={tags.map((t) => ({ name: t.name, color: t.color }))}
+            />
+          )}
+        />
       </Field>
 
       <Field>

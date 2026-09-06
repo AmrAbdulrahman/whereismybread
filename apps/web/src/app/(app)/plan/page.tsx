@@ -3,6 +3,7 @@ import { getCurrentUser } from '@wib/auth/server';
 import { startOfMonth, todayIn } from '@wib/domain';
 import { PaymentsView } from '@wib/feature-payments';
 import {
+  getBankTransactionsData,
   getBoardData,
   getBudgetsData,
   getExpensesData,
@@ -29,6 +30,7 @@ export default async function CalendarPage({
   const { context, board } = await getBoardData({ month });
   const budgets = await getBudgetsData();
   const expenses = await getExpensesData();
+  const { pending: reviewTransactions } = await getBankTransactionsData();
 
   return (
     <PaymentsView
@@ -43,6 +45,7 @@ export default async function CalendarPage({
       month={month}
       budgets={budgets}
       expenses={expenses}
+      reviewTransactions={reviewTransactions}
     />
   );
 }

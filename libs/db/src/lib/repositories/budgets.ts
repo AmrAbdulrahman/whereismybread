@@ -9,7 +9,16 @@ export type BudgetExpenseAttachment = Pick<
   'id' | 'name' | 'contentType' | 'size' | 'url' | 'pathname'
 >;
 
+export interface BudgetExpenseTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export type BudgetExpense = Expense & {
+  accountName: string | null;
+  accountColor: string | null;
+  tags: BudgetExpenseTag[];
   attachments: BudgetExpenseAttachment[];
 };
 
@@ -64,9 +73,18 @@ export async function getBudgetsBundle(
             select jsonb_agg(
               jsonb_build_object(
                 'id', e.id, 'userId', e.user_id, 'budgetId', e.budget_id,
-                'name', e.name, 'date', e.date, 'amountMinor', e.amount_minor,
+                'accountId', e.account_id,
+                'accountName', ac.name, 'accountColor', ac.color,
+                'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
+                'amountMinor', e.amount_minor,
                 'currency', e.currency, 'notes', e.notes,
                 'createdAt', e.created_at, 'updatedAt', e.updated_at,
+                'tags', coalesce((
+                  select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
+                    order by t.name)
+                  from expense_tags et join tags t on t.id = et.tag_id
+                  where et.expense_id = e.id
+                ), '[]'::jsonb),
                 'attachments', coalesce((
                   select jsonb_agg(jsonb_build_object(
                     'id', a.id, 'name', a.name,
@@ -80,6 +98,7 @@ export async function getBudgetsBundle(
               order by e.date, e.created_at
             )
             from expenses e
+            left join accounts ac on ac.id = e.account_id
             where e.budget_id = b.id
           ), '[]'::jsonb)
         )

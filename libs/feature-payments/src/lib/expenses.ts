@@ -11,11 +11,16 @@ export async function getExpensesData(): Promise<ExpenseLine[]> {
     id: e.id,
     name: e.name,
     date: e.date,
+    occurredAt: e.occurredAt,
     amount: money(e.amountMinor, e.currency),
     notes: e.notes,
     budgetId: e.budgetId,
     budgetName: e.budgetName,
     budgetColor: e.budgetColor,
+    accountId: e.accountId,
+    accountName: e.accountName,
+    accountColor: e.accountColor,
+    tags: e.tags,
     attachments: e.attachments,
   }));
 }

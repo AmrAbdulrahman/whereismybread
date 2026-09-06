@@ -56,21 +56,49 @@ test('checklist shows manual payments month-by-month, current month open', async
   // the direct debit is filtered out entirely
   await expect(page.getByText('Broadband')).toHaveCount(0);
 
-  // ticking it updates the month's progress
+  // ticking the only item completes the month — it auto-collapses and folds away
   await expect(current).toContainText('0/1 done');
   await page.getByRole('button', { name: 'Mark Cleaner paid' }).click();
   await expect(current).toContainText('1/1 done', { timeout: 12_000 });
-
-  // collapsing hides the items; expanding brings them back
-  await current.click();
-  await expect(current).toHaveAttribute('aria-expanded', 'false');
+  await expect(current).toHaveAttribute('aria-expanded', 'false', {
+    timeout: 12_000,
+  });
   await expect(
     page.getByRole('button', { name: 'Mark Cleaner unpaid' }),
   ).toBeHidden();
+
+  // expanding it again brings the items back
   await current.click();
+  await expect(current).toHaveAttribute('aria-expanded', 'true');
   await expect(
     page.getByRole('button', { name: 'Mark Cleaner unpaid' }),
   ).toBeVisible();
+});
+
+test('completing a month folds it away and opens the next one in line', async ({
+  page,
+}) => {
+  await signUp(page);
+  // A monthly manual transfer lands one item in every month.
+  await addMonthly(page, 'Rent', '900', 'Manual transfer');
+
+  await page.goto('/checklist');
+  const thisMonth = page.getByRole('button', { name: /This month/ });
+  await expect(thisMonth).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('button', { expanded: true })).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Mark Rent paid' }).first().click();
+  await expect(thisMonth).toContainText('1/1 done', { timeout: 12_000 });
+
+  // this month folds shut on its own...
+  await expect(thisMonth).toHaveAttribute('aria-expanded', 'false', {
+    timeout: 12_000,
+  });
+  // ...and a different, still-unfinished month becomes the open one
+  const openMonth = page.getByRole('button', { expanded: true });
+  await expect(openMonth).toHaveCount(1);
+  await expect(openMonth).not.toContainText('This month');
+  await expect(openMonth).toContainText('0/1 done');
 });
 
 test('clicking a checklist item opens the payment details form', async ({

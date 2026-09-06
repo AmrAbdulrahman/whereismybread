@@ -1,16 +1,26 @@
 import { and, eq } from 'drizzle-orm';
 import { getDb, getSql } from '../client';
-import { budgets, expenses, type Expense } from '../schema/budgets';
+import {
+  budgets,
+  expenses,
+  expenseTags,
+  type Expense,
+} from '../schema/budgets';
+import { accounts } from '../schema/payments';
 
 export interface ExpenseInput {
   /** `null` — the expense isn't tracked against any budget. */
   budgetId: string | null;
+  /** `null` — not assigned to any account. */
+  accountId: string | null;
   name: string;
   /** `YYYY-MM-DD`. */
   date: string;
   amountMinor: number;
   currency: string;
   notes: string | null;
+  /** Tag ids to link — the caller resolves names first (`getOrCreateTags`). */
+  tagIds: string[];
 }
 
 /** `true` when `budgetId` is unset, or is a budget this user owns. */
@@ -27,31 +37,57 @@ async function ownsBudgetOrNone(
   return owned.length > 0;
 }
 
-/** Insert an expense — returns `null` if a given budget isn't the user's. */
+/** `true` when `accountId` is unset, or is an account this user owns. */
+async function ownsAccountOrNone(
+  userId: string,
+  accountId: string | null,
+): Promise<boolean> {
+  if (!accountId) return true;
+  const owned = await getDb()
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)))
+    .limit(1);
+  return owned.length > 0;
+}
+
+/** Insert an expense — returns `null` if a given budget/account isn't the user's. */
 export async function createExpense(
   userId: string,
   input: ExpenseInput,
 ): Promise<Expense | null> {
   if (!(await ownsBudgetOrNone(userId, input.budgetId))) return null;
+  if (!(await ownsAccountOrNone(userId, input.accountId))) return null;
 
-  const rows = await getDb()
-    .insert(expenses)
-    .values({
-      userId,
-      budgetId: input.budgetId,
-      name: input.name.trim(),
-      date: input.date,
-      amountMinor: input.amountMinor,
-      currency: input.currency,
-      notes: input.notes,
-    })
-    .returning();
-  return rows[0] ?? null;
+  return getDb().transaction(async (tx) => {
+    const rows = await tx
+      .insert(expenses)
+      .values({
+        userId,
+        budgetId: input.budgetId,
+        accountId: input.accountId,
+        name: input.name.trim(),
+        date: input.date,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        notes: input.notes,
+      })
+      .returning();
+    const expense = rows[0];
+    if (!expense) return null;
+    if (input.tagIds.length > 0) {
+      await tx
+        .insert(expenseTags)
+        .values(input.tagIds.map((tagId) => ({ expenseId: expense.id, tagId })))
+        .onConflictDoNothing();
+    }
+    return expense;
+  });
 }
 
 /**
- * Update an expense, optionally reassigning it to a different (owned) budget
- * or clearing it to none.
+ * Update an expense, optionally reassigning its budget/account or clearing
+ * either to none. Tags are replaced wholesale.
  */
 export async function updateExpense(
   userId: string,
@@ -59,33 +95,57 @@ export async function updateExpense(
   input: ExpenseInput,
 ): Promise<Expense | null> {
   if (!(await ownsBudgetOrNone(userId, input.budgetId))) return null;
+  if (!(await ownsAccountOrNone(userId, input.accountId))) return null;
 
-  const rows = await getDb()
-    .update(expenses)
-    .set({
-      budgetId: input.budgetId,
-      name: input.name.trim(),
-      date: input.date,
-      amountMinor: input.amountMinor,
-      currency: input.currency,
-      notes: input.notes,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return getDb().transaction(async (tx) => {
+    const rows = await tx
+      .update(expenses)
+      .set({
+        budgetId: input.budgetId,
+        accountId: input.accountId,
+        name: input.name.trim(),
+        date: input.date,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        notes: input.notes,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+      .returning();
+    const expense = rows[0];
+    if (!expense) return null;
+
+    await tx.delete(expenseTags).where(eq(expenseTags.expenseId, id));
+    if (input.tagIds.length > 0) {
+      await tx
+        .insert(expenseTags)
+        .values(input.tagIds.map((tagId) => ({ expenseId: id, tagId })))
+        .onConflictDoNothing();
+    }
+    return expense;
+  });
+}
+
+export interface ExpenseWithMeta extends Expense {
+  tagIds: string[];
 }
 
 export async function getExpense(
   userId: string,
   id: string,
-): Promise<Expense | null> {
+): Promise<ExpenseWithMeta | null> {
   const rows = await getDb()
     .select()
     .from(expenses)
     .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
     .limit(1);
-  return rows[0] ?? null;
+  const expense = rows[0];
+  if (!expense) return null;
+  const links = await getDb()
+    .select({ tagId: expenseTags.tagId })
+    .from(expenseTags)
+    .where(eq(expenseTags.expenseId, id));
+  return { ...expense, tagIds: links.map((l) => l.tagId) };
 }
 
 export async function deleteExpense(userId: string, id: string): Promise<void> {
@@ -103,27 +163,39 @@ export interface ExpenseLineAttachment {
   pathname: string;
 }
 
+export interface ExpenseLineTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 /** An expense resolved for the plan board — its budget's name/colour inlined. */
 export interface ExpenseLine {
   id: string;
   name: string;
   /** `YYYY-MM-DD`. */
   date: string;
+  /** ISO timestamp when the expense came from a timed bank transaction; else null. */
+  occurredAt: string | null;
   amountMinor: number;
   currency: string;
   notes: string | null;
   budgetId: string | null;
   budgetName: string | null;
   budgetColor: string | null;
+  accountId: string | null;
+  accountName: string | null;
+  accountColor: string | null;
+  tags: ExpenseLineTag[];
   attachments: ExpenseLineAttachment[];
 }
 
 /**
  * Every expense the user has (budgeted or not) — one round trip, its
- * budget's name/colour joined straight in. Expenses are discrete rows (not
- * generated recurrence occurrences like payments), so unlike the plan
- * board there's no window to page through — this stays a bounded,
- * cheap fetch for the whole account.
+ * budget/account name+colour and tags joined straight in. Expenses are
+ * discrete rows (not generated recurrence occurrences like payments), so
+ * unlike the plan board there's no window to page through — this stays a
+ * bounded, cheap fetch for the whole account.
  */
 export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
   const sql = getSql();
@@ -132,9 +204,17 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
       select jsonb_agg(
         jsonb_build_object(
           'id', e.id, 'name', e.name, 'date', e.date,
+          'occurredAt', e.occurred_at,
           'amountMinor', e.amount_minor, 'currency', e.currency,
           'notes', e.notes,
           'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
+          'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
+          'tags', coalesce((
+            select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
+              order by t.name)
+            from expense_tags et join tags t on t.id = et.tag_id
+            where et.expense_id = e.id
+          ), '[]'::jsonb),
           'attachments', coalesce((
             select jsonb_agg(jsonb_build_object(
               'id', a.id, 'name', a.name,
@@ -149,6 +229,7 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
       )
       from expenses e
       left join budgets b on b.id = e.budget_id
+      left join accounts ac on ac.id = e.account_id
       where e.user_id = ${userId}
     ), '[]'::jsonb) as expenses
   `;

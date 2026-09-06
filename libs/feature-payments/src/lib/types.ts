@@ -287,9 +287,15 @@ export interface BudgetExpenseView {
   name: string;
   /** `YYYY-MM-DD`. */
   date: string;
+  /** ISO timestamp when it came from a timed bank transaction; else null. */
+  occurredAt: string | null;
   /** In its own currency — converted into the budget's for totals. */
   amount: Money;
   notes: string | null;
+  accountId: string | null;
+  accountName: string | null;
+  accountColor: string | null;
+  tags: OccurrenceTag[];
   attachments: OccurrenceAttachment[];
 }
 
@@ -326,10 +332,16 @@ export interface ExpenseLine {
   name: string;
   /** `YYYY-MM-DD`. */
   date: string;
+  /** ISO timestamp when it came from a timed bank transaction; else null. */
+  occurredAt: string | null;
   amount: Money;
   notes: string | null;
   budgetId: string | null;
   budgetName: string | null;
   budgetColor: string | null;
+  accountId: string | null;
+  accountName: string | null;
+  accountColor: string | null;
+  tags: OccurrenceTag[];
   attachments: OccurrenceAttachment[];
 }

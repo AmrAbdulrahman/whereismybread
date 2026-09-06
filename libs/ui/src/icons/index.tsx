@@ -4,6 +4,7 @@ import {
   Bitcoin,
   Briefcase,
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   Coins,
@@ -41,6 +42,7 @@ import {
   Tag,
   Trash2,
   TriangleAlert,
+  Upload,
   Users,
   Wallet,
   X,
@@ -69,6 +71,7 @@ export const icons = {
   transfer: ArrowLeftRight,
   card: CreditCard,
   cash: Banknote,
+  transactions: ArrowLeftRight,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;
@@ -84,6 +87,7 @@ export {
   Bitcoin,
   Briefcase,
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   Coins,
@@ -121,6 +125,7 @@ export {
   Tag,
   Trash2,
   TriangleAlert,
+  Upload,
   Users,
   Wallet,
   X,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { Account, Tag } from '@wib/db';
 import { formatMoney, money, type IsoDate } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
 import { FileText, Pencil, Plus, Repeat, Trash2 } from '@wib/ui/icons';
@@ -8,6 +9,7 @@ import { deleteBudgetAction, deleteExpenseAction } from '../lib/budget-actions';
 import type { BudgetExpenseView, BudgetSummary } from '../lib/types';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
 import { BudgetProgressBar } from './budget-progress-bar';
+import { expenseTimeLabel } from './expense-list-item';
 import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
 
 function periodLabel(b: BudgetSummary): string {
@@ -57,22 +59,28 @@ function toExpenseFormInitial(
   return {
     id: e.id,
     budgetId,
+    accountId: e.accountId,
     name: e.name,
     date: e.date,
     amountMinor: e.amount.minorUnits,
     currency: e.amount.currency,
     notes: e.notes,
+    tags: e.tags.map((t) => t.name),
     attachments: e.attachments,
   };
 }
 
 export function BudgetsView({
   budgets,
+  accounts = [],
+  tags = [],
   today,
   defaultCurrency,
   usedCurrencies,
 }: {
   budgets: BudgetSummary[];
+  accounts?: Account[];
+  tags?: Tag[];
   today: string;
   defaultCurrency: string;
   usedCurrencies: string[];
@@ -287,8 +295,39 @@ export function BudgetsView({
                                 </div>
                                 <p className="truncate text-[11px] text-muted">
                                   {formatShortDate(e.date)}
+                                  {expenseTimeLabel(e.occurredAt)
+                                    ? ` · ${expenseTimeLabel(e.occurredAt)}`
+                                    : ''}
                                   {e.notes ? ` · ${e.notes}` : ''}
                                 </p>
+                                {e.accountId || e.tags.length > 0 ? (
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted">
+                                    {e.accountId ? (
+                                      <span className="flex items-center gap-1">
+                                        <span
+                                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                                          style={{
+                                            background:
+                                              e.accountColor ?? undefined,
+                                          }}
+                                        />
+                                        {e.accountName}
+                                      </span>
+                                    ) : null}
+                                    {e.tags.map((t) => (
+                                      <span
+                                        key={t.id}
+                                        className="rounded-full px-1.5 py-0.5 font-medium"
+                                        style={{
+                                          background: `${t.color}22`,
+                                          color: t.color,
+                                        }}
+                                      >
+                                        {t.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </div>
                               <span className="shrink-0 text-sm font-medium text-ink">
                                 {formatMoney(e.amount)}
@@ -374,6 +413,8 @@ export function BudgetsView({
         {expenseOpen.mode !== 'closed' ? (
           <ExpenseForm
             budgets={budgetOptions}
+            accounts={accounts}
+            tags={tags}
             budgetId={expenseOpen.budgetId}
             date={
               expenseOpen.mode === 'edit' ? expenseOpen.expense.date : today

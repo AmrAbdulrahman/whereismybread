@@ -10,6 +10,7 @@ import {
   deleteBudget,
   deleteExpense,
   deleteExpenseAttachment,
+  getOrCreateTags,
   reconcileExpenseAttachments,
   updateBudget,
   updateExpense,
@@ -136,15 +137,18 @@ export async function saveExpenseAction(
     return { ok: false, fieldErrors: { amount: ['Not a valid amount'] } };
   }
 
+  const tagRows = await getOrCreateTags(userId, parsed.data.tags);
   const input = {
     budgetId: parsed.data.budgetId,
+    accountId: parsed.data.accountId,
     name: parsed.data.name,
     date: parsed.data.date,
     amountMinor,
     currency: parsed.data.currency,
     notes: parsed.data.notes,
+    tagIds: tagRows.map((t) => t.id),
   };
-  const budgetGoneError = 'That budget no longer exists.';
+  const budgetGoneError = 'That budget or account no longer exists.';
 
   if (!id) {
     const expense = await createExpense(userId, input);
@@ -164,7 +168,10 @@ export async function saveExpenseAction(
   if (!expense) {
     return {
       ok: false,
-      error: parsed.data.budgetId ? budgetGoneError : 'That expense no longer exists.',
+      error:
+        parsed.data.budgetId || parsed.data.accountId
+          ? budgetGoneError
+          : 'That expense no longer exists.',
     };
   }
   revalidateBudgets();

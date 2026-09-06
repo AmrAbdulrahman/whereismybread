@@ -1,0 +1,1 @@
+ALTER TYPE "public"."payment_method_kind" ADD VALUE 'standing_order';

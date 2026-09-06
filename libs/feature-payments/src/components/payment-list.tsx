@@ -23,11 +23,15 @@ import type {
   ExpenseLine,
   PaymentBoard,
 } from '../lib/types';
+import { BankTransactionRow as BankTransactionRowComponent } from './bank-transaction-row';
+import type { BankTransactionRow } from '../lib/bank-sync-queries';
 import { BudgetMonthLine } from './budget-month-line';
 import { ExpenseListItem } from './expense-list-item';
 import {
   EMPTY_LIST_FILTER,
   listFilterCount,
+  expenseIncompatibleFilterActive,
+  paymentAttrFilterActive,
   type ListFilterValue,
 } from './list-filters';
 import { ListMinimap } from './list-minimap';
@@ -155,6 +159,7 @@ export function PaymentList({
   board: baseBoard,
   budgets = [],
   expenses = [],
+  reviewTransactions = [],
   filter = EMPTY_LIST_FILTER,
   unpaidOnly = false,
   stickyTop = 0,
@@ -163,10 +168,15 @@ export function PaymentList({
   onEditBudget,
   onEditExpense,
   onAddExpense,
+  onReviewExpense,
+  onReviewPayment,
+  onReviewIgnore,
 }: {
   board: PaymentBoard;
   budgets?: BudgetSummary[];
   expenses?: ExpenseLine[];
+  /** Uncategorized imported transactions — shown per-day, never in any total. */
+  reviewTransactions?: BankTransactionRow[];
   filter?: ListFilterValue;
   /** Hide paid occurrences; days left with nothing to show drop out entirely. */
   unpaidOnly?: boolean;
@@ -177,9 +187,33 @@ export function PaymentList({
   onEditBudget: (budget: BudgetSummary) => void;
   onEditExpense: (expense: ExpenseLine) => void;
   onAddExpense: (date: string) => void;
+  onReviewExpense?: (txn: BankTransactionRow) => void;
+  onReviewPayment?: (txn: BankTransactionRow) => void;
+  onReviewIgnore?: (txn: BankTransactionRow) => void;
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
+  const attrFilterActive = paymentAttrFilterActive(filter);
+  const expenseIncompatibleFilter = expenseIncompatibleFilterActive(filter);
+  const wantKind = (k: 'planned' | 'budgeted' | 'unbudgeted') =>
+    filter.kinds.length === 0 || filter.kinds.includes(k);
+  const wantPlanned = wantKind('planned');
+  /** An expense passes the account/tag chips (the only attrs it carries). */
+  const matchesExpenseFilter = (e: ExpenseLine): boolean => {
+    if (
+      filter.accountIds.length > 0 &&
+      !(e.accountId && filter.accountIds.includes(e.accountId))
+    ) {
+      return false;
+    }
+    if (
+      filter.tagIds.length > 0 &&
+      !e.tags.some((t) => filter.tagIds.includes(t.id))
+    ) {
+      return false;
+    }
+    return true;
+  };
 
   // Months pulled in by scrolling past either end of the server window.
   const [pastBoard, setPastBoard] = useState<PaymentBoard | null>(null);
@@ -474,6 +508,12 @@ export function PaymentList({
       return false;
     }
     if (
+      filter.methodIds.length > 0 &&
+      !(occ.method && filter.methodIds.includes(occ.method.id))
+    ) {
+      return false;
+    }
+    if (
       filter.tagIds.length > 0 &&
       !occ.tags.some((t) => filter.tagIds.includes(t.id))
     ) {
@@ -488,17 +528,41 @@ export function PaymentList({
     return true;
   };
 
-  // Budgets/expenses are unrelated to the payment filter fields (account,
-  // bank, tag) — rather than show them against a narrowed, unrelated view,
-  // they're hidden for as long as a filter is active.
-  const showBudgetsAndExpenses = !filterActive;
+  // A budget *line* has no account/bank/method/tag, so any payment-attribute
+  // filter hides it. Individual expenses do carry an account + tags now, so
+  // they survive an account/tag filter (matched below) — only a filter they
+  // can't satisfy (search / bank / method) hides them. The "Show" kinds
+  // filter narrows further.
+  const showBudgetLines = !attrFilterActive && wantKind('budgeted');
+  const showBudgeted = !expenseIncompatibleFilter && wantKind('budgeted');
+  const showUnbudgeted = !expenseIncompatibleFilter && wantKind('unbudgeted');
+  const showBudgetsAndExpenses =
+    showBudgetLines || showBudgeted || showUnbudgeted;
   const expensesByDate = new Map<string, ExpenseLine[]>();
   for (const e of expenses) {
     if (e.date < board.window.from || e.date > board.window.to) continue;
+    const budgeted = e.budgetId != null;
+    if (budgeted ? !showBudgeted : !showUnbudgeted) continue;
+    if (!matchesExpenseFilter(e)) continue;
     const arr = expensesByDate.get(e.date);
     if (arr) arr.push(e);
     else expensesByDate.set(e.date, [e]);
   }
+
+  // Uncategorized imported transactions, bucketed by their day. They always
+  // show (independent of every filter and the "Show" kinds) — an inbox nudge
+  // that vanishes once triaged — and never touch a single total.
+  const reviewByDate = new Map<string, BankTransactionRow[]>();
+  for (const txn of reviewTransactions) {
+    const d = txn.occurredAt.slice(0, 10);
+    if (d < board.window.from || d > board.window.to) continue;
+    const arr = reviewByDate.get(d);
+    if (arr) arr.push(txn);
+    else reviewByDate.set(d, [txn]);
+  }
+  const reviewOutsideWindow =
+    reviewTransactions.length -
+    [...reviewByDate.values()].reduce((n, a) => n + a.length, 0);
 
   // Show everything that isn't skipped — paid occurrences stay in place with
   // their checkbox ticked (earlier this month, or in months scrolled back in),
@@ -510,24 +574,29 @@ export function PaymentList({
         ...g,
         occurrences: g.occurrences.filter(
           (o) =>
+            wantPlanned &&
             matchesFilter(o) &&
             o.status !== 'skipped' &&
             (!unpaidOnly || !isPaid(o)),
         ),
       }))
       .filter((g) => g.occurrences.length > 0);
-    if (!showBudgetsAndExpenses) return base;
-    // A date with an expense but no payment still needs its own day section.
+    // A date with only an expense, or only a transaction to review, still
+    // needs its own day section.
     const seen = new Set(base.map((g) => g.date));
-    const extra: DayGroup[] = [...expensesByDate.keys()]
-      .filter((d) => !seen.has(d))
-      .map((d) => ({
-        date: d,
-        relativeLabel: '',
-        occurrences: [],
-        totalMinor: 0,
-        currency: displayCurrency,
-      }));
+    const extraDates = new Set<string>();
+    if (showBudgetsAndExpenses) {
+      for (const d of expensesByDate.keys()) if (!seen.has(d)) extraDates.add(d);
+    }
+    for (const d of reviewByDate.keys()) if (!seen.has(d)) extraDates.add(d);
+    if (extraDates.size === 0) return base;
+    const extra: DayGroup[] = [...extraDates].map((d) => ({
+      date: d,
+      relativeLabel: '',
+      occurrences: [],
+      totalMinor: 0,
+      currency: displayCurrency,
+    }));
     return [...base, ...extra].sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
     );
@@ -646,6 +715,16 @@ export function PaymentList({
     return (
       <div className="flex flex-col gap-4">
         {filterActive ? null : <TodayMarker />}
+        {reviewTransactions.length > 0 ? (
+          <p className="rounded-lg border border-warn/40 bg-warn/[0.06] px-3 py-2 text-xs text-ink-soft">
+            {reviewTransactions.length} imported transaction
+            {reviewTransactions.length === 1 ? '' : 's'} to review — open the{' '}
+            <a href="/transactions" className="font-medium text-warn underline">
+              Sync bank
+            </a>{' '}
+            tab, or jump to their month.
+          </p>
+        ) : null}
         <p className="rounded-xl border border-dashed border-line-strong p-8 text-center text-sm text-muted">
           {filterActive
             ? 'No payments match your filters in the months loaded so far. Scroll to load more, or clear the filters.'
@@ -697,6 +776,18 @@ export function PaymentList({
         </div>
       )}
 
+      {reviewOutsideWindow > 0 ? (
+        <p className="rounded-lg border border-warn/40 bg-warn/[0.06] px-3 py-2 text-xs text-ink-soft">
+          {reviewOutsideWindow} more imported transaction
+          {reviewOutsideWindow === 1 ? '' : 's'} to review fall outside these
+          months — scroll to them, or open the{' '}
+          <a href="/transactions" className="font-medium text-warn underline">
+            Sync bank
+          </a>{' '}
+          tab.
+        </p>
+      ) : null}
+
       {months.map((mo) => {
         const isActive = mo.key === activeKey;
         const occs = mo.groups.flatMap((g) => g.occurrences);
@@ -706,14 +797,17 @@ export function PaymentList({
         // reserved); an unbudgeted expense counts too (money already spent).
         // A budgeted expense doesn't count separately — its budget already
         // does — it's shown but excluded here.
-        const monthBudgets = showBudgetsAndExpenses
+        const monthBudgets = showBudgetLines
           ? budgets.filter(
               (b) => b.startDate <= monthEnd && b.endDate >= monthStart,
             )
           : [];
-        const monthUnbudgetedExpenses = showBudgetsAndExpenses
+        const monthUnbudgetedExpenses = showUnbudgeted
           ? expenses.filter(
-              (e) => e.date.slice(0, 7) === mo.key && !e.budgetId,
+              (e) =>
+                e.date.slice(0, 7) === mo.key &&
+                !e.budgetId &&
+                matchesExpenseFilter(e),
             )
           : [];
         const unbudgetedExpensesMinor = sumInDisplay(
@@ -864,6 +958,7 @@ export function PaymentList({
               const dayExpenses = showBudgetsAndExpenses
                 ? (expensesByDate.get(group.date) ?? [])
                 : [];
+              const dayReview = reviewByDate.get(group.date) ?? [];
               const dayUnbudgetedExpenses = dayExpenses.filter(
                 (e) => !e.budgetId,
               );
@@ -879,18 +974,27 @@ export function PaymentList({
                   displayCurrency,
                   rates,
                 );
+              const dayNeedsReview = dayReview.length > 0;
               return (
                 <div key={group.date} className="flex flex-col gap-2">
                   <div
                     className={cn(
                       'flex items-baseline justify-between border-b pb-1',
-                      isToday ? 'border-accent/50' : 'border-line',
+                      isToday
+                        ? 'border-accent/50'
+                        : dayNeedsReview
+                          ? 'border-warn/50'
+                          : 'border-line',
                     )}
                   >
                     <span
                       className={cn(
                         'flex items-center gap-2 font-display text-sm font-semibold',
-                        isToday ? 'text-accent' : 'text-ink',
+                        isToday
+                          ? 'text-accent'
+                          : dayNeedsReview
+                            ? 'text-warn'
+                            : 'text-ink',
                       )}
                     >
                       {isToday ? (
@@ -904,6 +1008,11 @@ export function PaymentList({
                         month: 'short',
                         timeZone: 'UTC',
                       }).format(new Date(`${group.date}T00:00:00Z`))}
+                      {dayNeedsReview ? (
+                        <span className="rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
+                          {dayReview.length} to review
+                        </span>
+                      ) : null}
                     </span>
                     <span className="flex items-center gap-2 text-xs text-muted">
                       {!isToday &&
@@ -957,6 +1066,16 @@ export function PaymentList({
                         key={e.id}
                         expense={e}
                         onEdit={() => onEditExpense(e)}
+                      />
+                    ))}
+                    {dayReview.map((txn) => (
+                      <BankTransactionRowComponent
+                        key={txn.id}
+                        txn={txn}
+                        variant="day"
+                        onLogExpense={() => onReviewExpense?.(txn)}
+                        onCreatePayment={() => onReviewPayment?.(txn)}
+                        onIgnore={() => onReviewIgnore?.(txn)}
                       />
                     ))}
                   </div>

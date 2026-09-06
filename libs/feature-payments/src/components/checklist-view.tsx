@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatMoney, money, type RateMap } from '@wib/domain';
 import { ResponsiveModal, cn } from '@wib/ui';
-import { ChevronDown } from '@wib/ui/icons';
+import { Check, ChevronDown } from '@wib/ui/icons';
 import type { PaymentOverrides } from '@wib/db';
 import type {
   ChecklistMonth,
@@ -42,9 +42,53 @@ export function ChecklistView({
   const [open, setOpen] = useState<Set<string>>(
     () => new Set([currentMonthKey]),
   );
+
+  const monthHasWork = (m: ChecklistMonth) =>
+    m.totalCount > 0 && m.doneCount < m.totalCount;
+  const monthDone = (m: ChecklistMonth) =>
+    m.totalCount > 0 && m.doneCount === m.totalCount;
+
+  // Months this effect has already auto-collapsed — so a month the user
+  // deliberately re-opens to review stays open, and only re-arms once its
+  // items go back to incomplete.
+  const autoCollapsed = useRef<Set<string>>(new Set());
+
+  // When every item in an open month gets ticked, fold it away and pull the
+  // next month that still has outstanding transfers into view. All the
+  // decision-making (and the ref bookkeeping) happens here in the effect
+  // body; the `setOpen` updater stays pure so React can safely call it more
+  // than once.
   useEffect(() => {
-    setOpen((prev) => (prev.size === 0 ? new Set([currentMonthKey]) : prev));
-  }, [currentMonthKey]);
+    // A month that's no longer complete re-arms for a future auto-collapse.
+    for (const m of months) {
+      if (!monthDone(m)) autoCollapsed.current.delete(m.key);
+    }
+
+    const collapse: string[] = [];
+    const reveal: string[] = [];
+    for (const m of months) {
+      if (monthDone(m) && open.has(m.key) && !autoCollapsed.current.has(m.key)) {
+        autoCollapsed.current.add(m.key);
+        collapse.push(m.key);
+        const nextUp = months.find((x) => x.key > m.key && monthHasWork(x));
+        if (nextUp) reveal.push(nextUp.key);
+      }
+    }
+
+    if (collapse.length === 0 && reveal.length === 0) return;
+
+    setOpen((prev) => {
+      const next = new Set(prev);
+      for (const k of collapse) next.delete(k);
+      for (const k of reveal) next.add(k);
+      // Don't strand the reader on a fully-collapsed list while work remains.
+      if (next.size === 0) {
+        const fallback = months.find(monthHasWork)?.key;
+        if (fallback) next.add(fallback);
+      }
+      return next;
+    });
+  }, [months, open, currentMonthKey]);
 
   const toggle = (key: string) =>
     setOpen((prev) => {
@@ -150,6 +194,14 @@ export function ChecklistView({
                     )}
                   />
                   <span className="flex min-w-0 flex-1 items-center gap-2">
+                    {allDone ? (
+                      <span
+                        className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good text-ground"
+                        aria-label="All done"
+                      >
+                        <Check size={11} strokeWidth={3} />
+                      </span>
+                    ) : null}
                     <span className="truncate font-display text-sm font-semibold text-ink">
                       {m.label}
                     </span>

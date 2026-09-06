@@ -219,6 +219,9 @@ importers:
       '@wib/auth':
         specifier: workspace:*
         version: link:../../libs/auth
+      '@wib/config':
+        specifier: workspace:*
+        version: link:../../libs/config
       '@wib/db':
         specifier: workspace:*
         version: link:../../libs/db

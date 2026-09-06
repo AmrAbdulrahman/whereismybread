@@ -2,6 +2,7 @@ export {
   getBoardData,
   getAccounts,
   getBanks,
+  getTags,
   type PaymentsContext,
 } from './lib/queries';
 export {
@@ -15,6 +16,12 @@ export {
   budgetsOverlapping,
 } from './lib/budgets';
 export { getExpensesData } from './lib/expenses';
+export {
+  getBankTransactionsData,
+  type BankTransactionRow,
+  type BankTransactionsData,
+  type StatementImportSummary,
+} from './lib/bank-sync-queries';
 export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_ALLOWED_TYPES,

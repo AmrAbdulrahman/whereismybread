@@ -28,6 +28,12 @@ const DEFAULT_METHODS: {
     iconKey: 'transfer',
     color: '#a8641a',
   },
+  {
+    name: 'Standing order',
+    kind: 'standing_order',
+    iconKey: 'repeat',
+    color: '#2b6cb0',
+  },
 ];
 
 export async function listPaymentMethods(
@@ -40,7 +46,7 @@ export async function listPaymentMethods(
     .orderBy(asc(paymentMethods.sortOrder), asc(paymentMethods.name));
 }
 
-/** Seed the four standard methods the first time a user needs them. */
+/** Seed the standard methods the first time a user needs them. */
 export async function ensureDefaultMethods(
   userId: string,
 ): Promise<PaymentMethod[]> {

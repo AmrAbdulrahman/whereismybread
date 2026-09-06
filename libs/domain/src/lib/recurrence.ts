@@ -19,6 +19,7 @@ export const PAYMENT_METHOD_KINDS = [
   'credit_card',
   'cash',
   'manual_transfer',
+  'standing_order',
 ] as const;
 export type PaymentMethodKind = (typeof PAYMENT_METHOD_KINDS)[number];
 

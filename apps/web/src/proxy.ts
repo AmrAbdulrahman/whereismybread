@@ -8,6 +8,8 @@ const PUBLIC_PREFIXES = [
   '/reset-password',
   '/verify',
   '/api/auth',
+  '/privacy-policy',
+  '/terms-and-conditions',
 ];
 
 export default auth((req) => {
