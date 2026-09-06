@@ -32,7 +32,7 @@ test('a payment pulls its logo and name from the service website', async ({
   await page.getByRole('button', { name: 'Add payment' }).click();
   await expect(page.getByLabel('Amount')).toBeHidden();
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: /Edit .*monzo/i }).first(),
   ).toBeVisible();

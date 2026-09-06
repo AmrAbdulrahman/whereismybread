@@ -48,13 +48,13 @@ test('the list view search + day total span currencies', async ({ page }) => {
     // Wait for the board to settle into the "has payments" layout before the
     // next call — the post-save re-render swaps the whole view and briefly
     // remounts the form modal.
-    await expect(page.getByRole('button', { name: 'list' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   };
 
   await addMonthly('Rent', '1000', 'EUR', 'Home');
   await addMonthly('Gym membership', '150', 'GBP');
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
 
   await expect(page.getByRole('button', { name: 'Edit Rent' }).first()).toBeVisible();
   await expect(
@@ -66,6 +66,9 @@ test('the list view search + day total span currencies', async ({ page }) => {
   // currencies — €1000 + (£150 ≈ €150–200) — never just one of them (which
   // would read €1,000.00, or ~€175 for the GBP row alone).
   await expect(page.getByText(/€1,1\d\d\.\d\d/).first()).toBeVisible();
+
+  // Search + all filters live behind the single "Filters" button now.
+  await page.getByRole('button', { name: /^Filters/ }).click();
 
   // free-text search narrows to the matching payment
   await page.getByLabel('Search payments').fill('gym');
@@ -82,8 +85,7 @@ test('the list view search + day total span currencies', async ({ page }) => {
   // and it's gone once the field is empty
   await expect(page.getByRole('button', { name: 'Clear search' })).toHaveCount(0);
 
-  // the account filter (in the collapsible panel) narrows to Rent
-  await page.getByRole('button', { name: /^Filters/ }).click();
+  // the account filter (in the same panel) narrows to Rent
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Edit Rent' }).first()).toBeVisible();
   await expect(

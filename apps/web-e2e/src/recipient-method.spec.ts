@@ -57,7 +57,7 @@ test('a manual payment can pick a recipient method, added on the fly', async ({
   await expect(page.getByLabel('Amount')).toBeHidden();
 
   // the link survives a re-open of the edit form (Wise chip stays selected)
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await page
     .getByRole('button', { name: 'Edit Rent to landlord' })
     .first()

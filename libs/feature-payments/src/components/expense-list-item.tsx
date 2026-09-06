@@ -2,7 +2,7 @@
 
 import { formatMoney } from '@wib/domain';
 import { cn } from '@wib/ui';
-import { FileText, Receipt } from '@wib/ui/icons';
+import { FileText, PiggyBank, Receipt } from '@wib/ui/icons';
 import type { ExpenseLine } from '../lib/types';
 
 /** "16:57" for a CSV-imported expense that carried a time; "" otherwise. */
@@ -67,9 +67,11 @@ export function ExpenseListItem({
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
             {budgeted ? (
               <span className="flex items-center gap-1">
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: expense.budgetColor ?? undefined }}
+                <PiggyBank
+                  size={12}
+                  strokeWidth={2}
+                  className="shrink-0"
+                  style={{ color: expense.budgetColor ?? undefined }}
                 />
                 <span className="truncate">{expense.budgetName}</span>
               </span>

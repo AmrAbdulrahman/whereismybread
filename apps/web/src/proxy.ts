@@ -33,6 +33,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/version|api/health|.*\\.\\w+$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/version|api/health|api/bank-sync|.*\\.\\w+$).*)',
   ],
 };

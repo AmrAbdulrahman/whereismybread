@@ -239,6 +239,13 @@
       "when": 1788715078724,
       "tag": "0033_transaction_times",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788733574810,
+      "tag": "0034_bank_connections",
+      "breakpoints": true
     }
   ]
 }

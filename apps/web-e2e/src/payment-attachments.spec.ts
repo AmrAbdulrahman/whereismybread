@@ -30,7 +30,7 @@ test('attach a file to a payment, preview it, then remove it', async ({
   await expect(page.getByLabel('Amount')).toBeHidden();
 
   // reopen in edit mode and attach a file (immediate upload → server action)
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await page.getByRole('button', { name: 'Edit Car service' }).first().click();
 
   await page

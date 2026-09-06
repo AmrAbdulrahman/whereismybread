@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
   addDays,
@@ -13,7 +13,7 @@ import {
   type RateMap,
 } from '@wib/domain';
 import { cn, Progress, Spinner } from '@wib/ui';
-import { Pencil } from '@wib/ui/icons';
+import { Check, ChevronDown, Pencil } from '@wib/ui/icons';
 import { loadListWindowAction } from '../lib/actions';
 import { riskFor, sumInDisplay } from '../lib/risk';
 import type {
@@ -38,9 +38,12 @@ import { ListMinimap } from './list-minimap';
 import { MonthIncomeEditor } from './month-income-editor';
 import { OccurrenceItem } from './occurrence-item';
 
+/** How much of a day's list is shown. */
+type DayMode = 'collapsed' | 'compact' | 'expanded';
+
 function TodayMarker({ label }: { label?: string }) {
   return (
-    <div className="flex items-center gap-3" aria-label="Today">
+    <div className="flex items-center gap-3" aria-label="Today" data-plan-today>
       <span className="grid h-5 place-items-center rounded-full bg-accent px-2 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
         Today
       </span>
@@ -193,6 +196,45 @@ export function PaymentList({
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
+
+  // Per-day expansion. Past days default to `compact` (only what still needs
+  // action — unpaid payments + transactions to review); today and future
+  // default to `expanded`. Clicking the day's chevron cycles
+  // collapsed -> compact ("needs action") -> expanded — but a day with
+  // nothing that needs action has no meaningful `compact` state, so it just
+  // toggles collapsed <-> expanded.
+  const [dayModes, setDayModes] = useState<ReadonlyMap<string, DayMode>>(
+    new Map(),
+  );
+  const defaultDayMode = (date: string): DayMode =>
+    date < baseBoard.today ? 'compact' : 'expanded';
+  /** The mode actually shown — `compact` folds to `collapsed` when there's nothing to compact. */
+  const dayModeFor = (
+    date: string,
+    actionable: boolean,
+    stored: DayMode = dayModes.get(date) ?? defaultDayMode(date),
+  ): DayMode => (!actionable && stored === 'compact' ? 'collapsed' : stored);
+  const cycleDayMode = (date: string, actionable: boolean) =>
+    setDayModes((prev) => {
+      const from = dayModeFor(
+        date,
+        actionable,
+        prev.get(date) ?? defaultDayMode(date),
+      );
+      const next: DayMode = actionable
+        ? from === 'collapsed'
+          ? 'compact'
+          : from === 'compact'
+            ? 'expanded'
+            : 'collapsed'
+        : from === 'collapsed'
+          ? 'expanded'
+          : 'collapsed';
+      const m = new Map(prev);
+      m.set(date, next);
+      return m;
+    });
+
   const attrFilterActive = paymentAttrFilterActive(filter);
   const expenseIncompatibleFilter = expenseIncompatibleFilterActive(filter);
   const wantKind = (k: 'planned' | 'budgeted' | 'unbudgeted') =>
@@ -252,7 +294,9 @@ export function PaymentList({
             const p = prev[o.key];
             if (p !== undefined && p !== (o.status === 'paid')) next[o.key] = p;
           }
-      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      return Object.keys(next).length === Object.keys(prev).length
+        ? prev
+        : next;
     });
   }, [baseBoard, pastBoard, futureBoard]);
   const isPaid = (o: BoardOccurrence) =>
@@ -490,7 +534,14 @@ export function PaymentList({
       loadPastRef.current();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-checks after each slice lands
-  }, [pastBoard, futureBoard, atStart, futureExhausted, loadTick, filterActive]);
+  }, [
+    pastBoard,
+    futureBoard,
+    atStart,
+    futureExhausted,
+    loadTick,
+    filterActive,
+  ]);
 
   // Search / account / bank / tag filter — matched against the occurrence and
   // its payment's notes.
@@ -532,10 +583,15 @@ export function PaymentList({
   // filter hides it. Individual expenses do carry an account + tags now, so
   // they survive an account/tag filter (matched below) — only a filter they
   // can't satisfy (search / bank / method) hides them. The "Show" kinds
-  // filter narrows further.
-  const showBudgetLines = !attrFilterActive && wantKind('budgeted');
-  const showBudgeted = !expenseIncompatibleFilter && wantKind('budgeted');
-  const showUnbudgeted = !expenseIncompatibleFilter && wantKind('unbudgeted');
+  // filter narrows further. "Unpaid only" is about outstanding payments —
+  // expenses are records of money already spent and budget lines aren't a
+  // payment at all, so both drop out entirely under it.
+  const showBudgetLines =
+    !unpaidOnly && !attrFilterActive && wantKind('budgeted');
+  const showBudgeted =
+    !unpaidOnly && !expenseIncompatibleFilter && wantKind('budgeted');
+  const showUnbudgeted =
+    !unpaidOnly && !expenseIncompatibleFilter && wantKind('unbudgeted');
   const showBudgetsAndExpenses =
     showBudgetLines || showBudgeted || showUnbudgeted;
   const expensesByDate = new Map<string, ExpenseLine[]>();
@@ -586,7 +642,8 @@ export function PaymentList({
     const seen = new Set(base.map((g) => g.date));
     const extraDates = new Set<string>();
     if (showBudgetsAndExpenses) {
-      for (const d of expensesByDate.keys()) if (!seen.has(d)) extraDates.add(d);
+      for (const d of expensesByDate.keys())
+        if (!seen.has(d)) extraDates.add(d);
     }
     for (const d of reviewByDate.keys()) if (!seen.has(d)) extraDates.add(d);
     if (extraDates.size === 0) return base;
@@ -601,9 +658,20 @@ export function PaymentList({
       a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
     );
   })();
-  const todayHasPayments = upcoming.some(
-    (g) => g.date === board.today && g.occurrences.length > 0,
-  );
+  // Today gets a "Today" divider unless it already has its own dated section
+  // (which carries a "Today" badge of its own).
+  const todayHasOwnGroup = upcoming.some((g) => g.date === board.today);
+
+  const dayNeedsAction = (g: DayGroup): boolean =>
+    (reviewByDate.get(g.date)?.length ?? 0) > 0 ||
+    g.occurrences.some((o) => !isPaid(o));
+  // The earliest day this calendar month that still needs the user to act —
+  // the list auto-scrolls here on load (see the effect below).
+  const firstActionDate =
+    upcoming.find(
+      (g) =>
+        g.date.slice(0, 7) === board.today.slice(0, 7) && dayNeedsAction(g),
+    )?.date ?? null;
 
   // Bucket the day groups by calendar month, in order.
   const monthsByKey = new Map<string, { key: string; groups: DayGroup[] }>();
@@ -635,11 +703,20 @@ export function PaymentList({
       }
     }
   }
+  const todayMonth = board.today.slice(0, 7);
+  // The current month always gets a section — even with nothing in it — so the
+  // "Today" divider always has somewhere to land.
+  if (
+    todayMonth >= board.window.from.slice(0, 7) &&
+    todayMonth <= board.window.to.slice(0, 7) &&
+    !monthsByKey.has(todayMonth)
+  ) {
+    monthsByKey.set(todayMonth, { key: todayMonth, groups: [] });
+  }
   const months = [...monthsByKey.values()].sort((a, b) =>
     a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
   );
 
-  const todayMonth = board.today.slice(0, 7);
   const defaultKey =
     months.find((m) => m.key === todayMonth)?.key ?? months[0]?.key ?? '';
 
@@ -657,8 +734,7 @@ export function PaymentList({
   // loaded month (or the furthest one, once there's nothing more to load).
   const loadedMonthKeys = new Set(months.map((m) => m.key));
   const minimapFrom = (
-    startedFloor ??
-    `${months[0]?.key ?? todayMonth}-01`
+    startedFloor ?? `${months[0]?.key ?? todayMonth}-01`
   ).slice(0, 7);
   const lastLoadedKey = months.at(-1)?.key ?? todayMonth;
   const sixOut = addMonths(`${todayMonth}-01`, 6).slice(0, 7);
@@ -673,7 +749,40 @@ export function PaymentList({
     Number(minimapFrom.slice(5, 7)) +
     1;
   const showMinimap = minimapSpan >= 3;
-  const goToday = () => jumpToMonth(todayMonth);
+  // "Today" jumps to today's own day section, or the "Today" divider when the
+  // day has nothing of its own — not just the top of the month.
+  const goToday = () => {
+    const el =
+      document.querySelector<HTMLElement>(`[data-day="${board.today}"]`) ??
+      document.querySelector<HTMLElement>('[data-plan-today]');
+    if (el) {
+      const y = window.scrollY + el.getBoundingClientRect().top - stickyTop - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      return;
+    }
+    jumpToMonth(todayMonth);
+  };
+
+  // On first load, land on the earliest day this month that still needs
+  // action (an unpaid payment or a transaction to review) rather than the
+  // very top of the month. Runs once, and only if the user hasn't already
+  // scrolled — and waits for the sticky panel to be measured so the day
+  // header isn't left tucked under it.
+  const didAutoScroll = useRef(false);
+  useEffect(() => {
+    if (didAutoScroll.current || !firstActionDate || stickyTop === 0) return;
+    if (window.scrollY > 4) {
+      didAutoScroll.current = true;
+      return;
+    }
+    const el = document.querySelector<HTMLElement>(
+      `[data-day="${firstActionDate}"]`,
+    );
+    if (!el) return;
+    didAutoScroll.current = true;
+    const y = window.scrollY + el.getBoundingClientRect().top - stickyTop - 8;
+    window.scrollTo({ top: Math.max(0, y) });
+  }, [firstActionDate, stickyTop, monthKeys]);
 
   useEffect(() => {
     const order = monthKeys ? monthKeys.split(',') : [];
@@ -748,9 +857,7 @@ export function PaymentList({
     : null;
 
   return (
-    <div
-      className={cn('flex flex-col gap-8', showMinimap && 'sm:pr-16')}
-    >
+    <div className={cn('flex flex-col gap-8', showMinimap && 'sm:pr-16')}>
       {showMinimap ? (
         <ListMinimap
           fromKey={minimapFrom}
@@ -764,7 +871,9 @@ export function PaymentList({
         />
       ) : null}
       {atStart ? (
-        scrolledUp ? <StartMarker /> : null
+        scrolledUp ? (
+          <StartMarker />
+        ) : null
       ) : (
         <div className="flex h-9 items-center justify-center gap-2 text-xs text-muted">
           {loadingPast ? (
@@ -793,6 +902,16 @@ export function PaymentList({
         const occs = mo.groups.flatMap((g) => g.occurrences);
         const monthStart = `${mo.key}-01`;
         const monthEnd = endOfMonth(monthStart);
+        // Index in this month's days where the "Today" divider belongs (just
+        // before the first day after today; `mo.groups.length` = after them
+        // all). `-1` = not the current month, or today has its own section.
+        const todayMarkerAt =
+          mo.key === todayMonth && !todayHasOwnGroup
+            ? (() => {
+                const i = mo.groups.findIndex((g) => g.date > board.today);
+                return i === -1 ? mo.groups.length : i;
+              })()
+            : -1;
         // A budget counts toward the month like a payment would (it's money
         // reserved); an unbudgeted expense counts too (money already spent).
         // A budgeted expense doesn't count separately — its budget already
@@ -890,9 +1009,7 @@ export function PaymentList({
                       </span>
                       <Pencil size={12} className="opacity-60" />
                     </button>
-                    <span
-                      className={cn('font-medium tabular-nums', risk.text)}
-                    >
+                    <span className={cn('font-medium tabular-nums', risk.text)}>
                       {leftMinor >= 0
                         ? `${formatMoney(money(leftMinor, displayCurrency))} left`
                         : `${formatMoney(
@@ -949,11 +1066,11 @@ export function PaymentList({
               ) : null}
             </div>
 
-            {mo.key === todayMonth && !todayHasPayments ? (
+            {todayMarkerAt === 0 ? (
               <TodayMarker label="Nothing due today" />
             ) : null}
 
-            {mo.groups.map((group) => {
+            {mo.groups.map((group, gi) => {
               const isToday = group.date === board.today;
               const dayExpenses = showBudgetsAndExpenses
                 ? (expensesByDate.get(group.date) ?? [])
@@ -975,113 +1092,203 @@ export function PaymentList({
                   rates,
                 );
               const dayNeedsReview = dayReview.length > 0;
+              // Something on this day still needs the user to act.
+              const dayActionable =
+                dayNeedsReview || group.occurrences.some((o) => !isPaid(o));
+              // "Done": everything that was on this day is handled — every
+              // payment ticked and nothing left to review. (A day with only
+              // expenses counts — they're records of money already spent.)
+              const dayDone =
+                !dayActionable &&
+                group.occurrences.length + dayExpenses.length > 0;
+              const dayMode = dayModeFor(group.date, dayActionable);
+              const dayCollapsed = dayMode === 'collapsed';
+              const dayCompact = dayMode === 'compact';
+              // Compact: only what still needs action — unpaid payments and
+              // transactions to review. Paid payments + expenses are hidden.
+              const shownOccurrences = dayCompact
+                ? group.occurrences.filter((o) => !isPaid(o))
+                : group.occurrences;
+              const shownExpenses = dayCompact ? [] : dayExpenses;
+              const hasVisibleRows =
+                !dayCollapsed &&
+                (shownOccurrences.length > 0 ||
+                  shownExpenses.length > 0 ||
+                  dayReview.length > 0);
+              const dayItemCount =
+                group.occurrences.length +
+                dayExpenses.length +
+                dayReview.length;
+              const hiddenCount = dayCollapsed
+                ? dayItemCount
+                : group.occurrences.length -
+                  shownOccurrences.length +
+                  dayExpenses.length;
+              const modeLabel =
+                dayMode === 'collapsed'
+                  ? dayActionable
+                    ? 'Collapsed — click to show what needs action'
+                    : 'Collapsed — click to expand'
+                  : dayMode === 'compact'
+                    ? 'Showing only what needs action — click to expand'
+                    : 'Showing everything — click to collapse';
               return (
-                <div key={group.date} className="flex flex-col gap-2">
-                  <div
-                    className={cn(
-                      'flex items-baseline justify-between border-b pb-1',
-                      isToday
-                        ? 'border-accent/50'
-                        : dayNeedsReview
-                          ? 'border-warn/50'
-                          : 'border-line',
-                    )}
-                  >
-                    <span
+                <Fragment key={group.date}>
+                  {todayMarkerAt === gi && gi > 0 ? (
+                    <TodayMarker label="Nothing due today" />
+                  ) : null}
+                  <div className="flex flex-col gap-2" data-day={group.date}>
+                    <div
                       className={cn(
-                        'flex items-center gap-2 font-display text-sm font-semibold',
+                        'flex items-baseline justify-between border-b pb-1',
                         isToday
-                          ? 'text-accent'
+                          ? 'border-accent/50'
                           : dayNeedsReview
-                            ? 'text-warn'
-                            : 'text-ink',
+                            ? 'border-warn/50'
+                            : dayDone
+                              ? 'border-good/30'
+                              : 'border-line',
                       )}
                     >
-                      {isToday ? (
-                        <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
-                          Today
-                        </span>
-                      ) : null}
-                      {new Intl.DateTimeFormat('en-GB', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                        timeZone: 'UTC',
-                      }).format(new Date(`${group.date}T00:00:00Z`))}
-                      {dayNeedsReview ? (
-                        <span className="rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
-                          {dayReview.length} to review
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="flex items-center gap-2 text-xs text-muted">
-                      {!isToday &&
-                      /^(Tomorrow|Yesterday|in \d|\d+ days ago)/.test(
-                        group.relativeLabel,
-                      ) ? (
-                        <span>{group.relativeLabel}</span>
-                      ) : null}
-                      {showBudgetsAndExpenses ? (
-                        <button
-                          type="button"
-                          onClick={() => onAddExpense(group.date)}
-                          className="font-medium text-ink-soft hover:text-ink hover:underline"
-                        >
-                          + expense
-                        </button>
-                      ) : null}
-                      {dayTotalMinor > 0 ? (
-                        <span className="font-mono tabular-nums">
-                          {formatMoney(money(dayTotalMinor, displayCurrency))}
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    {[...group.occurrences]
-                      .sort((a, b) => Number(isPaid(a)) - Number(isPaid(b)))
-                      .map((occ) => (
-                        <div
-                          key={occ.key}
-                          style={{
-                            viewTransitionName: `o-${occ.key.replace(
-                              /[^\w-]/g,
-                              '_',
-                            )}`,
-                          }}
-                        >
-                          <OccurrenceItem
-                            occ={occ}
-                            onEdit={onEdit}
-                            onFlag={onFlag}
-                            onToggle={(paid) => setLocalPaid(occ.key, paid)}
-                            displayCurrency={displayCurrency}
-                            rates={rates}
-                            today={board.today}
+                      <button
+                        type="button"
+                        onClick={() => cycleDayMode(group.date, dayActionable)}
+                        aria-expanded={dayMode !== 'collapsed'}
+                        title={modeLabel}
+                        aria-label={`${new Intl.DateTimeFormat('en-GB', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          timeZone: 'UTC',
+                        }).format(
+                          new Date(`${group.date}T00:00:00Z`),
+                        )} — ${modeLabel}`}
+                        className={cn(
+                          'group -ml-1 flex items-center gap-1.5 rounded px-1 font-display text-sm font-semibold hover:bg-surface-2/60',
+                          isToday
+                            ? 'text-accent'
+                            : dayNeedsReview
+                              ? 'text-warn'
+                              : dayDone
+                                ? 'text-muted'
+                                : 'text-ink',
+                        )}
+                      >
+                        <ChevronDown
+                          size={13}
+                          strokeWidth={2.5}
+                          className={cn(
+                            'shrink-0 text-muted transition-transform',
+                            dayCompact && '-rotate-45',
+                            dayCollapsed && '-rotate-90',
+                          )}
+                        />
+                        {isToday ? (
+                          <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-fg">
+                            Today
+                          </span>
+                        ) : null}
+                        {dayDone ? (
+                          <span
+                            className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-good text-ground"
+                            aria-label="All done"
+                          >
+                            <Check size={11} strokeWidth={3} />
+                          </span>
+                        ) : null}
+                        {new Intl.DateTimeFormat('en-GB', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                          timeZone: 'UTC',
+                        }).format(new Date(`${group.date}T00:00:00Z`))}
+                        {dayNeedsReview ? (
+                          <span className="rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
+                            {dayReview.length} to review
+                          </span>
+                        ) : null}
+                        {(dayCollapsed || dayCompact) && hiddenCount > 0 ? (
+                          <span className="text-[11px] font-medium text-muted">
+                            {dayCollapsed
+                              ? dayItemCount
+                              : `+${hiddenCount} hidden`}
+                          </span>
+                        ) : null}
+                      </button>
+                      <span className="flex items-center gap-2 text-xs text-muted">
+                        {!isToday &&
+                        /^(Tomorrow|Yesterday|in \d|\d+ days ago)/.test(
+                          group.relativeLabel,
+                        ) ? (
+                          <span>{group.relativeLabel}</span>
+                        ) : null}
+                        {showBudgetsAndExpenses ? (
+                          <button
+                            type="button"
+                            onClick={() => onAddExpense(group.date)}
+                            className="font-medium text-ink-soft hover:text-ink hover:underline"
+                          >
+                            + expense
+                          </button>
+                        ) : null}
+                        {dayTotalMinor > 0 ? (
+                          <span className="font-mono tabular-nums">
+                            {formatMoney(money(dayTotalMinor, displayCurrency))}
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                    {hasVisibleRows ? (
+                      <div className="flex flex-col gap-1.5">
+                        {[...shownOccurrences]
+                          .sort((a, b) => Number(isPaid(a)) - Number(isPaid(b)))
+                          .map((occ) => (
+                            <div
+                              key={occ.key}
+                              style={{
+                                viewTransitionName: `o-${occ.key.replace(
+                                  /[^\w-]/g,
+                                  '_',
+                                )}`,
+                              }}
+                            >
+                              <OccurrenceItem
+                                occ={occ}
+                                onEdit={onEdit}
+                                onFlag={onFlag}
+                                onToggle={(paid) => setLocalPaid(occ.key, paid)}
+                                displayCurrency={displayCurrency}
+                                rates={rates}
+                                today={board.today}
+                              />
+                            </div>
+                          ))}
+                        {shownExpenses.map((e) => (
+                          <ExpenseListItem
+                            key={e.id}
+                            expense={e}
+                            onEdit={() => onEditExpense(e)}
                           />
-                        </div>
-                      ))}
-                    {dayExpenses.map((e) => (
-                      <ExpenseListItem
-                        key={e.id}
-                        expense={e}
-                        onEdit={() => onEditExpense(e)}
-                      />
-                    ))}
-                    {dayReview.map((txn) => (
-                      <BankTransactionRowComponent
-                        key={txn.id}
-                        txn={txn}
-                        variant="day"
-                        onLogExpense={() => onReviewExpense?.(txn)}
-                        onCreatePayment={() => onReviewPayment?.(txn)}
-                        onIgnore={() => onReviewIgnore?.(txn)}
-                      />
-                    ))}
+                        ))}
+                        {dayReview.map((txn) => (
+                          <BankTransactionRowComponent
+                            key={txn.id}
+                            txn={txn}
+                            variant="day"
+                            onLogExpense={() => onReviewExpense?.(txn)}
+                            onCreatePayment={() => onReviewPayment?.(txn)}
+                            onIgnore={() => onReviewIgnore?.(txn)}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                </div>
+                </Fragment>
               );
             })}
+            {todayMarkerAt === mo.groups.length && mo.groups.length > 0 ? (
+              <TodayMarker label="Nothing due today" />
+            ) : null}
           </section>
         );
       })}

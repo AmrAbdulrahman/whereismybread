@@ -32,6 +32,69 @@ const audit = {
 };
 
 /**
+ * A live Open Banking connection (Enable Banking AISP). One row per user —
+ * the connection covers every account/currency-balance the user consented
+ * to. `sessionIdEnc` is the Enable Banking session id, AES-256-GCM encrypted
+ * (it is a bearer credential to account data). `status`:
+ *   - `pending`  authorization link issued, user not back yet
+ *   - `active`   session created, syncing
+ *   - `expired`  consent lapsed (~90 days) — user must reconnect
+ *   - `error`    last sync failed for another reason (`lastError`)
+ */
+export const bankConnections = pgTable(
+  'bank_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull().default('enablebanking'),
+    /** ASPSP name as Enable Banking knows it, e.g. "Wise". */
+    aspspName: text('aspsp_name').notNull(),
+    /** ASPSP country code, e.g. "GB". */
+    aspspCountry: text('aspsp_country').notNull(),
+    /** Opaque `state` we round-trip through the auth redirect (CSRF guard). */
+    authState: text('auth_state'),
+    /** Enable Banking session id, AES-256-GCM encrypted. Null while pending. */
+    sessionIdEnc: text('session_id_enc'),
+    psuIdHash: text('psu_id_hash'),
+    status: text('status').notNull().default('pending'),
+    consentExpiresAt: timestamp('consent_expires_at', { withTimezone: true }),
+    authorizedAt: timestamp('authorized_at', { withTimezone: true }),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    ...audit,
+  },
+  (t) => [uniqueIndex('bank_connections_user_idx').on(t.userId)],
+);
+
+/**
+ * One account / currency-balance exposed by a connection. `uid` is the
+ * Enable Banking account uid used in `/accounts/{uid}/transactions`.
+ */
+export const bankAccounts = pgTable(
+  'bank_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => bankConnections.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    uid: text('uid').notNull(),
+    name: text('name'),
+    currency: text('currency').notNull(),
+    /** IBAN / sort-code+number / other, whatever the ASPSP returns. */
+    identification: text('identification'),
+    cashAccountType: text('cash_account_type'),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    ...audit,
+  },
+  (t) => [uniqueIndex('bank_accounts_connection_uid_idx').on(t.connectionId, t.uid)],
+);
+
+/**
  * One uploaded bank statement (CSV). Kept as an audit trail and as the
  * per-source high-water mark — `source` groups statements from the same
  * account, and `latestOccurredAt` / `latestExternalId` are the "last synced"
@@ -78,6 +141,10 @@ export const bankTransactions = pgTable(
     importId: uuid('import_id').references(() => statementImports.id, {
       onDelete: 'set null',
     }),
+    /** Set when the row came from a live sync rather than a CSV upload. */
+    accountId: uuid('account_id').references(() => bankAccounts.id, {
+      onDelete: 'set null',
+    }),
     dedupKey: text('dedup_key').notNull(),
     source: text('source').notNull().default('Statement'),
     /** The bank's own transaction id, when the statement format carries one. */
@@ -110,3 +177,7 @@ export type StatementImport = typeof statementImports.$inferSelect;
 export type NewStatementImport = typeof statementImports.$inferInsert;
 export type BankTransaction = typeof bankTransactions.$inferSelect;
 export type NewBankTransaction = typeof bankTransactions.$inferInsert;
+export type BankConnection = typeof bankConnections.$inferSelect;
+export type NewBankConnection = typeof bankConnections.$inferInsert;
+export type BankAccount = typeof bankAccounts.$inferSelect;
+export type NewBankAccount = typeof bankAccounts.$inferInsert;

@@ -20,9 +20,10 @@ export default function TermsAndConditionsPage() {
         </h2>
         <p>
           It helps you track payments, budgets, and expenses you enter
-          yourself, and — if you choose to upload a bank statement — helps you
-          categorize the transactions in it. It never connects to your bank or
-          initiates a payment, transfer, or any change to a bank account.
+          yourself, and — if you choose to connect a bank or upload a
+          statement — helps you categorize your transactions. Any bank
+          connection is read-only account information: the app never initiates
+          a payment, transfer, or any change to a bank account.
         </p>
       </section>
 
@@ -53,13 +54,16 @@ export default function TermsAndConditionsPage() {
 
       <section className="flex flex-col gap-2">
         <h2 className="font-display text-lg font-semibold text-ink">
-          Bank statements
+          Bank data
         </h2>
         <p>
-          Uploading a bank statement is entirely optional and under your
-          control. The file is parsed in memory and not stored — only the
-          parsed transactions are kept, and you can ignore or delete them at
-          any time. See our{' '}
+          Connecting a bank or uploading a statement is entirely optional and
+          under your control. A bank connection uses Enable Banking, a
+          regulated Open Banking provider, is read-only, is authorised by you
+          directly with your bank, expires automatically, and can be
+          disconnected at any time. An uploaded file is parsed in memory and
+          not stored — only the parsed transactions are kept, and you can
+          ignore or delete them at any time. See our{' '}
           <a href="/privacy-policy" className="text-accent underline">
             Privacy policy
           </a>{' '}

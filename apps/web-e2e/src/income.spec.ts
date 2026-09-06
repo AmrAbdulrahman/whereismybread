@@ -39,7 +39,7 @@ test('set a monthly income, see the risk level, override one month', async ({
   await page.getByRole('button', { name: 'Add payment' }).click();
 
   // list view shows the income line and an "On track" risk label
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   const firstMonth = page.locator('section').first();
   await expect(
     firstMonth.getByRole('button', { name: /^Income €3,000/ }),

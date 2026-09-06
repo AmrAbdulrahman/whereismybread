@@ -1,6 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
 import { money, toMajor } from '@wib/domain';
+import { BankConnectionPanel } from '@wib/feature-payments';
+import {
+  getBankConnectionData,
+  isEnableBankingConfigured,
+} from '@wib/feature-payments/server';
 import { ThemeToggle } from '@wib/ui';
 import { CheckForUpdatesButton } from '../../_components/update-prompt';
 import { PasswordForm } from './_password-form';
@@ -14,6 +19,9 @@ export const metadata = { title: 'Account' };
 export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+
+  const bankConnection = await getBankConnectionData();
+  const bankConfigured = isEnableBankingConfigured();
 
   return (
     <div className="flex max-w-lg flex-col gap-8">
@@ -53,6 +61,16 @@ export default async function AccountPage() {
           monthlyHours={user.monthlyHours ? String(user.monthlyHours) : ''}
         />
       </section>
+
+      {(bankConfigured || bankConnection) && (
+        <section className="flex flex-col gap-3 border-t border-line pt-6">
+          <h2 className="font-display text-base font-semibold">Bank sync</h2>
+          <BankConnectionPanel
+            connection={bankConnection}
+            configured={bankConfigured}
+          />
+        </section>
+      )}
 
       <section className="flex flex-col gap-3 border-t border-line pt-6">
         <h2 className="font-display text-base font-semibold">Appearance</h2>

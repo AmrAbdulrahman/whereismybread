@@ -88,7 +88,7 @@ test('accounts: list, add, dedupe, rename, count, delete', async ({ page }) => {
   await del.getByRole('button', { name: 'Delete anyway' }).click();
   await expect(page.getByText('No accounts yet.')).toBeVisible();
   await page.goto('/plan');
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Edit Water' }).first(),
   ).toBeVisible();

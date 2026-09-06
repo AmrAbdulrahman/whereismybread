@@ -1,7 +1,12 @@
 import 'server-only';
 
 import { requireUserId } from '@wib/auth/server';
-import { listPendingBankTransactions, listStatementImports } from '@wib/db';
+import {
+  getBankConnection,
+  listBankAccounts,
+  listPendingBankTransactions,
+  listStatementImports,
+} from '@wib/db';
 
 export interface BankTransactionRow {
   id: string;
@@ -30,6 +35,46 @@ export interface StatementImportSummary {
 export interface BankTransactionsData {
   pending: BankTransactionRow[];
   imports: StatementImportSummary[];
+}
+
+export interface BankConnectionAccountView {
+  name: string | null;
+  currency: string;
+  lastSyncedAt: string | null;
+}
+
+export interface BankConnectionView {
+  status: 'pending' | 'active' | 'expired' | 'error';
+  aspspName: string;
+  aspspCountry: string;
+  lastSyncedAt: string | null;
+  consentExpiresAt: string | null;
+  lastError: string | null;
+  accounts: BankConnectionAccountView[];
+}
+
+/** Safe (no secrets) view of the user's live bank connection, or null. */
+export async function getBankConnectionData(): Promise<BankConnectionView | null> {
+  const userId = await requireUserId();
+  const connection = await getBankConnection(userId);
+  if (!connection) return null;
+  const accounts =
+    connection.status === 'pending'
+      ? []
+      : await listBankAccounts(connection.id);
+  return {
+    status: connection.status as BankConnectionView['status'],
+    aspspName: connection.aspspName,
+    aspspCountry: connection.aspspCountry,
+    lastSyncedAt: connection.lastSyncedAt?.toISOString() ?? null,
+    consentExpiresAt: connection.consentExpiresAt?.toISOString() ?? null,
+    lastError: connection.lastError,
+    accounts: accounts.map((a) => ({
+      name: a.name,
+      currency: a.currency,
+      lastSyncedAt: a.lastSyncedAt?.toISOString() ?? null,
+    })),
+  };
 }
 
 export async function getBankTransactionsData(): Promise<BankTransactionsData> {

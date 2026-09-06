@@ -37,6 +37,23 @@ const serverSchema = z.object({
 
   // File storage — Vercel Blob (optional until Phase 6)
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
+
+  // Bank sync — Enable Banking (Open Banking AISP). All optional so deploys
+  // without bank sync configured don't fail validation.
+  //  - APP_ID       the application id, used as the JWT `kid`
+  //  - PRIVATE_KEY  the RSA private key (PEM), base64-encoded to survive
+  //                 single-line env vars; PEM-with-newlines is also accepted
+  //  - API_URL      https://api.enablebanking.com (production / restricted prod)
+  ENABLE_BANKING_APP_ID: z.string().optional(),
+  ENABLE_BANKING_PRIVATE_KEY: z.string().optional(),
+  ENABLE_BANKING_API_URL: z.url().default('https://api.enablebanking.com'),
+
+  // AES-256-GCM key (base64, 32 bytes) for encrypting third-party tokens at
+  // rest — currently the Enable Banking session id.
+  SECRETS_ENCRYPTION_KEY: z.string().optional(),
+
+  // Shared secret for authenticating Vercel Cron calls to /api/bank-sync.
+  CRON_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

@@ -1,9 +1,13 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../client';
 import { expenses } from '../schema/budgets';
 import {
+  bankAccounts,
+  bankConnections,
   bankTransactions,
   statementImports,
+  type BankAccount,
+  type BankConnection,
   type BankTransaction,
   type StatementImport,
 } from '../schema/bank-sync';
@@ -132,6 +136,251 @@ export async function insertImportedTransactions(
     inserted += result.length;
   }
   return inserted;
+}
+
+/**
+ * Bulk-insert transactions pulled from a live sync (Enable Banking), skipping
+ * any already seen (`onConflictDoNothing` on `(userId, dedupKey)`). Returns
+ * the count of genuinely-new rows. Mirrors `insertImportedTransactions` but
+ * stamps `accountId` instead of `importId`.
+ */
+export async function insertSyncedTransactions(
+  userId: string,
+  accountId: string,
+  rows: ImportedTransactionInput[],
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const db = getDb();
+  const CHUNK = 500;
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK);
+    const result = await db
+      .insert(bankTransactions)
+      .values(
+        slice.map((r) => ({
+          userId,
+          accountId,
+          dedupKey: r.dedupKey,
+          source: r.source,
+          externalId: r.externalId,
+          occurredAt: r.occurredAt,
+          occurredHasTime: r.occurredHasTime,
+          description: r.description,
+          amountMinor: r.amountMinor,
+          currency: r.currency,
+          rawType: r.rawType,
+          runningBalanceMinor: r.runningBalanceMinor,
+          rawPayload: r.rawPayload,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [bankTransactions.userId, bankTransactions.dedupKey],
+      })
+      .returning({ id: bankTransactions.id });
+    inserted += result.length;
+  }
+  return inserted;
+}
+
+// --- Live connections (Enable Banking) -----------------------------------
+
+export async function getBankConnection(
+  userId: string,
+): Promise<BankConnection | null> {
+  const rows = await getDb()
+    .select()
+    .from(bankConnections)
+    .where(eq(bankConnections.userId, userId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export interface PendingConnectionInput {
+  aspspName: string;
+  aspspCountry: string;
+  authState: string;
+}
+
+/**
+ * Create or reset the user's connection to a fresh `pending` row for a new
+ * authorization attempt. One connection per user — an existing row (any
+ * status) is overwritten.
+ */
+export async function upsertPendingConnection(
+  userId: string,
+  input: PendingConnectionInput,
+): Promise<BankConnection> {
+  const db = getDb();
+  const existing = await getBankConnection(userId);
+  const patch = {
+    provider: 'enablebanking',
+    aspspName: input.aspspName,
+    aspspCountry: input.aspspCountry,
+    authState: input.authState,
+    sessionIdEnc: null,
+    psuIdHash: null,
+    status: 'pending' as const,
+    consentExpiresAt: null,
+    authorizedAt: null,
+    lastError: null,
+    updatedAt: new Date(),
+  };
+  const rows = existing
+    ? await db
+        .update(bankConnections)
+        .set(patch)
+        .where(eq(bankConnections.id, existing.id))
+        .returning()
+    : await db
+        .insert(bankConnections)
+        .values({ userId, ...patch })
+        .returning();
+  if (!rows[0]) throw new Error('upsertPendingConnection: no row');
+  return rows[0];
+}
+
+export async function activateConnection(
+  id: string,
+  input: {
+    sessionIdEnc: string;
+    psuIdHash: string | null;
+    consentExpiresAt: Date | null;
+  },
+): Promise<void> {
+  await getDb()
+    .update(bankConnections)
+    .set({
+      sessionIdEnc: input.sessionIdEnc,
+      psuIdHash: input.psuIdHash,
+      consentExpiresAt: input.consentExpiresAt,
+      status: 'active',
+      authorizedAt: new Date(),
+      lastError: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(bankConnections.id, id));
+}
+
+export async function setConnectionStatus(
+  id: string,
+  status: 'pending' | 'active' | 'expired' | 'error',
+  lastError?: string | null,
+): Promise<void> {
+  await getDb()
+    .update(bankConnections)
+    .set({
+      status,
+      lastError: lastError ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(bankConnections.id, id));
+}
+
+export async function markConnectionSynced(id: string): Promise<void> {
+  await getDb()
+    .update(bankConnections)
+    .set({ lastSyncedAt: new Date(), lastError: null, updatedAt: new Date() })
+    .where(eq(bankConnections.id, id));
+}
+
+/** Every connection the cron job should attempt. */
+export async function listSyncableConnections(): Promise<BankConnection[]> {
+  return getDb()
+    .select()
+    .from(bankConnections)
+    .where(inArray(bankConnections.status, ['active', 'error']));
+}
+
+export async function deleteBankConnection(userId: string): Promise<void> {
+  await getDb()
+    .delete(bankConnections)
+    .where(eq(bankConnections.userId, userId));
+}
+
+export interface BankAccountInput {
+  uid: string;
+  name: string | null;
+  currency: string;
+  identification: string | null;
+  cashAccountType: string | null;
+}
+
+/**
+ * Reconcile the accounts under a connection: upsert the ones we got back,
+ * delete the ones that disappeared. Delete-missing is safe — a
+ * `bank_transactions.account_id` FK is `on delete set null`, so history
+ * survives the ~90-day reconsent cycle.
+ */
+export async function replaceBankAccounts(
+  connectionId: string,
+  userId: string,
+  accounts: BankAccountInput[],
+): Promise<BankAccount[]> {
+  const db = getDb();
+  const current = await db
+    .select()
+    .from(bankAccounts)
+    .where(eq(bankAccounts.connectionId, connectionId));
+
+  const keepUids = new Set(accounts.map((a) => a.uid));
+  const stale = current.filter((c) => !keepUids.has(c.uid));
+  if (stale.length > 0) {
+    await db.delete(bankAccounts).where(
+      inArray(
+        bankAccounts.id,
+        stale.map((s) => s.id),
+      ),
+    );
+  }
+
+  const out: BankAccount[] = [];
+  for (const a of accounts) {
+    const existing = current.find((c) => c.uid === a.uid);
+    const rows = existing
+      ? await db
+          .update(bankAccounts)
+          .set({
+            name: a.name,
+            currency: a.currency,
+            identification: a.identification,
+            cashAccountType: a.cashAccountType,
+            updatedAt: new Date(),
+          })
+          .where(eq(bankAccounts.id, existing.id))
+          .returning()
+      : await db
+          .insert(bankAccounts)
+          .values({
+            connectionId,
+            userId,
+            uid: a.uid,
+            name: a.name,
+            currency: a.currency,
+            identification: a.identification,
+            cashAccountType: a.cashAccountType,
+          })
+          .returning();
+    if (rows[0]) out.push(rows[0]);
+  }
+  return out;
+}
+
+export async function listBankAccounts(
+  connectionId: string,
+): Promise<BankAccount[]> {
+  return getDb()
+    .select()
+    .from(bankAccounts)
+    .where(eq(bankAccounts.connectionId, connectionId))
+    .orderBy(bankAccounts.currency);
+}
+
+export async function markBankAccountSynced(id: string): Promise<void> {
+  await getDb()
+    .update(bankAccounts)
+    .set({ lastSyncedAt: new Date(), updatedAt: new Date() })
+    .where(eq(bankAccounts.id, id));
 }
 
 export async function listPendingBankTransactions(

@@ -4,4 +4,5 @@
 
 export { handlers, auth, signIn, signOut } from './lib/auth';
 export { getCurrentUser, requireUser, requireUserId } from './lib/session';
+export { encryptSecret, decryptSecret } from './lib/secret-crypto';
 export type { SessionUser } from './lib/types';

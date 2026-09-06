@@ -315,6 +315,9 @@ importers:
       '@wib/auth':
         specifier: workspace:*
         version: link:../auth
+      '@wib/config':
+        specifier: workspace:*
+        version: link:../config
       '@wib/db':
         specifier: workspace:*
         version: link:../db

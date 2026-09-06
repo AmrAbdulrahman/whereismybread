@@ -18,10 +18,19 @@ export {
 export { getExpensesData } from './lib/expenses';
 export {
   getBankTransactionsData,
+  getBankConnectionData,
   type BankTransactionRow,
   type BankTransactionsData,
   type StatementImportSummary,
+  type BankConnectionView,
+  type BankConnectionAccountView,
 } from './lib/bank-sync-queries';
+export {
+  syncAllConnections,
+  syncUserConnection,
+  completeConnection,
+} from './lib/bank-sync';
+export { isEnableBankingConfigured } from './lib/enablebanking-client';
 export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_ALLOWED_TYPES,

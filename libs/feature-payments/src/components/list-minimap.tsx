@@ -60,8 +60,10 @@ export function ListMinimap({
   return (
     <nav
       aria-label="Timeline"
+      // Floor the top so the rail always clears a top-right corner FAB, even
+      // before the sticky panel height is measured (stickyTop = 0).
       className="fixed right-0 z-20 hidden w-14 flex-col items-stretch sm:flex"
-      style={{ top: stickyTop + 10, bottom: 18 }}
+      style={{ top: Math.max(stickyTop + 10, 84), bottom: 18 }}
     >
       <button
         type="button"

@@ -1,4 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["lhr1"]
+  "regions": ["lhr1"],
+  "crons": [
+    { "path": "/api/bank-sync/enable-banking", "schedule": "0 6 * * *" }
+  ]
 }

@@ -49,7 +49,7 @@ test('create a recurring payment, see it, mark it paid, edit it', async ({
   await page.getByRole('button', { name: 'Add payment' }).click();
 
   // list view shows it, grouped
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Edit Rent' }).first(),
   ).toBeVisible();

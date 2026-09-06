@@ -28,7 +28,7 @@ test('a one-time payment flags without a scope choice', async ({ page }) => {
   await page.getByLabel('Amount').fill('1200');
   await page.getByRole('button', { name: 'Add payment' }).click();
   await expect(page.getByLabel('Amount')).toBeHidden();
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Flag Laptop' }).click();
   const dialog = page.getByRole('dialog', { name: 'Flag Laptop' });
@@ -59,7 +59,7 @@ test('a recurring payment flags the series or the occurrence', async ({
   await page.getByLabel('Day of the month').fill('5');
   await page.getByRole('button', { name: 'Add payment' }).click();
   await expect(page.getByLabel('Amount')).toBeHidden();
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
 
   // flag the whole series
   await page.getByRole('button', { name: 'Flag Rent' }).first().click();

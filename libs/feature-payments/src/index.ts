@@ -89,3 +89,12 @@ export {
   categorizeBankTransactionAction,
   ignoreBankTransactionAction,
 } from './lib/bank-transaction-actions';
+
+export { BankConnectionPanel } from './components/bank-connection-panel';
+export {
+  startBankConnectionAction,
+  disconnectBankAction,
+  syncNowAction,
+  listBankOptionsAction,
+  type BankOption,
+} from './lib/bank-connection-actions';

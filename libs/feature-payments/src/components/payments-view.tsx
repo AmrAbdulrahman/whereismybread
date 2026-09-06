@@ -17,15 +17,9 @@ import {
   startOfMonth,
   type IsoDate,
 } from '@wib/domain';
-import {
-  Button,
-  ResponsiveModal,
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  cn,
-} from '@wib/ui';
-import { CalendarDays, PiggyBank, Plus, Receipt } from '@wib/ui/icons';
+import { Button, ResponsiveModal, cn } from '@wib/ui';
+import { CalendarDays, List, Plus, SlidersHorizontal } from '@wib/ui/icons';
+import { AddFab } from './add-fab';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
 import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
 import { FlagModal, type FlagTarget } from './flag-modal';
@@ -35,6 +29,7 @@ import { PaymentList } from './payment-list';
 import {
   EMPTY_LIST_FILTER,
   ListFilters,
+  listFilterBadgeCount,
   type ListFilterValue,
 } from './list-filters';
 import {
@@ -175,6 +170,7 @@ export function PaymentsView({
   const [listFilter, setListFilter] =
     useState<ListFilterValue>(EMPTY_LIST_FILTER);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const filterBadge = listFilterBadgeCount(listFilter, unpaidOnly);
 
   // Per-day "needs review" transactions, with optimistic removal on triage.
   const [reviewSheet, setReviewSheet] = useState<TriageSheet>({ mode: 'closed' });
@@ -207,9 +203,7 @@ export function PaymentsView({
     recipientMethods,
     tags,
   };
-  // Mobile keeps one "Add" button that opens a sheet of the three options —
-  // desktop shows all three inline instead.
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -489,7 +483,7 @@ export function PaymentsView({
     <div className="flex flex-col gap-5">
       <div
         ref={panelRef}
-        className="sticky top-0 z-30 -mx-4 flex flex-col gap-2.5 border-b border-line/60 bg-ground/95 px-4 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:gap-3 sm:px-6"
+        className="sticky top-0 z-30 -mx-4 flex flex-col gap-2.5 border-b border-line/60 bg-ground/95 px-4 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:gap-3 sm:px-6 sm:pt-4 lg:pr-20"
       >
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
@@ -545,70 +539,45 @@ export function PaymentsView({
               </p>
             ) : null}
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                className="sm:hidden"
-                onClick={() => setAddMenuOpen(true)}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {view === 'list' ? (
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((o) => !o)}
+                aria-expanded={filtersOpen}
+                className={cn(
+                  'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[13px] font-medium',
+                  filterBadge > 0 || filtersOpen
+                    ? 'border-accent text-accent'
+                    : 'border-line-strong text-muted hover:text-ink',
+                )}
               >
-                <Plus size={16} strokeWidth={3} />
-                Add
-              </Button>
-              <Button
-                size="sm"
-                className="hidden sm:inline-flex sm:h-10 sm:px-4"
-                onClick={() => setSheet({ mode: 'new' })}
-              >
-                <Plus size={16} strokeWidth={3} />
-                New payment
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="hidden sm:inline-flex sm:h-10 sm:px-3"
-                onClick={() => setBudgetSheet({ mode: 'new' })}
-              >
-                <Plus size={16} strokeWidth={3} />
-                Add budget
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="hidden sm:inline-flex sm:h-10 sm:px-3"
-                onClick={() =>
-                  setExpenseSheet({
-                    mode: 'new',
-                    date: board.today,
-                    budgetId: null,
-                  })
-                }
-              >
-                <Plus size={16} strokeWidth={3} />
-                Add expense
-              </Button>
-            </div>
-            <div className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-ground p-1">
-              {(['list', 'calendar'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => changeView(v)}
-                  className={cn(
-                    'rounded-sm px-3 py-1 text-[13px] font-medium capitalize transition-colors',
-                    view === v
-                      ? 'bg-surface-2 text-ink'
-                      : 'text-muted hover:text-ink',
-                  )}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
+                <SlidersHorizontal size={15} />
+                Filters
+                {filterBadge > 0 ? (
+                  <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg">
+                    {filterBadge}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => changeView(view === 'list' ? 'calendar' : 'list')}
+              aria-label={`Switch to ${view === 'list' ? 'calendar' : 'list'} view`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line-strong px-3 text-[13px] font-medium text-muted hover:text-ink"
+            >
+              {view === 'list' ? (
+                <CalendarDays size={15} />
+              ) : (
+                <List size={15} />
+              )}
+              {view === 'list' ? 'Calendar' : 'List'}
+            </button>
           </div>
         </header>
 
-        {view === 'list' ? (
+        {view === 'list' && filtersOpen ? (
           <ListFilters
             value={listFilter}
             onChange={setListFilter}
@@ -618,6 +587,7 @@ export function PaymentsView({
             methods={methods}
             unpaidOnly={unpaidOnly}
             onUnpaidOnlyChange={setUnpaidOnly}
+            onClose={() => setFiltersOpen(false)}
           />
         ) : null}
       </div>
@@ -689,50 +659,13 @@ export function PaymentsView({
         }}
       />
 
-      <Sheet open={addMenuOpen} onOpenChange={setAddMenuOpen}>
-        <SheetContent side="bottom" className="p-4 pb-6 sm:hidden">
-          <SheetTitle>Add</SheetTitle>
-          <div className="mt-3 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setAddMenuOpen(false);
-                setSheet({ mode: 'new' });
-              }}
-              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-2"
-            >
-              <CalendarDays size={18} strokeWidth={2} className="text-accent" />
-              Payment
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAddMenuOpen(false);
-                setExpenseSheet({
-                  mode: 'new',
-                  date: board.today,
-                  budgetId: null,
-                });
-              }}
-              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-2"
-            >
-              <Receipt size={18} strokeWidth={2} className="text-accent" />
-              Expense
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAddMenuOpen(false);
-                setBudgetSheet({ mode: 'new' });
-              }}
-              className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-left text-sm font-medium text-ink hover:bg-surface-2"
-            >
-              <PiggyBank size={18} strokeWidth={2} className="text-accent" />
-              Budget
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
+      <AddFab
+        onAddPayment={() => setSheet({ mode: 'new' })}
+        onAddExpense={() =>
+          setExpenseSheet({ mode: 'new', date: board.today, budgetId: null })
+        }
+        onAddBudget={() => setBudgetSheet({ mode: 'new' })}
+      />
     </div>
   );
 }

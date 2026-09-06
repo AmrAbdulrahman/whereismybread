@@ -26,6 +26,10 @@ export type {
   NewStatementImport,
   BankTransaction,
   NewBankTransaction,
+  BankConnection,
+  NewBankConnection,
+  BankAccount,
+  NewBankAccount,
 } from './lib/schema/bank-sync';
 
 export {
@@ -186,8 +190,21 @@ export {
   latestStatementImport,
   listStatementImports,
   insertImportedTransactions,
+  insertSyncedTransactions,
   listPendingBankTransactions,
   markBankTransactionCategorized,
   markBankTransactionIgnored,
+  getBankConnection,
+  upsertPendingConnection,
+  activateConnection,
+  setConnectionStatus,
+  markConnectionSynced,
+  listSyncableConnections,
+  deleteBankConnection,
+  replaceBankAccounts,
+  listBankAccounts,
+  markBankAccountSynced,
   type ImportedTransactionInput,
+  type PendingConnectionInput,
+  type BankAccountInput,
 } from './lib/repositories/bank-sync';

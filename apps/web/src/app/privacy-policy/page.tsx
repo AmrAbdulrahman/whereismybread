@@ -33,10 +33,20 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong className="text-ink">Bank transaction data</strong>,
-            only if you choose to upload a bank statement — we read the
-            transaction descriptions, amounts and dates in the file so you can
-            categorize them in the app. The uploaded file is parsed in memory
+            only if you choose to connect a bank or upload a statement — we
+            read the transaction descriptions, amounts and dates so you can
+            categorize them in the app. An uploaded file is parsed in memory
             and not stored; only the parsed transactions are kept.
+          </li>
+          <li>
+            <strong className="text-ink">Open Banking connection</strong>, only
+            if you link a bank account. We use Enable Banking (a regulated
+            account-information provider) to fetch your transactions on your
+            behalf. The connection is read-only, you authorise it directly with
+            your bank, it expires automatically (around every 90 days), and you
+            can disconnect it at any time from the Sync bank or Account page.
+            We store an encrypted reference to the connection so the daily sync
+            can run — never your bank login.
           </li>
         </ul>
       </section>
@@ -49,6 +59,10 @@ export default function PrivacyPolicyPage() {
           <li>Vercel — hosting, and file storage for attachments.</li>
           <li>Supabase — the database your data is stored in.</li>
           <li>Resend — sending account emails (verification, password reset).</li>
+          <li>
+            Enable Banking — Open Banking access to your transactions, only if
+            you connect a bank.
+          </li>
         </ul>
         <p>
           We don&rsquo;t sell your data, and we don&rsquo;t share it with
@@ -62,7 +76,8 @@ export default function PrivacyPolicyPage() {
         </h2>
         <p>
           Imported transactions can be ignored or deleted from the Sync bank
-          tab. To request a copy of your data or full account deletion, email
+          tab, and a linked bank can be disconnected there or on the Account
+          page. To request a copy of your data or full account deletion, email
           us (below) — there&rsquo;s no self-service deletion button yet.
         </p>
       </section>

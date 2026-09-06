@@ -42,7 +42,7 @@ test('an annual payment lets you pick which day and month it lands on, and keeps
   await page.getByLabel('Day of the month').fill('15');
   await page.getByRole('button', { name: 'Add payment' }).click();
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Edit Home insurance' }).first(),
   ).toBeVisible();
@@ -71,7 +71,7 @@ test('an annual payment lets you pick which day and month it lands on, and keeps
   await expect(confirmDialog).toBeHidden();
   await page.reload();
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await page
     .getByRole('button', { name: 'Edit Home insurance' })
     .first()

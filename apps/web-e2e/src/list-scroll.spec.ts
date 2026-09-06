@@ -25,7 +25,7 @@ test('the list lazy-loads later months on scroll; start marker stays hidden', as
   await page.getByLabel('Day of the month').fill('12');
   await page.getByRole('button', { name: 'Add payment' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'list' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
 
   // the "this is where you started" marker only appears once the reader has
   // scrolled up looking for earlier months — never on the initial render.
@@ -41,4 +41,15 @@ test('the list lazy-loads later months on scroll; start marker stays hidden', as
     await page.mouse.wheel(0, 8000);
     expect(await monthHeadings.count()).toBeGreaterThan(before);
   }).toPass({ timeout: 15_000 });
+
+  // On a wide screen the timeline rail's "Today" button jumps back to the
+  // "Today" divider, not the top of the month.
+  const todayBtn = page.getByRole('button', { name: 'Today', exact: true });
+  // eslint-disable-next-line playwright/no-conditional-in-test -- the rail is desktop-only
+  if (await todayBtn.isVisible()) {
+    await page.mouse.wheel(0, 20000);
+    await todayBtn.click();
+    // eslint-disable-next-line playwright/no-conditional-expect
+    await expect(page.locator('[data-plan-today]').first()).toBeInViewport();
+  }
 });

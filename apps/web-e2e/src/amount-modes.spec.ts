@@ -31,7 +31,7 @@ test('a per-unit payment charges rate × units, editable per month', async ({
   await page.getByRole('button', { name: 'Add payment' }).click();
 
   // list view: 2 × €45.00 → €90.00
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await expect(page.getByText('2 × €45.00').first()).toBeVisible();
   await expect(page.getByText('€90.00').first()).toBeVisible();
 
@@ -72,7 +72,7 @@ test('hourly income = rate × hours, with a per-month hours override', async ({
   await page.getByRole('button', { name: 'Monthly', exact: true }).click();
   await page.getByRole('button', { name: 'Add payment' }).click();
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   const firstMonth = page.locator('section').first();
   await expect(
     firstMonth.getByRole('button', { name: /^Income €4,800/ }),

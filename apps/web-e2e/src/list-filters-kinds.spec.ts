@@ -52,7 +52,7 @@ test('the "Show" filter segments planned / budgeted / unbudgeted rows', async ({
   await expenseForm.getByRole('button', { name: 'Add expense' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
 
   // Everything shows by default.
   await expect(page.getByRole('button', { name: 'Edit Rent' }).first()).toBeVisible();

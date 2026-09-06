@@ -65,7 +65,7 @@ test('an expense can carry a tag and an account, and the tag filters the list', 
   await form2.getByRole('button', { name: 'Add expense' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await page.getByRole('button', { name: /^Filters/ }).click();
   await page.getByRole('button', { name: 'work', exact: true }).click();
 

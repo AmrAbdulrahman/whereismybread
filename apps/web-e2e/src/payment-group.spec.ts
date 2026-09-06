@@ -41,7 +41,7 @@ test('a group payment sums its records and can be overridden per month', async (
   await page.getByRole('button', { name: 'Add payment' }).click();
 
   // list view: the occurrence shows the summed charge and a records chip
-  await page.getByRole('button', { name: 'list' }).click();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
   await expect(page.getByText('€23.99').first()).toBeVisible();
 
   const chip = page.getByRole('button', { name: '2 records' }).first();
