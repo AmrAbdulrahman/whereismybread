@@ -749,9 +749,13 @@ export function PaymentList({
         const next = { ...prev };
         let changed = false;
         for (const e of entries) {
-          const key = (e.target as HTMLElement).dataset['monthKey'];
+          const el = e.target as HTMLElement;
+          const key = el.dataset['monthKey'];
           if (!key) continue;
-          const h = Math.round(e.contentRect.height);
+          // border-box height (offsetHeight) — `contentRect` omits the
+          // header's padding, which left the day header ~12px too high and
+          // tucked behind the month header's budget rows.
+          const h = el.offsetHeight;
           if (next[key] !== h) {
             next[key] = h;
             changed = true;
@@ -1208,10 +1212,10 @@ export function PaymentList({
                   <div className="flex flex-col gap-2" data-day={group.date}>
                     <div
                       style={{
-                        top: stickyTop + (monthHeaderH[mo.key] ?? 0),
+                        top: stickyTop + (monthHeaderH[mo.key] ?? 0) - 2,
                       }}
                       className={cn(
-                        'sticky z-10 flex items-baseline justify-between border-b bg-ground pb-1 pt-1',
+                        'sticky z-10 flex items-baseline justify-between border-b bg-ground pb-1 pt-1.5',
                         isToday
                           ? 'border-accent/50'
                           : dayNeedsReview
