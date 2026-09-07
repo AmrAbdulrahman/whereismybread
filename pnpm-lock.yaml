@@ -228,6 +228,9 @@ importers:
       '@wib/domain':
         specifier: workspace:*
         version: link:../../libs/domain
+      '@wib/feature-insights':
+        specifier: workspace:*
+        version: link:../../libs/feature-insights
       '@wib/feature-payments':
         specifier: workspace:*
         version: link:../../libs/feature-payments
@@ -302,6 +305,24 @@ importers:
   libs/feature-checklist: {}
 
   libs/feature-debts: {}
+
+  libs/feature-insights:
+    dependencies:
+      '@wib/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@wib/db':
+        specifier: workspace:*
+        version: link:../db
+      '@wib/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@wib/feature-payments':
+        specifier: workspace:*
+        version: link:../feature-payments
+      '@wib/ui':
+        specifier: workspace:*
+        version: link:../ui
 
   libs/feature-installments: {}
 

@@ -267,6 +267,13 @@
       "when": 1788769969589,
       "tag": "0037_multi_bank_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788782859363,
+      "tag": "0038_insights_layout",
+      "breakpoints": true
     }
   ]
 }

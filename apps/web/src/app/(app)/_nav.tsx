@@ -3,37 +3,55 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AppShell, icons, type NavItem } from '@wib/ui';
+import { AppShell, icons, type NavEntry } from '@wib/ui';
 import { UserMenu } from './_user-menu';
 
-const NAV_ITEMS: NavItem[] = [
-  { href: '/plan', label: 'Plan', icon: icons.calendar },
+const NAV_ITEMS: NavEntry[] = [
+  { href: '/plan', label: 'Payments', icon: icons.calendar },
+  { href: '/insights', label: 'Insights', icon: icons.insights },
   {
-    href: '/subscriptions',
-    label: 'Subscriptions',
-    shortLabel: 'Subs',
-    icon: icons.subscriptions,
+    href: '/checklist',
+    label: 'Checklist',
+    shortLabel: 'Checks',
+    icon: icons.checklist,
   },
-  {
-    href: '/installments',
-    label: 'Installments',
-    shortLabel: 'Instal.',
-    icon: icons.installments,
-  },
-  { href: '/checklist', label: 'Checklist', shortLabel: 'Checks', icon: icons.checklist },
-  { href: '/budgets', label: 'Budgets', icon: icons.budgets },
   {
     href: '/integrations',
     label: 'Integrations',
     shortLabel: 'Integr.',
     icon: icons.transactions,
   },
-  { href: '/debts', label: 'Debts', icon: icons.debts },
-  { href: '/tags', label: 'Tags', icon: icons.tags },
-  { href: '/accounts', label: 'Accounts', icon: icons.accounts },
+
+  { separator: true },
+  {
+    href: '/subscriptions',
+    label: 'Subscriptions',
+    shortLabel: 'Subs',
+    icon: icons.subscriptions,
+    comingSoon: true,
+  },
+  { href: '/budgets', label: 'Budgets', icon: icons.budgets },
+
+  { separator: true },
   { href: '/banks', label: 'Banks', icon: icons.banks },
-  { href: '/methods', label: 'Methods', icon: icons.methods },
-  { href: '/settings', label: 'Settings', icon: icons.settings },
+  { href: '/tags', label: 'Tags', icon: icons.tags },
+  {
+    href: '/methods',
+    label: 'Methods',
+    icon: icons.methods,
+    comingSoon: true,
+  },
+  { href: '/accounts', label: 'Accounts', icon: icons.accounts },
+
+  { separator: true },
+  { href: '/debts', label: 'Debts', icon: icons.debts, comingSoon: true },
+  {
+    href: '/installments',
+    label: 'Installments',
+    shortLabel: 'Instal.',
+    icon: icons.installments,
+    comingSoon: true,
+  },
 ];
 
 export function AppNav({

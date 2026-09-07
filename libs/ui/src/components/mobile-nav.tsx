@@ -3,16 +3,33 @@
 import { useEffect, useState, type ElementType, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Menu, X } from '../icons';
-import type { NavItem } from './app-shell';
+import { isSeparator, type NavEntry, type NavItem } from './app-shell';
 import { Sheet, SheetContent, SheetTitle } from './sheet';
 
 function isActive(currentPath: string, href: string): boolean {
   return currentPath === href || currentPath.startsWith(`${href}/`);
 }
 
+/** Drop leading/trailing/consecutive separators. */
+function tidySeparators(entries: NavEntry[]): NavEntry[] {
+  const out: NavEntry[] = [];
+  for (const e of entries) {
+    const last = out.at(-1);
+    if (isSeparator(e) && (!last || isSeparator(last))) continue;
+    out.push(e);
+  }
+  let last = out.at(-1);
+  while (last && isSeparator(last)) {
+    out.pop();
+    last = out.at(-1);
+  }
+  return out;
+}
+
 /**
- * The below-`lg` bottom tab bar: the first `primaryCount` destinations, then a
- * "More" tab that opens a sheet with everything else + the account controls.
+ * The below-`lg` bottom tab bar: the first `primaryCount` real destinations,
+ * then a "More" tab whose sheet holds everything else — group separators and
+ * "coming soon" entries included.
  */
 export function MobileNav({
   navItems,
@@ -21,20 +38,25 @@ export function MobileNav({
   primaryCount,
   footerSlot,
 }: {
-  navItems: NavItem[];
+  navItems: NavEntry[];
   currentPath: string;
   linkComponent?: ElementType;
   primaryCount: number;
   footerSlot?: ReactNode;
 }) {
-  const primary = navItems.slice(0, primaryCount);
-  const overflow = navItems.slice(primaryCount);
-  const [open, setOpen] = useState(false);
+  const items = navItems.filter((e): e is NavItem => !isSeparator(e));
+  const primary = items.filter((i) => !i.comingSoon).slice(0, primaryCount);
+  const primaryHrefs = new Set(primary.map((i) => i.href));
+  const overflow = tidySeparators(
+    navItems.filter((e) => isSeparator(e) || !primaryHrefs.has(e.href)),
+  );
 
-  // Close the sheet whenever the route changes.
+  const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [currentPath]);
 
-  const overflowActive = overflow.some((i) => isActive(currentPath, i.href));
+  const overflowActive = overflow.some(
+    (e) => !isSeparator(e) && !e.comingSoon && isActive(currentPath, e.href),
+  );
 
   return (
     <>
@@ -92,13 +114,37 @@ export function MobileNav({
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {overflow.map((item) => {
-              const active = isActive(currentPath, item.href);
-              const Icon = item.icon;
+            {overflow.map((entry, i) => {
+              if (isSeparator(entry)) {
+                return (
+                  <div
+                    key={`sep-${i}`}
+                    className="col-span-3 my-1 h-px bg-line"
+                    role="separator"
+                  />
+                );
+              }
+              const Icon = entry.icon;
+              if (entry.comingSoon) {
+                return (
+                  <span
+                    key={entry.href}
+                    aria-disabled
+                    className="flex flex-col items-center gap-1.5 rounded-xl border border-line/60 px-2 py-3 text-center text-xs font-medium text-muted/50"
+                  >
+                    <Icon size={20} strokeWidth={2} />
+                    {entry.label}
+                    <span className="rounded-full bg-surface-2 px-1.5 text-[9px] text-muted">
+                      Soon
+                    </span>
+                  </span>
+                );
+              }
+              const active = isActive(currentPath, entry.href);
               return (
                 <Link
-                  key={item.href}
-                  href={item.href}
+                  key={entry.href}
+                  href={entry.href}
                   onClick={() => setOpen(false)}
                   className={cn(
                     'flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-center text-xs font-medium',
@@ -109,7 +155,7 @@ export function MobileNav({
                   aria-current={active ? 'page' : undefined}
                 >
                   <Icon size={20} strokeWidth={2} />
-                  {item.label}
+                  {entry.label}
                 </Link>
               );
             })}

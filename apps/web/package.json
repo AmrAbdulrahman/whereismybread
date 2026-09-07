@@ -8,6 +8,7 @@
     "@wib/config": "workspace:*",
     "@wib/db": "workspace:*",
     "@wib/domain": "workspace:*",
+    "@wib/feature-insights": "workspace:*",
     "@wib/feature-payments": "workspace:*",
     "@wib/feature-tags": "workspace:*",
     "@wib/ui": "workspace:*",

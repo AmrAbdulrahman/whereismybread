@@ -25,11 +25,13 @@ export default [
             // apps compose everything
             { sourceTag: 'type:app', onlyDependOnLibsWithTags: ['*'] },
 
-            // a feature lib may use shared UI / utilities / data / auth,
-            // but NEVER another feature lib — features compose only in apps/web
+            // a feature lib may use shared UI / utilities / data / auth, and
+            // (since feature-insights) other feature libs — insights reuses
+            // feature-payments' board/budget/expense queries.
             {
               sourceTag: 'type:feature',
               onlyDependOnLibsWithTags: [
+                'type:feature',
                 'type:ui',
                 'type:util',
                 'type:data',

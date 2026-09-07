@@ -61,8 +61,10 @@ export {
 export { MethodIcon, METHOD_ICON_KEYS } from './components/method-icon';
 export {
   AppShell,
+  isSeparator,
   type AppShellProps,
   type NavItem,
+  type NavEntry,
 } from './components/app-shell';
 
 export { icons, iconFor, type IconName, type LucideIcon } from './icons';

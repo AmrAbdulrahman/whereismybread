@@ -10,10 +10,19 @@ export interface NavItem {
   /** A tighter label for the mobile tab bar (falls back to `label`). */
   shortLabel?: string;
   icon: LucideIcon;
+  /** Rendered muted with a "Soon" pill and no navigation. */
+  comingSoon?: boolean;
+}
+
+/** A nav entry: a destination, or a group separator. */
+export type NavEntry = NavItem | { separator: true };
+
+export function isSeparator(e: NavEntry): e is { separator: true } {
+  return 'separator' in e;
 }
 
 export interface AppShellProps {
-  navItems: NavItem[];
+  navItems: NavEntry[];
   /** Current pathname, for active state. */
   currentPath: string;
   /** e.g. Next's `Link`. Defaults to a plain anchor. */
@@ -45,9 +54,33 @@ export function AppShell({
           <Wordmark size="sm" />
         </div>
         <nav className="mt-3 flex flex-col gap-0.5">
-          {navItems.map((item) => {
-            const active = isActive(currentPath, item.href);
+          {navItems.map((item, i) => {
+            if (isSeparator(item)) {
+              return (
+                <div
+                  key={`sep-${i}`}
+                  className="mx-2.5 my-1.5 h-px bg-line"
+                  role="separator"
+                />
+              );
+            }
             const Icon = item.icon;
+            if (item.comingSoon) {
+              return (
+                <span
+                  key={item.href}
+                  aria-disabled
+                  className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] text-muted/50"
+                >
+                  <Icon size={16} strokeWidth={2} />
+                  {item.label}
+                  <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                    Soon
+                  </span>
+                </span>
+              );
+            }
+            const active = isActive(currentPath, item.href);
             return (
               <Link
                 key={item.href}

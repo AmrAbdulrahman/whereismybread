@@ -283,6 +283,40 @@ export function PaymentsView({
     });
   };
 
+  // Deep link from Insights (or anywhere): `?open=<paymentId>&on=<YYYY-MM-DD>`
+  // opens that payment's edit sheet, then strips the params so a refresh
+  // doesn't reopen it. Best-effort scroll to the day underneath.
+  const deepLinkDone = useRef(false);
+  useEffect(() => {
+    if (deepLinkDone.current) return;
+    const openId = params.get('open');
+    if (!openId) return;
+    deepLinkDone.current = true;
+    const on = params.get('on') ?? undefined;
+    const base = board.editable[openId];
+    if (base) {
+      const ov = on ? board.overrides[`${openId}:${on}`] : undefined;
+      setSheet({
+        mode: 'edit',
+        payment: ov ? applyOverride(base, ov) : base,
+        occurrenceDate: on,
+        hasOverride: ov != null,
+      });
+      if (on) {
+        requestAnimationFrame(() => {
+          document
+            .querySelector(`[data-day="${on}"]`)
+            ?.scrollIntoView({ block: 'center' });
+        });
+      }
+    }
+    const next = new URLSearchParams(params);
+    next.delete('open');
+    next.delete('on');
+    const qs = next.toString();
+    window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
+  }, [params, pathname, board.editable, board.overrides]);
+
   const [flagTarget, setFlagTarget] = useState<FlagTarget | null>(null);
   const openFlag = (paymentId: string, occurrenceDate: string) => {
     const occ = board.occurrences.find(

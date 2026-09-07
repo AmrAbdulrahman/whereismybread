@@ -10,7 +10,7 @@ import {
   getSyncTargets,
 } from '@wib/feature-payments/server';
 
-export const metadata = { title: 'Plan' };
+export const metadata = { title: 'Payments' };
 export const dynamic = 'force-dynamic';
 
 export default async function CalendarPage({

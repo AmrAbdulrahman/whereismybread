@@ -216,3 +216,9 @@ export {
   type PendingConnectionInput,
   type BankAccountInput,
 } from './lib/repositories/bank-sync';
+
+export {
+  getInsightsLayout,
+  setInsightsLayout,
+} from './lib/repositories/insights-layout';
+export type { InsightsLayout, InsightsLayoutData } from './lib/schema/insights';

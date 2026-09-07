@@ -62,6 +62,9 @@
       "path": "../../libs/feature-payments"
     },
     {
+      "path": "../../libs/feature-insights"
+    },
+    {
       "path": "../../libs/domain"
     },
     {
