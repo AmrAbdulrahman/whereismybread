@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, useToast } from '@wib/ui';
+import { Button, cn, MethodIcon, useToast } from '@wib/ui';
 import type { BankConnectionView } from '../lib/bank-sync-queries';
 import {
   disconnectBankAction,
+  setConnectionBankAction,
+  setIgnorePatternsAction,
   startBankConnectionAction,
   syncNowAction,
 } from '../lib/bank-connection-actions';
@@ -44,6 +46,8 @@ export function BankConnectionPanel({
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [connecting, setConnecting] = useState(false);
+  const [patterns, setPatterns] = useState(connection?.ignorePatterns ?? '');
+  const [patternsDirty, setPatternsDirty] = useState(false);
 
   if (!configured && !connection) return null;
 
@@ -82,6 +86,27 @@ export function BankConnectionPanel({
     startTransition(async () => {
       await disconnectBankAction();
       toast({ title: 'Bank disconnected', duration: 3000 });
+      router.refresh();
+    });
+
+  const pickBank = (bankId: string | null) =>
+    startTransition(async () => {
+      await setConnectionBankAction(bankId);
+      router.refresh();
+    });
+
+  const savePatterns = () =>
+    startTransition(async () => {
+      const res = await setIgnorePatternsAction(patterns);
+      setPatternsDirty(false);
+      toast({
+        title: 'Ignore rules saved',
+        description:
+          res.ignored && res.ignored > 0
+            ? `${res.ignored} matching transaction${res.ignored === 1 ? '' : 's'} moved to ignored.`
+            : undefined,
+        duration: 3500,
+      });
       router.refresh();
     });
 
@@ -211,6 +236,102 @@ export function BankConnectionPanel({
           Disconnect
         </Button>
       </div>
+
+      <details className="group border-t border-line pt-3 text-sm">
+        <summary className="cursor-pointer list-none text-xs font-medium text-ink-soft [&::-webkit-details-marker]:hidden">
+          Sync settings
+          <span className="ml-1 text-muted group-open:hidden">▸</span>
+          <span className="ml-1 hidden text-muted group-open:inline">▾</span>
+        </summary>
+
+        <div className="mt-3 flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-medium text-ink-soft">
+              Tag synced transactions with
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => pickBank(null)}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-xs font-medium',
+                  connection.bankId == null
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-line-strong text-muted hover:text-ink',
+                )}
+              >
+                None
+              </button>
+              {connection.banks.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => pickBank(b.id)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
+                    connection.bankId === b.id
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : 'border-line-strong text-muted hover:text-ink',
+                  )}
+                >
+                  {b.iconKey || b.logoUrl ? (
+                    <MethodIcon
+                      iconKey={b.iconKey ?? 'bank'}
+                      logoUrl={b.logoUrl}
+                      size={13}
+                    />
+                  ) : (
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: b.color }}
+                    />
+                  )}
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="ignore-patterns"
+              className="text-xs font-medium text-ink-soft"
+            >
+              Auto-ignore rules
+            </label>
+            <p className="text-[11px] text-muted">
+              One case-insensitive regex per line, matched against a
+              transaction&apos;s description and type. Matches come in already
+              ignored. <code>#</code> starts a comment.
+            </p>
+            <textarea
+              id="ignore-patterns"
+              rows={5}
+              spellCheck={false}
+              value={patterns}
+              onChange={(e) => {
+                setPatterns(e.target.value);
+                setPatternsDirty(true);
+              }}
+              className="rounded-md border border-line-strong bg-ground px-3 py-2 font-mono text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            {patternsDirty && (
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={pending}
+                  onClick={savePatterns}
+                >
+                  {pending ? 'Saving…' : 'Save rules'}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

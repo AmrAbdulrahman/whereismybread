@@ -284,7 +284,7 @@ export async function updateProfileAction(
   }
 
   await updateUserProfile(id, parsed.data);
-  revalidatePath('/account');
+  revalidatePath('/settings');
   return { ok: true, message: 'Profile saved.' };
 }
 

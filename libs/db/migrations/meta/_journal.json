@@ -246,6 +246,20 @@
       "when": 1788733574810,
       "tag": "0034_bank_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788735933754,
+      "tag": "0035_expense_bank_and_ignore",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788738290389,
+      "tag": "0036_transaction_bank",
+      "breakpoints": true
     }
   ]
 }

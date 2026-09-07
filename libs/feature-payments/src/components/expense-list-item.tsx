@@ -34,7 +34,10 @@ export function ExpenseListItem({
   const budgeted = expense.budgetId != null;
   const time = expenseTimeLabel(expense.occurredAt);
   const hasMeta =
-    budgeted || expense.accountId != null || expense.tags.length > 0;
+    budgeted ||
+    expense.accountId != null ||
+    expense.bankId != null ||
+    expense.tags.length > 0;
   return (
     <button
       type="button"
@@ -83,6 +86,23 @@ export function ExpenseListItem({
                   style={{ background: expense.accountColor ?? undefined }}
                 />
                 <span className="truncate">{expense.accountName}</span>
+              </span>
+            ) : null}
+            {expense.bankId ? (
+              <span className="flex items-center gap-1">
+                {expense.bankLogoUrl ? (
+                  <img
+                    src={expense.bankLogoUrl}
+                    alt=""
+                    className="h-3 w-3 shrink-0 rounded-sm object-contain"
+                  />
+                ) : (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: expense.bankColor ?? undefined }}
+                  />
+                )}
+                <span className="truncate">{expense.bankName}</span>
               </span>
             ) : null}
             {expense.tags.map((t) => (

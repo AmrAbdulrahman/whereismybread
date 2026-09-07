@@ -27,7 +27,7 @@ test('sign up, sign out, sign back in', async ({ page }) => {
   await expect(page).toHaveURL(/\/plan$/, { timeout: 20_000 });
 
   // account page shows the profile
-  await page.goto('/account');
+  await page.goto('/settings');
   await expect(page.getByLabel('Name')).toHaveValue(name);
   await expect(page.getByLabel('Email')).toHaveValue(email);
 

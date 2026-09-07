@@ -88,13 +88,17 @@ export { importStatementAction } from './lib/statement-import-actions';
 export {
   categorizeBankTransactionAction,
   ignoreBankTransactionAction,
+  bulkIgnoreBankTransactionsAction,
 } from './lib/bank-transaction-actions';
 
 export { BankConnectionPanel } from './components/bank-connection-panel';
+export { IntegrationsView } from './components/integrations-view';
 export {
   startBankConnectionAction,
   disconnectBankAction,
   syncNowAction,
   listBankOptionsAction,
+  setConnectionBankAction,
+  setIgnorePatternsAction,
   type BankOption,
 } from './lib/bank-connection-actions';

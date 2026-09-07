@@ -18,6 +18,10 @@ export interface BudgetExpenseTag {
 export type BudgetExpense = Expense & {
   accountName: string | null;
   accountColor: string | null;
+  bankName: string | null;
+  bankColor: string | null;
+  bankIconKey: string | null;
+  bankLogoUrl: string | null;
   tags: BudgetExpenseTag[];
   attachments: BudgetExpenseAttachment[];
 };
@@ -75,6 +79,8 @@ export async function getBudgetsBundle(
                 'id', e.id, 'userId', e.user_id, 'budgetId', e.budget_id,
                 'accountId', e.account_id,
                 'accountName', ac.name, 'accountColor', ac.color,
+                'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,
+                'bankIconKey', bk.icon_key, 'bankLogoUrl', bk.logo_url,
                 'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
                 'amountMinor', e.amount_minor,
                 'currency', e.currency, 'notes', e.notes,
@@ -99,6 +105,7 @@ export async function getBudgetsBundle(
             )
             from expenses e
             left join accounts ac on ac.id = e.account_id
+            left join banks bk on bk.id = e.bank_id
             where e.budget_id = b.id
           ), '[]'::jsonb)
         )

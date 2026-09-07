@@ -8,8 +8,11 @@ import { importStatementAction } from '../lib/statement-import-actions';
 
 export function StatementUpload({
   defaultCurrency,
+  bankId = null,
 }: {
   defaultCurrency: string;
+  /** Tag imported transactions with this bank (the active Integrations tab). */
+  bankId?: string | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -23,6 +26,7 @@ export function StatementUpload({
       const form = new FormData();
       form.set('file', file);
       form.set('defaultCurrency', defaultCurrency);
+      if (bankId) form.set('bankId', bankId);
       const result = await importStatementAction(form);
       if (!result.ok) {
         toast({ title: 'Import failed', description: result.error, duration: 6000 });

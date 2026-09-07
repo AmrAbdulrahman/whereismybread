@@ -23,9 +23,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/checklist', label: 'Checklist', shortLabel: 'Checks', icon: icons.checklist },
   { href: '/budgets', label: 'Budgets', icon: icons.budgets },
   {
-    href: '/transactions',
-    label: 'Sync bank',
-    shortLabel: 'Bank',
+    href: '/integrations',
+    label: 'Integrations',
+    shortLabel: 'Integr.',
     icon: icons.transactions,
   },
   { href: '/debts', label: 'Debts', icon: icons.debts },
@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/accounts', label: 'Accounts', icon: icons.accounts },
   { href: '/banks', label: 'Banks', icon: icons.banks },
   { href: '/methods', label: 'Methods', icon: icons.methods },
-  { href: '/account', label: 'Account', icon: icons.settings },
+  { href: '/settings', label: 'Settings', icon: icons.settings },
 ];
 
 export function AppNav({

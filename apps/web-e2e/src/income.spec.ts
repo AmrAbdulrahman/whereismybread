@@ -22,7 +22,7 @@ test('set a monthly income, see the risk level, override one month', async ({
   await signUp(page);
 
   // set a global monthly income
-  await page.goto('/account');
+  await page.goto('/settings');
   const prefs = page.locator('section', {
     has: page.getByRole('heading', { name: 'Preferences' }),
   });

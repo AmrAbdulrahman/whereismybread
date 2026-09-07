@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '../client';
 import { expenses } from '../schema/budgets';
 import {
@@ -91,6 +91,8 @@ export interface ImportedTransactionInput {
   rawType: string | null;
   runningBalanceMinor: number | null;
   rawPayload: Record<string, unknown>;
+  /** Defaults to `pending`; a live sync passes `ignored` for rule matches. */
+  status?: 'pending' | 'ignored';
 }
 
 /**
@@ -103,6 +105,7 @@ export async function insertImportedTransactions(
   userId: string,
   importId: string,
   rows: ImportedTransactionInput[],
+  bankId?: string | null,
 ): Promise<number> {
   if (rows.length === 0) return 0;
   const db = getDb();
@@ -116,6 +119,7 @@ export async function insertImportedTransactions(
         slice.map((r) => ({
           userId,
           importId,
+          bankId: bankId ?? null,
           dedupKey: r.dedupKey,
           source: r.source,
           externalId: r.externalId,
@@ -148,6 +152,7 @@ export async function insertSyncedTransactions(
   userId: string,
   accountId: string,
   rows: ImportedTransactionInput[],
+  bankId?: string | null,
 ): Promise<number> {
   if (rows.length === 0) return 0;
   const db = getDb();
@@ -161,6 +166,7 @@ export async function insertSyncedTransactions(
         slice.map((r) => ({
           userId,
           accountId,
+          bankId: bankId ?? null,
           dedupKey: r.dedupKey,
           source: r.source,
           externalId: r.externalId,
@@ -172,6 +178,7 @@ export async function insertSyncedTransactions(
           rawType: r.rawType,
           runningBalanceMinor: r.runningBalanceMinor,
           rawPayload: r.rawPayload,
+          status: r.status ?? 'pending',
         })),
       )
       .onConflictDoNothing({
@@ -275,6 +282,37 @@ export async function setConnectionStatus(
       updatedAt: new Date(),
     })
     .where(eq(bankConnections.id, id));
+}
+
+export async function setConnectionBank(
+  userId: string,
+  bankId: string | null,
+): Promise<void> {
+  await getDb()
+    .update(bankConnections)
+    .set({ bankId, updatedAt: new Date() })
+    .where(eq(bankConnections.userId, userId));
+}
+
+export async function setConnectionIgnorePatterns(
+  userId: string,
+  patterns: string | null,
+): Promise<void> {
+  await getDb()
+    .update(bankConnections)
+    .set({ ignorePatterns: patterns, updatedAt: new Date() })
+    .where(eq(bankConnections.userId, userId));
+}
+
+/** Set the connection's bank only if it doesn't have one yet (connect-time). */
+export async function setConnectionBankIfUnset(
+  id: string,
+  bankId: string,
+): Promise<void> {
+  await getDb()
+    .update(bankConnections)
+    .set({ bankId, updatedAt: new Date() })
+    .where(and(eq(bankConnections.id, id), isNull(bankConnections.bankId)));
 }
 
 export async function markConnectionSynced(id: string): Promise<void> {
@@ -436,5 +474,47 @@ export async function markBankTransactionIgnored(
     .set({ status: 'ignored', updatedAt: new Date() })
     .where(
       and(eq(bankTransactions.id, id), eq(bankTransactions.userId, userId)),
+    );
+}
+
+export async function markBankTransactionsIgnored(
+  userId: string,
+  ids: string[],
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await getDb()
+    .update(bankTransactions)
+    .set({ status: 'ignored', updatedAt: new Date() })
+    .where(
+      and(
+        eq(bankTransactions.userId, userId),
+        inArray(bankTransactions.id, ids),
+        eq(bankTransactions.status, 'pending'),
+      ),
+    )
+    .returning({ id: bankTransactions.id });
+  return rows.length;
+}
+
+/**
+ * Stamp `bankId` onto this user's transactions for the given bank accounts
+ * that don't have one yet — a one-time backfill so rows synced before the
+ * connection had a bank still land in the right tab.
+ */
+export async function backfillTransactionsBank(
+  userId: string,
+  bankId: string,
+  accountIds: string[],
+): Promise<void> {
+  if (accountIds.length === 0) return;
+  await getDb()
+    .update(bankTransactions)
+    .set({ bankId })
+    .where(
+      and(
+        eq(bankTransactions.userId, userId),
+        inArray(bankTransactions.accountId, accountIds),
+        isNull(bankTransactions.bankId),
+      ),
     );
 }

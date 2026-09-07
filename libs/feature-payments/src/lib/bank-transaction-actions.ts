@@ -5,6 +5,7 @@ import type { FormState } from '@wib/auth';
 import {
   markBankTransactionCategorized,
   markBankTransactionIgnored,
+  markBankTransactionsIgnored,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
 
@@ -14,7 +15,7 @@ export async function categorizeBankTransactionAction(
 ): Promise<FormState> {
   const userId = await requireUserId();
   await markBankTransactionCategorized(userId, transactionId, result.type, result.id);
-  revalidatePath('/transactions');
+  revalidatePath('/integrations');
   revalidatePath('/plan');
   return { ok: true };
 }
@@ -24,7 +25,20 @@ export async function ignoreBankTransactionAction(
 ): Promise<FormState> {
   const userId = await requireUserId();
   await markBankTransactionIgnored(userId, transactionId);
-  revalidatePath('/transactions');
+  revalidatePath('/integrations');
   revalidatePath('/plan');
   return { ok: true };
+}
+
+export async function bulkIgnoreBankTransactionsAction(
+  ids: string[],
+): Promise<FormState & { ignored?: number }> {
+  const userId = await requireUserId();
+  const clean = (Array.isArray(ids) ? ids : []).filter(
+    (id) => typeof id === 'string' && id.length > 0,
+  );
+  const ignored = await markBankTransactionsIgnored(userId, clean.slice(0, 500));
+  revalidatePath('/integrations');
+  revalidatePath('/plan');
+  return { ok: true, ignored };
 }

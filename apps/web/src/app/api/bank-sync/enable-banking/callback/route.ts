@@ -14,7 +14,7 @@ export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const base = url.origin;
   const done = (status: string) =>
-    Response.redirect(`${base}/transactions?bank=${status}`, 303);
+    Response.redirect(`${base}/integrations?bank=${status}`, 303);
 
   const error = url.searchParams.get('error');
   if (error) return done('error');

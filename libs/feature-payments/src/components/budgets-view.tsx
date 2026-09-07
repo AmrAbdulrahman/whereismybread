@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Account, Tag } from '@wib/db';
+import type { Account, Bank, Tag } from '@wib/db';
 import { formatMoney, money, type IsoDate } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
 import { FileText, Pencil, Plus, Repeat, Trash2 } from '@wib/ui/icons';
@@ -60,6 +60,7 @@ function toExpenseFormInitial(
     id: e.id,
     budgetId,
     accountId: e.accountId,
+    bankId: e.bankId,
     name: e.name,
     date: e.date,
     amountMinor: e.amount.minorUnits,
@@ -73,6 +74,7 @@ function toExpenseFormInitial(
 export function BudgetsView({
   budgets,
   accounts = [],
+  banks = [],
   tags = [],
   today,
   defaultCurrency,
@@ -80,6 +82,7 @@ export function BudgetsView({
 }: {
   budgets: BudgetSummary[];
   accounts?: Account[];
+  banks?: Bank[];
   tags?: Tag[];
   today: string;
   defaultCurrency: string;
@@ -414,6 +417,7 @@ export function BudgetsView({
           <ExpenseForm
             budgets={budgetOptions}
             accounts={accounts}
+            banks={banks}
             tags={tags}
             budgetId={expenseOpen.budgetId}
             date={

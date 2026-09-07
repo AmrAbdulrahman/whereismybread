@@ -77,6 +77,8 @@ export interface PaymentFormPrefill {
   name?: string;
   amount?: string;
   currency?: string;
+  notes?: string;
+  bankId?: string | null;
 }
 
 export interface PaymentFormProps {
@@ -200,7 +202,7 @@ export function PaymentForm({
         defaultCurrency,
       methodId: initial?.methodId ?? null,
       accountId: initial?.accountId ?? null,
-      bankId: initial?.bankId ?? null,
+      bankId: initial?.bankId ?? prefill?.bankId ?? null,
       recipientMethodId: initial?.recipientMethodId ?? null,
       recurrence: initial?.recurrence ?? 'one_time',
       anchorDate: initial?.anchorDate ?? today,
@@ -216,7 +218,7 @@ export function PaymentForm({
       url: initial?.url ?? '',
       logoUrl: initial?.logoUrl ?? '',
       brandColor: initial?.brandColor ?? '',
-      notes: initial?.notes ?? '',
+      notes: initial?.notes ?? prefill?.notes ?? '',
       tags: initial?.tags ?? [],
     },
   });

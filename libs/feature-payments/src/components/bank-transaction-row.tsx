@@ -31,12 +31,19 @@ function timeLabel(iso: string): string {
 export function BankTransactionRow({
   txn,
   variant = 'inbox',
+  selectable = false,
+  selected = false,
+  onSelectedChange,
   onLogExpense,
   onCreatePayment,
   onIgnore,
 }: {
   txn: BankTransactionRowData;
   variant?: 'inbox' | 'day';
+  /** Show a leading checkbox for bulk actions (inbox only). */
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectedChange?: (checked: boolean) => void;
   onLogExpense: () => void;
   onCreatePayment: () => void;
   onIgnore: () => void;
@@ -56,19 +63,37 @@ export function BankTransactionRow({
         'flex flex-col gap-2 rounded-lg border px-3 py-2.5',
         variant === 'day'
           ? 'border-warn/40 bg-warn/[0.06]'
-          : 'border-line bg-surface',
+          : selected
+            ? 'border-accent bg-accent/[0.06]'
+            : 'border-line bg-surface',
       )}
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+        {selectable ? (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(e) => onSelectedChange?.(e.target.checked)}
+            aria-label={`Select ${txn.merchant || txn.description}`}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+          />
+        ) : null}
+        <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-sm text-ink">
             {variant === 'day' ? (
               <span className="shrink-0 rounded-full bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warn">
                 Review
               </span>
             ) : null}
-            <span className="truncate">{txn.description}</span>
+            <span className="truncate" title={txn.description}>
+              {txn.merchant || txn.description}
+            </span>
           </p>
+          {txn.merchant && txn.merchant !== txn.description ? (
+            <p className="truncate text-[11px] text-muted" title={txn.description}>
+              {txn.description}
+            </p>
+          ) : null}
           {meta ? <p className="text-[11px] text-muted">{meta}</p> : null}
         </div>
         <span
@@ -96,7 +121,7 @@ export function BankTransactionRow({
           className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1 text-xs font-medium text-ink-soft transition-colors hover:border-accent/60 hover:text-ink"
         >
           <CalendarDays size={12} strokeWidth={2} />
-          Create recurring payment
+          Create a planned payment
         </button>
         <button
           type="button"

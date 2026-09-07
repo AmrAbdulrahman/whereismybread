@@ -20,6 +20,11 @@ export async function getExpensesData(): Promise<ExpenseLine[]> {
     accountId: e.accountId,
     accountName: e.accountName,
     accountColor: e.accountColor,
+    bankId: e.bankId,
+    bankName: e.bankName,
+    bankColor: e.bankColor,
+    bankIconKey: e.bankIconKey,
+    bankLogoUrl: e.bankLogoUrl,
     tags: e.tags,
     attachments: e.attachments,
   }));

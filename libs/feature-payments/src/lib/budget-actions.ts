@@ -141,6 +141,7 @@ export async function saveExpenseAction(
   const input = {
     budgetId: parsed.data.budgetId,
     accountId: parsed.data.accountId,
+    bankId: parsed.data.bankId,
     name: parsed.data.name,
     date: parsed.data.date,
     amountMinor,

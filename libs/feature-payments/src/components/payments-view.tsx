@@ -106,6 +106,7 @@ function toExpenseFormInitial(e: ExpenseLine): ExpenseFormInitial {
     id: e.id,
     budgetId: e.budgetId,
     accountId: e.accountId,
+    bankId: e.bankId,
     name: e.name,
     date: e.date,
     amountMinor: e.amount.minorUnits,
@@ -423,6 +424,7 @@ export function PaymentsView({
         <ExpenseForm
           budgets={budgetCurrencyOptions}
           accounts={accounts}
+          banks={banks}
           tags={tags}
           budgetId={
             expenseSheet.mode === 'new' ? expenseSheet.budgetId : null

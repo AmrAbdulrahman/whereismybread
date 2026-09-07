@@ -44,7 +44,7 @@ export default function PrivacyPolicyPage() {
             account-information provider) to fetch your transactions on your
             behalf. The connection is read-only, you authorise it directly with
             your bank, it expires automatically (around every 90 days), and you
-            can disconnect it at any time from the Sync bank or Account page.
+            can disconnect it at any time from the Integrations page.
             We store an encrypted reference to the connection so the daily sync
             can run — never your bank login.
           </li>
@@ -75,7 +75,7 @@ export default function PrivacyPolicyPage() {
           Your choices
         </h2>
         <p>
-          Imported transactions can be ignored or deleted from the Sync bank
+          Imported transactions can be ignored or deleted from the Integrations
           tab, and a linked bank can be disconnected there or on the Account
           page. To request a copy of your data or full account deletion, email
           us (below) — there&rsquo;s no self-service deletion button yet.

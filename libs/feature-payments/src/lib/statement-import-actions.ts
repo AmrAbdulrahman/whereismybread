@@ -52,6 +52,8 @@ export async function importStatementAction(
 
   const defaultCurrency =
     (formData.get('defaultCurrency') as string | null)?.toUpperCase() || 'GBP';
+  const bankIdRaw = (formData.get('bankId') as string | null) ?? '';
+  const bankId = /^[0-9a-f-]{36}$/i.test(bankIdRaw) ? bankIdRaw : null;
 
   let text: string;
   try {
@@ -90,7 +92,12 @@ export async function importStatementAction(
     rawPayload: r.raw as Record<string, unknown>,
   }));
 
-  const imported = await insertImportedTransactions(userId, importRow.id, rows);
+  const imported = await insertImportedTransactions(
+    userId,
+    importRow.id,
+    rows,
+    bankId,
+  );
 
   const latest = statement.rows.reduce((a, b) =>
     b.occurredAt > a.occurredAt ? b : a,
@@ -107,7 +114,7 @@ export async function importStatementAction(
     latestExternalId: lastWithId?.externalId ?? null,
   });
 
-  revalidatePath('/transactions');
+  revalidatePath('/integrations');
   return {
     ok: true,
     imported,

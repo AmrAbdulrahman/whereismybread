@@ -827,11 +827,11 @@ export function PaymentList({
         {reviewTransactions.length > 0 ? (
           <p className="rounded-lg border border-warn/40 bg-warn/[0.06] px-3 py-2 text-xs text-ink-soft">
             {reviewTransactions.length} imported transaction
-            {reviewTransactions.length === 1 ? '' : 's'} to review — open the{' '}
-            <a href="/transactions" className="font-medium text-warn underline">
-              Sync bank
-            </a>{' '}
-            tab, or jump to their month.
+            {reviewTransactions.length === 1 ? '' : 's'} to review — open{' '}
+            <a href="/integrations" className="font-medium text-warn underline">
+              Integrations
+            </a>
+            , or jump to their month.
           </p>
         ) : null}
         <p className="rounded-xl border border-dashed border-line-strong p-8 text-center text-sm text-muted">
@@ -889,11 +889,11 @@ export function PaymentList({
         <p className="rounded-lg border border-warn/40 bg-warn/[0.06] px-3 py-2 text-xs text-ink-soft">
           {reviewOutsideWindow} more imported transaction
           {reviewOutsideWindow === 1 ? '' : 's'} to review fall outside these
-          months — scroll to them, or open the{' '}
-          <a href="/transactions" className="font-medium text-warn underline">
-            Sync bank
-          </a>{' '}
-          tab.
+          months — scroll to them, or open{' '}
+          <a href="/integrations" className="font-medium text-warn underline">
+            Integrations
+          </a>
+          .
         </p>
       ) : null}
 

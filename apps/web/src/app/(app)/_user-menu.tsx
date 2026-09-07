@@ -14,7 +14,7 @@ export function UserMenu({
   return (
     <div className="flex flex-col gap-2 px-1">
       <Link
-        href="/account"
+        href="/settings"
         className="min-w-0 rounded-md px-1.5 py-1 hover:bg-surface-2"
       >
         <div className="truncate text-[13px] font-medium text-ink">

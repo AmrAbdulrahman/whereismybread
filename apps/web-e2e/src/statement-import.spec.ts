@@ -43,7 +43,7 @@ test('uploading a statement pulls in new transactions and dedups a re-upload', a
   page,
 }) => {
   await signUp(page);
-  await page.goto('/transactions');
+  await page.goto('/integrations');
 
   await upload(page);
 

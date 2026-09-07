@@ -1,11 +1,7 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
 import { money, toMajor } from '@wib/domain';
-import { BankConnectionPanel } from '@wib/feature-payments';
-import {
-  getBankConnectionData,
-  isEnableBankingConfigured,
-} from '@wib/feature-payments/server';
 import { ThemeToggle } from '@wib/ui';
 import { CheckForUpdatesButton } from '../../_components/update-prompt';
 import { PasswordForm } from './_password-form';
@@ -14,20 +10,17 @@ import { ProfileForm } from './_profile-form';
 import { SignOutButton } from './_sign-out';
 import { VerifyEmailNotice } from './_verify-notice';
 
-export const metadata = { title: 'Account' };
+export const metadata = { title: 'Settings' };
 
-export default async function AccountPage() {
+export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
-
-  const bankConnection = await getBankConnectionData();
-  const bankConfigured = isEnableBankingConfigured();
 
   return (
     <div className="flex max-w-lg flex-col gap-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">Account</h1>
-        <p className="text-ink-soft">Your profile and how you sign in.</p>
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <p className="text-ink-soft">Your profile, preferences, and connected apps.</p>
       </header>
 
       {user.emailVerified ? null : <VerifyEmailNotice />}
@@ -62,15 +55,16 @@ export default async function AccountPage() {
         />
       </section>
 
-      {(bankConfigured || bankConnection) && (
-        <section className="flex flex-col gap-3 border-t border-line pt-6">
-          <h2 className="font-display text-base font-semibold">Bank sync</h2>
-          <BankConnectionPanel
-            connection={bankConnection}
-            configured={bankConfigured}
-          />
-        </section>
-      )}
+      <section className="flex flex-col gap-3 border-t border-line pt-6">
+        <h2 className="font-display text-base font-semibold">Integrations</h2>
+        <p className="text-sm text-ink-soft">
+          Connect a bank, upload statements and manage sync rules on the{' '}
+          <Link href="/integrations" className="text-accent underline">
+            Integrations
+          </Link>{' '}
+          page.
+        </p>
+      </section>
 
       <section className="flex flex-col gap-3 border-t border-line pt-6">
         <h2 className="font-display text-base font-semibold">Appearance</h2>

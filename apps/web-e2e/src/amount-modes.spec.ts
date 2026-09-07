@@ -54,7 +54,7 @@ test('hourly income = rate × hours, with a per-month hours override', async ({
   await signUp(page);
 
   // switch income to hourly: €30/h, 160 h/month → €4,800 default
-  await page.goto('/account');
+  await page.goto('/settings');
   const prefs = page.locator('section', {
     has: page.getByRole('heading', { name: 'Preferences' }),
   });

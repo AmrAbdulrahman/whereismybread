@@ -295,6 +295,11 @@ export interface BudgetExpenseView {
   accountId: string | null;
   accountName: string | null;
   accountColor: string | null;
+  bankId: string | null;
+  bankName: string | null;
+  bankColor: string | null;
+  bankIconKey: string | null;
+  bankLogoUrl: string | null;
   tags: OccurrenceTag[];
   attachments: OccurrenceAttachment[];
 }
@@ -342,6 +347,11 @@ export interface ExpenseLine {
   accountId: string | null;
   accountName: string | null;
   accountColor: string | null;
+  bankId: string | null;
+  bankName: string | null;
+  bankColor: string | null;
+  bankIconKey: string | null;
+  bankLogoUrl: string | null;
   tags: OccurrenceTag[];
   attachments: OccurrenceAttachment[];
 }

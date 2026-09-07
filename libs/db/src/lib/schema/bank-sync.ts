@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { banks } from './payments';
 import { users } from './users';
 
 export const bankTransactionStatusEnum = pgEnum('bank_transaction_status', [
@@ -58,6 +59,15 @@ export const bankConnections = pgTable(
     /** Enable Banking session id, AES-256-GCM encrypted. Null while pending. */
     sessionIdEnc: text('session_id_enc'),
     psuIdHash: text('psu_id_hash'),
+    /** The `banks` row synced transactions from this connection are tagged
+     * with (prefilled into the triage form). Auto-set to a "Wise" bank on
+     * connect; editable in the connection panel. */
+    bankId: uuid('bank_id').references(() => banks.id, { onDelete: 'set null' }),
+    /** Newline-separated rules; a synced transaction whose description or type
+     * matches any line is stored pre-`ignored`. `#` starts a comment line;
+     * other lines are case-insensitive regexes (literal substring if the
+     * regex doesn't compile). */
+    ignorePatterns: text('ignore_patterns'),
     status: text('status').notNull().default('pending'),
     consentExpiresAt: timestamp('consent_expires_at', { withTimezone: true }),
     authorizedAt: timestamp('authorized_at', { withTimezone: true }),
@@ -145,6 +155,10 @@ export const bankTransactions = pgTable(
     accountId: uuid('account_id').references(() => bankAccounts.id, {
       onDelete: 'set null',
     }),
+    /** The bank this transaction belongs to — the connection's bank for a
+     * synced row, or the tab it was uploaded under for a CSV row. Drives the
+     * per-bank tabs on the Integrations page. */
+    bankId: uuid('bank_id').references(() => banks.id, { onDelete: 'set null' }),
     dedupKey: text('dedup_key').notNull(),
     source: text('source').notNull().default('Statement'),
     /** The bank's own transaction id, when the statement format carries one. */
@@ -170,6 +184,7 @@ export const bankTransactions = pgTable(
       t.status,
       t.occurredAt,
     ),
+    index('bank_transactions_bank_idx').on(t.bankId),
   ],
 );
 

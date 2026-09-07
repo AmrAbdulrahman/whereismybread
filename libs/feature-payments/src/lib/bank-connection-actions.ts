@@ -6,6 +6,8 @@ import { serverEnv } from '@wib/config';
 import {
   deleteBankConnection,
   getBankConnection,
+  setConnectionBank,
+  setConnectionIgnorePatterns,
   upsertPendingConnection,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
@@ -15,7 +17,7 @@ import {
   listAspsps,
   startAuthorization,
 } from './enablebanking-client';
-import { syncUserConnection } from './bank-sync';
+import { reapplyIgnoreRules, syncUserConnection } from './bank-sync';
 
 // Wise is not offered for GB via Enable Banking — only ~27 EEA countries.
 // Wise Europe SA/NV is Belgium-based, so BE is the natural pick; any EEA
@@ -119,8 +121,8 @@ export async function disconnectBankAction(): Promise<{ ok: boolean }> {
     }
   }
   await deleteBankConnection(userId);
-  revalidatePath('/account');
-  revalidatePath('/transactions');
+  revalidatePath('/settings');
+  revalidatePath('/integrations');
   return { ok: true };
 }
 
@@ -133,10 +135,34 @@ export interface SyncNowResult {
 export async function syncNowAction(): Promise<SyncNowResult> {
   const userId = await requireUserId();
   const res = await syncUserConnection(userId);
-  revalidatePath('/transactions');
+  revalidatePath('/integrations');
   revalidatePath('/plan');
-  revalidatePath('/account');
+  revalidatePath('/settings');
   return res.ok
     ? { ok: true, imported: res.imported }
     : { ok: false, error: res.error };
+}
+
+/** Set (or clear, with null) the bank synced transactions are tagged with. */
+export async function setConnectionBankAction(
+  bankId: string | null,
+): Promise<{ ok: boolean }> {
+  const userId = await requireUserId();
+  await setConnectionBank(userId, bankId && bankId.length > 0 ? bankId : null);
+  revalidatePath('/settings');
+  revalidatePath('/integrations');
+  return { ok: true };
+}
+
+export async function setIgnorePatternsAction(
+  patterns: string,
+): Promise<{ ok: boolean; ignored?: number }> {
+  const userId = await requireUserId();
+  const trimmed = patterns.trim();
+  await setConnectionIgnorePatterns(userId, trimmed.length > 0 ? patterns : '');
+  const ignored = await reapplyIgnoreRules(userId);
+  revalidatePath('/settings');
+  revalidatePath('/integrations');
+  revalidatePath('/plan');
+  return { ok: true, ignored };
 }

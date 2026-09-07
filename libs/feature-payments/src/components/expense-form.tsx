@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
-import type { Account, Expense, Tag } from '@wib/db';
+import type { Account, Bank, Expense, Tag } from '@wib/db';
 import {
   AmountField,
   Button,
@@ -11,6 +11,7 @@ import {
   Field,
   Input,
   Label,
+  MethodIcon,
   ResponsiveModal,
 } from '@wib/ui';
 import { Plus } from '@wib/ui/icons';
@@ -28,6 +29,7 @@ import {
 import type { OccurrenceAttachment } from '../lib/types';
 import { AccountForm } from './account-form';
 import { AttachmentsField } from './attachments-field';
+import { BankForm } from './bank-form';
 import { TagInput } from './tag-input';
 
 export interface ExpenseFormBudgetOption {
@@ -65,6 +67,7 @@ export interface ExpenseFormInitial {
   id: string;
   budgetId: string | null;
   accountId: string | null;
+  bankId: string | null;
   name: string;
   date: string;
   amountMinor: number;
@@ -78,11 +81,14 @@ export interface ExpenseFormPrefill {
   name?: string;
   amount?: string;
   currency?: string;
+  notes?: string;
+  bankId?: string | null;
 }
 
 export function ExpenseForm({
   budgets,
   accounts: initialAccounts = [],
+  banks: initialBanks = [],
   tags = [],
   budgetId = null,
   date,
@@ -95,6 +101,7 @@ export function ExpenseForm({
 }: {
   budgets: ExpenseFormBudgetOption[];
   accounts?: Account[];
+  banks?: Bank[];
   tags?: Tag[];
   /** Which budget to preselect (e.g. the one "Add expense" was opened from). */
   budgetId?: string | null;
@@ -112,6 +119,8 @@ export function ExpenseForm({
   const [formError, setFormError] = useState<string>();
   const [accounts, setAccounts] = useState(initialAccounts);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [banks, setBanks] = useState(initialBanks);
+  const [addingBank, setAddingBank] = useState(false);
   const [savedAttachments, setSavedAttachments] = useState<
     OccurrenceAttachment[]
   >(() => initial?.attachments ?? []);
@@ -134,6 +143,7 @@ export function ExpenseForm({
       ? {
           budgetId: initial.budgetId ?? '',
           accountId: initial.accountId ?? '',
+          bankId: initial.bankId ?? '',
           tags: initial.tags,
           name: initial.name,
           date: initial.date,
@@ -145,6 +155,7 @@ export function ExpenseForm({
       : {
           budgetId: budgetId ?? '',
           accountId: '',
+          bankId: prefill?.bankId ?? '',
           tags: [],
           name: prefill?.name ?? '',
           date,
@@ -153,7 +164,7 @@ export function ExpenseForm({
             prefill?.currency ??
             budgets.find((b) => b.id === budgetId)?.currency ??
             'EUR',
-          notes: '',
+          notes: prefill?.notes ?? '',
           attachments: [],
         },
   });
@@ -311,6 +322,75 @@ export function ExpenseForm({
             setAccounts((prev) => [...prev, account]);
             setValue('accountId', account.id, { shouldDirty: true });
             setAddingAccount(false);
+          }}
+        />
+      </ResponsiveModal>
+
+      <Field>
+        <Label>Bank</Label>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setValue('bankId', '', { shouldDirty: true })}
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs font-medium',
+              !watch('bankId')
+                ? 'border-accent bg-accent/15 text-accent'
+                : 'border-line-strong text-muted hover:text-ink',
+            )}
+          >
+            None
+          </button>
+          {banks.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setValue('bankId', b.id, { shouldDirty: true })}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
+                watch('bankId') === b.id
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-line-strong text-muted hover:text-ink',
+              )}
+            >
+              {b.iconKey || b.logoUrl ? (
+                <MethodIcon
+                  iconKey={b.iconKey ?? 'bank'}
+                  logoUrl={b.logoUrl}
+                  size={13}
+                />
+              ) : (
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: b.color }}
+                />
+              )}
+              {b.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setAddingBank(true)}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:text-ink"
+          >
+            <Plus size={13} strokeWidth={3} />
+            New bank
+          </button>
+        </div>
+      </Field>
+
+      <ResponsiveModal
+        open={addingBank}
+        onOpenChange={setAddingBank}
+        title="New bank"
+        description="The bank or card this spend went through."
+      >
+        <BankForm
+          onCancel={() => setAddingBank(false)}
+          onCreated={(bank) => {
+            setBanks((prev) => [...prev, bank]);
+            setValue('bankId', bank.id, { shouldDirty: true });
+            setAddingBank(false);
           }}
         />
       </ResponsiveModal>

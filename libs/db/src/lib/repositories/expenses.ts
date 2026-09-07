@@ -6,13 +6,15 @@ import {
   expenseTags,
   type Expense,
 } from '../schema/budgets';
-import { accounts } from '../schema/payments';
+import { accounts, banks } from '../schema/payments';
 
 export interface ExpenseInput {
   /** `null` — the expense isn't tracked against any budget. */
   budgetId: string | null;
   /** `null` — not assigned to any account. */
   accountId: string | null;
+  /** `null` — not assigned to any bank. */
+  bankId: string | null;
   name: string;
   /** `YYYY-MM-DD`. */
   date: string;
@@ -51,6 +53,20 @@ async function ownsAccountOrNone(
   return owned.length > 0;
 }
 
+/** `true` when `bankId` is unset, or is a bank this user owns. */
+async function ownsBankOrNone(
+  userId: string,
+  bankId: string | null,
+): Promise<boolean> {
+  if (!bankId) return true;
+  const owned = await getDb()
+    .select({ id: banks.id })
+    .from(banks)
+    .where(and(eq(banks.id, bankId), eq(banks.userId, userId)))
+    .limit(1);
+  return owned.length > 0;
+}
+
 /** Insert an expense — returns `null` if a given budget/account isn't the user's. */
 export async function createExpense(
   userId: string,
@@ -58,6 +74,7 @@ export async function createExpense(
 ): Promise<Expense | null> {
   if (!(await ownsBudgetOrNone(userId, input.budgetId))) return null;
   if (!(await ownsAccountOrNone(userId, input.accountId))) return null;
+  if (!(await ownsBankOrNone(userId, input.bankId))) return null;
 
   return getDb().transaction(async (tx) => {
     const rows = await tx
@@ -66,6 +83,7 @@ export async function createExpense(
         userId,
         budgetId: input.budgetId,
         accountId: input.accountId,
+        bankId: input.bankId,
         name: input.name.trim(),
         date: input.date,
         amountMinor: input.amountMinor,
@@ -96,6 +114,7 @@ export async function updateExpense(
 ): Promise<Expense | null> {
   if (!(await ownsBudgetOrNone(userId, input.budgetId))) return null;
   if (!(await ownsAccountOrNone(userId, input.accountId))) return null;
+  if (!(await ownsBankOrNone(userId, input.bankId))) return null;
 
   return getDb().transaction(async (tx) => {
     const rows = await tx
@@ -103,6 +122,7 @@ export async function updateExpense(
       .set({
         budgetId: input.budgetId,
         accountId: input.accountId,
+        bankId: input.bankId,
         name: input.name.trim(),
         date: input.date,
         amountMinor: input.amountMinor,
@@ -186,6 +206,11 @@ export interface ExpenseLine {
   accountId: string | null;
   accountName: string | null;
   accountColor: string | null;
+  bankId: string | null;
+  bankName: string | null;
+  bankColor: string | null;
+  bankIconKey: string | null;
+  bankLogoUrl: string | null;
   tags: ExpenseLineTag[];
   attachments: ExpenseLineAttachment[];
 }
@@ -209,6 +234,8 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
           'notes', e.notes,
           'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
           'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
+          'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,
+          'bankIconKey', bk.icon_key, 'bankLogoUrl', bk.logo_url,
           'tags', coalesce((
             select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
               order by t.name)
@@ -230,6 +257,7 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
       from expenses e
       left join budgets b on b.id = e.budget_id
       left join accounts ac on ac.id = e.account_id
+      left join banks bk on bk.id = e.bank_id
       where e.user_id = ${userId}
     ), '[]'::jsonb) as expenses
   `;
