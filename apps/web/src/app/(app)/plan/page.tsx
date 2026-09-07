@@ -7,6 +7,7 @@ import {
   getBoardData,
   getBudgetsData,
   getExpensesData,
+  getSyncTargets,
 } from '@wib/feature-payments/server';
 
 export const metadata = { title: 'Plan' };
@@ -31,6 +32,7 @@ export default async function CalendarPage({
   const budgets = await getBudgetsData();
   const expenses = await getExpensesData();
   const { pending: reviewTransactions } = await getBankTransactionsData();
+  const syncTargets = await getSyncTargets();
 
   return (
     <PaymentsView
@@ -46,6 +48,7 @@ export default async function CalendarPage({
       budgets={budgets}
       expenses={expenses}
       reviewTransactions={reviewTransactions}
+      syncTargets={syncTargets}
     />
   );
 }

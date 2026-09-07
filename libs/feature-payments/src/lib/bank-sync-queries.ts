@@ -2,12 +2,17 @@ import 'server-only';
 
 import { requireUserId } from '@wib/auth/server';
 import {
-  getBankConnection,
   listBankAccounts,
+  listBankConnections,
   listBanks,
   listPendingBankTransactions,
   listStatementImports,
 } from '@wib/db';
+import {
+  isEnableBankingConfigured,
+  listAspspNames,
+} from './enablebanking-client';
+import { CONNECTABLE_BANKS } from './connectable-banks';
 import { cleanMerchant } from './merchant';
 
 export interface BankTransactionRow {
@@ -23,7 +28,7 @@ export interface BankTransactionRow {
   currency: string;
   rawType: string | null;
   balanceName: string | null;
-  /** The connection's bank, when this row came from a live sync. */
+  /** The bank this transaction belongs to. */
   bankId: string | null;
 }
 
@@ -59,6 +64,8 @@ export interface BankConnectionBankOption {
 }
 
 export interface BankConnectionView {
+  /** The connection row id. */
+  id: string;
   status: 'pending' | 'active' | 'expired' | 'error';
   aspspName: string;
   aspspCountry: string;
@@ -70,49 +77,102 @@ export interface BankConnectionView {
   bankId: string | null;
   /** Newline-separated auto-ignore rules. */
   ignorePatterns: string;
-  /** All the user's banks, for the picker. */
-  banks: BankConnectionBankOption[];
 }
 
-/** Safe (no secrets) view of the user's live bank connection, or null. */
-export async function getBankConnectionData(): Promise<BankConnectionView | null> {
+/** A bank the app can connect automatically (serializable subset). */
+export interface ConnectableBankOption {
+  key: string;
+  label: string;
+  aspspName: string;
+  aspspCountry: string;
+}
+
+/** Every live bank connection the user has (no secrets). */
+export async function getBankConnectionsData(): Promise<BankConnectionView[]> {
   const userId = await requireUserId();
-  const connection = await getBankConnection(userId);
-  if (!connection) return null;
-  const accounts =
-    connection.status === 'pending'
-      ? []
-      : await listBankAccounts(connection.id);
-  const banks = await listBanks(userId);
-  return {
-    status: connection.status as BankConnectionView['status'],
-    aspspName: connection.aspspName,
-    aspspCountry: connection.aspspCountry,
-    lastSyncedAt: connection.lastSyncedAt?.toISOString() ?? null,
-    consentExpiresAt: connection.consentExpiresAt?.toISOString() ?? null,
-    lastError: connection.lastError,
-    accounts: accounts.map((a) => ({
-      name: a.name,
-      currency: a.currency,
-      lastSyncedAt: a.lastSyncedAt?.toISOString() ?? null,
-    })),
-    bankId: connection.bankId,
-    ignorePatterns: connection.ignorePatterns ?? '',
-    banks: banks.map((b) => ({
-      id: b.id,
-      name: b.name,
-      color: b.color,
-      iconKey: b.iconKey,
-      logoUrl: b.logoUrl,
-    })),
-  };
+  const connections = await listBankConnections(userId);
+  const out: BankConnectionView[] = [];
+  for (const c of connections) {
+    const accounts =
+      c.status === 'pending' ? [] : await listBankAccounts(c.id);
+    out.push({
+      id: c.id,
+      status: c.status as BankConnectionView['status'],
+      aspspName: c.aspspName,
+      aspspCountry: c.aspspCountry,
+      lastSyncedAt: c.lastSyncedAt?.toISOString() ?? null,
+      consentExpiresAt: c.consentExpiresAt?.toISOString() ?? null,
+      lastError: c.lastError,
+      accounts: accounts.map((a) => ({
+        name: a.name,
+        currency: a.currency,
+        lastSyncedAt: a.lastSyncedAt?.toISOString() ?? null,
+      })),
+      bankId: c.bankId,
+      ignorePatterns: c.ignorePatterns ?? '',
+    });
+  }
+  return out;
+}
+
+/** Banks the app can auto-connect that this Enable Banking app can reach. */
+export async function getConnectableBanks(): Promise<ConnectableBankOption[]> {
+  await requireUserId();
+  if (!isEnableBankingConfigured()) return [];
+  let available = CONNECTABLE_BANKS;
+  try {
+    const names = await listAspspNames();
+    available = CONNECTABLE_BANKS.filter((b) =>
+      names.some(
+        (n) => n.name === b.aspspName && n.country === b.aspspCountry,
+      ),
+    );
+  } catch {
+    /* fall back to the full catalog */
+  }
+  return available.map((b) => ({
+    key: b.key,
+    label: b.label,
+    aspspName: b.aspspName,
+    aspspCountry: b.aspspCountry,
+  }));
+}
+
+export type SyncTarget = BankConnectionBankOption & { connectionId: string };
+
+/**
+ * Banks the user can trigger a sync for right now — a live integration that
+ * isn't `pending`. Each carries its connection id.
+ */
+export async function getSyncTargets(): Promise<SyncTarget[]> {
+  const userId = await requireUserId();
+  const [connections, banks] = await Promise.all([
+    listBankConnections(userId),
+    listBanks(userId),
+  ]);
+  const targets: SyncTarget[] = [];
+  for (const c of connections) {
+    if (c.status === 'pending' || !c.bankId) continue;
+    const bank = banks.find((b) => b.id === c.bankId);
+    if (!bank) continue;
+    targets.push({
+      connectionId: c.id,
+      id: bank.id,
+      name: bank.name,
+      color: bank.color,
+      iconKey: bank.iconKey,
+      logoUrl: bank.logoUrl,
+    });
+  }
+  return targets;
 }
 
 export async function getBankTransactionsData(): Promise<BankTransactionsData> {
   const userId = await requireUserId();
   const transactions = await listPendingBankTransactions(userId);
   const imports = await listStatementImports(userId, 5);
-  const connection = await getBankConnection(userId);
+  const connections = await listBankConnections(userId);
+  const connBankByAccountConn = connections[0]?.bankId ?? null;
 
   return {
     pending: transactions.map((t) => ({
@@ -125,10 +185,9 @@ export async function getBankTransactionsData(): Promise<BankTransactionsData> {
       currency: t.currency,
       rawType: t.rawType,
       balanceName: t.source,
-      // Prefer the row's own bank; fall back to the connection's for older
-      // synced rows that predate the column.
-      bankId:
-        t.bankId ?? (t.accountId ? (connection?.bankId ?? null) : null),
+      // Prefer the row's own bank; fall back to the (single) connection's
+      // for older synced rows that predate the column.
+      bankId: t.bankId ?? (t.accountId ? connBankByAccountConn : null),
     })),
     imports: imports.map((i) => ({
       id: i.id,

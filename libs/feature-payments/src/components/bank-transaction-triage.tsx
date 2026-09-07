@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { RateMap } from '@wib/domain';
+import { formatMoney, money, type RateMap } from '@wib/domain';
 import { Button } from '@wib/ui';
+import { Search, X } from '@wib/ui/icons';
 import {
   bulkIgnoreBankTransactionsAction,
   categorizeBankTransactionAction,
@@ -57,11 +58,26 @@ export function BankTransactionTriage({
 
   const [sheet, setSheet] = useState<TriageSheet>({ mode: 'closed' });
   const close = () => setSheet({ mode: 'closed' });
+  const [query, setQuery] = useState('');
 
-  const visible = useMemo(
+  const unhandled = useMemo(
     () => pending.filter((t) => !handled.has(t.id)),
     [pending, handled],
   );
+
+  const q = query.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!q) return unhandled;
+    return unhandled.filter((t) => {
+      const amount = formatMoney(money(t.amountMinor, t.currency)).toLowerCase();
+      return (
+        t.merchant.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        (t.balanceName ?? '').toLowerCase().includes(q) ||
+        amount.includes(q)
+      );
+    });
+  }, [unhandled, q]);
 
   const settle = (ids: string[], run: () => Promise<unknown>) => {
     setHandled((prev) => {
@@ -99,7 +115,7 @@ export function BankTransactionTriage({
       settle(ids, () => bulkIgnoreBankTransactionsAction(ids));
   };
 
-  if (visible.length === 0) {
+  if (unhandled.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-line-strong py-12 text-center text-sm text-ink-soft">
         Nothing to review. Upload a statement or sync to pull in new
@@ -108,20 +124,49 @@ export function BankTransactionTriage({
     );
   }
 
+  const showSearch = unhandled.length > 5 || q.length > 0;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-display text-base font-semibold text-ink">
-          Needs review ({visible.length})
+          Needs review ({q ? `${visible.length} of ${unhandled.length}` : visible.length})
         </h2>
         <button
           type="button"
           onClick={toggleAll}
-          className="text-xs font-medium text-ink-soft hover:text-ink"
+          disabled={visible.length === 0}
+          className="text-xs font-medium text-ink-soft hover:text-ink disabled:opacity-40"
         >
           {allSelected ? 'Clear selection' : 'Select all'}
         </button>
       </div>
+
+      {showSearch ? (
+        <div className="relative">
+          <Search
+            size={14}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search description, amount…"
+            className="h-9 w-full rounded-md border border-line-strong bg-ground pl-9 pr-8 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted hover:text-ink"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {selected.size > 0 ? (
         <div className="sticky top-2 z-10 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-sm backdrop-blur">
@@ -144,22 +189,28 @@ export function BankTransactionTriage({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-2">
-        {visible.map((txn) => (
-          <BankTransactionRow
-            key={txn.id}
-            txn={txn}
-            selectable
-            selected={selected.has(txn.id)}
-            onSelectedChange={(on) => toggle(txn.id, on)}
-            onLogExpense={() => setSheet({ mode: 'expense', txn })}
-            onCreatePayment={() => setSheet({ mode: 'payment', txn })}
-            onIgnore={() =>
-              settle([txn.id], () => ignoreBankTransactionAction(txn.id))
-            }
-          />
-        ))}
-      </div>
+      {visible.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line-strong py-8 text-center text-sm text-ink-soft">
+          No transactions match &ldquo;{query.trim()}&rdquo;.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {visible.map((txn) => (
+            <BankTransactionRow
+              key={txn.id}
+              txn={txn}
+              selectable
+              selected={selected.has(txn.id)}
+              onSelectedChange={(on) => toggle(txn.id, on)}
+              onLogExpense={() => setSheet({ mode: 'expense', txn })}
+              onCreatePayment={() => setSheet({ mode: 'payment', txn })}
+              onIgnore={() =>
+                settle([txn.id], () => ignoreBankTransactionAction(txn.id))
+              }
+            />
+          ))}
+        </div>
+      )}
 
       <TransactionTriageModal
         sheet={sheet}

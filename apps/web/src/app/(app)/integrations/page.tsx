@@ -4,11 +4,11 @@ import { todayIn } from '@wib/domain';
 import { IntegrationsView } from '@wib/feature-payments';
 import {
   getBanks,
-  getBankConnectionData,
+  getBankConnectionsData,
   getBankTransactionsData,
   getBoardData,
   getBudgetsData,
-  isEnableBankingConfigured,
+  getConnectableBanks,
 } from '@wib/feature-payments/server';
 
 export const metadata = { title: 'Integrations' };
@@ -27,8 +27,8 @@ export default async function IntegrationsPage({
   const budgets = await getBudgetsData();
   const banks = await getBanks();
   const { pending } = await getBankTransactionsData();
-  const connection = await getBankConnectionData();
-  const bankConfigured = isEnableBankingConfigured();
+  const connections = await getBankConnectionsData();
+  const connectable = await getConnectableBanks();
 
   return (
     <div className="flex max-w-xl flex-col gap-5">
@@ -43,8 +43,8 @@ export default async function IntegrationsPage({
 
       <IntegrationsView
         banks={banks}
-        connection={connection}
-        bankConfigured={bankConfigured}
+        connections={connections}
+        connectable={connectable}
         bankParam={bank}
         pending={pending}
         context={context}

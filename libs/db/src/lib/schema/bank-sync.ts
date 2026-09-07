@@ -75,7 +75,14 @@ export const bankConnections = pgTable(
     lastError: text('last_error'),
     ...audit,
   },
-  (t) => [uniqueIndex('bank_connections_user_idx').on(t.userId)],
+  (t) => [
+    // One connection per bank (ASPSP) per user.
+    uniqueIndex('bank_connections_user_aspsp_idx').on(
+      t.userId,
+      t.aspspName,
+      t.aspspCountry,
+    ),
+  ],
 );
 
 /**

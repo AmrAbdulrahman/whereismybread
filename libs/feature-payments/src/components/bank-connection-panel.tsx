@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, cn, MethodIcon, useToast } from '@wib/ui';
-import type { BankConnectionView } from '../lib/bank-sync-queries';
+import { Button, useToast } from '@wib/ui';
+import type {
+  BankConnectionView,
+  ConnectableBankOption,
+} from '../lib/bank-sync-queries';
 import {
   disconnectBankAction,
-  setConnectionBankAction,
   setIgnorePatternsAction,
   startBankConnectionAction,
   syncNowAction,
@@ -23,6 +25,23 @@ function fmtDate(iso: string | null): string | null {
   });
 }
 
+/** "just now" / "12 min ago" / "3 h ago" within a day, else "5 Sept, 14:07". */
+function fmtSynced(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const mins = Math.round((Date.now() - d.getTime()) / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)} h ago`;
+  return d.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
   const d = new Date(iso).getTime();
@@ -31,16 +50,17 @@ function daysUntil(iso: string | null): number | null {
 }
 
 /**
- * Connect / status / sync-now / disconnect for the user's live Open Banking
- * link (Enable Banking). New transactions land in the Sync-bank inbox for
+ * Connect / status / sync-now / disconnect for one bank's Open Banking link
+ * (Enable Banking). New transactions land in that bank's review inbox for
  * triage, same as a CSV upload — this just keeps them flowing automatically.
  */
 export function BankConnectionPanel({
   connection,
-  configured,
+  connectable,
 }: {
   connection: BankConnectionView | null;
-  configured: boolean;
+  /** The catalog entry for this bank, when it can be auto-connected. */
+  connectable: ConnectableBankOption | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -49,12 +69,19 @@ export function BankConnectionPanel({
   const [patterns, setPatterns] = useState(connection?.ignorePatterns ?? '');
   const [patternsDirty, setPatternsDirty] = useState(false);
 
-  if (!configured && !connection) return null;
+  useEffect(() => {
+    if (!patternsDirty) setPatterns(connection?.ignorePatterns ?? '');
+  }, [connection?.ignorePatterns, patternsDirty]);
+
+  if (!connection && !connectable) return null;
 
   const connect = async () => {
+    if (!connectable) return;
     setConnecting(true);
     try {
-      const res = await startBankConnectionAction();
+      const res = await startBankConnectionAction({
+        aspspName: connectable.aspspName,
+      });
       if (res.ok && res.url) {
         window.location.href = res.url;
         return;
@@ -66,8 +93,9 @@ export function BankConnectionPanel({
   };
 
   const syncNow = () =>
+    connection &&
     startTransition(async () => {
-      const res = await syncNowAction();
+      const res = await syncNowAction(connection.id);
       toast(
         res.ok
           ? {
@@ -83,21 +111,17 @@ export function BankConnectionPanel({
     });
 
   const disconnect = () =>
+    connection &&
     startTransition(async () => {
-      await disconnectBankAction();
+      await disconnectBankAction(connection.id);
       toast({ title: 'Bank disconnected', duration: 3000 });
       router.refresh();
     });
 
-  const pickBank = (bankId: string | null) =>
-    startTransition(async () => {
-      await setConnectionBankAction(bankId);
-      router.refresh();
-    });
-
   const savePatterns = () =>
+    connection &&
     startTransition(async () => {
-      const res = await setIgnorePatternsAction(patterns);
+      const res = await setIgnorePatternsAction(connection.id, patterns);
       setPatternsDirty(false);
       toast({
         title: 'Ignore rules saved',
@@ -110,30 +134,33 @@ export function BankConnectionPanel({
       router.refresh();
     });
 
-  // --- No connection yet -------------------------------------------------
+  const label = connectable?.label ?? connection?.aspspName ?? 'bank';
+
+  // --- Not connected yet ----------------------------------------------
   if (!connection) {
     return (
       <div className="flex flex-col items-start gap-3 rounded-xl border border-line p-4">
         <div>
-          <p className="text-sm font-medium text-ink">Connect your bank</p>
+          <p className="text-sm font-medium text-ink">Connect {label}</p>
           <p className="text-sm text-ink-soft">
-            Link your Wise account so new transactions arrive automatically for
-            you to review. Access is read-only and renews every ~90 days.
+            Link your {label} account so new transactions arrive automatically
+            for you to review. Access is read-only and renews about every 180
+            days.
           </p>
         </div>
         <Button type="button" size="sm" disabled={connecting} onClick={connect}>
-          {connecting ? 'Starting…' : 'Connect Wise'}
+          {connecting ? 'Starting…' : `Connect ${label}`}
         </Button>
       </div>
     );
   }
 
-  const lastSynced = fmtDate(connection.lastSyncedAt);
+  const lastSynced = fmtSynced(connection.lastSyncedAt);
   const expires = fmtDate(connection.consentExpiresAt);
   const expiresIn = daysUntil(connection.consentExpiresAt);
   const expiringSoon = expiresIn != null && expiresIn <= 7;
 
-  // --- Pending ---------------------------------------------------------
+  // --- Pending -------------------------------------------------------
   if (connection.status === 'pending') {
     return (
       <div className="flex flex-col items-start gap-3 rounded-xl border border-line p-4">
@@ -155,7 +182,7 @@ export function BankConnectionPanel({
     connection.status === 'expired' ||
     (connection.status === 'error' && !!connection.lastError);
 
-  // --- Active / error / expired ---------------------------------------
+  // --- Active / error / expired -------------------------------------
   return (
     <div
       className={`flex flex-col gap-3 rounded-xl border p-4 ${
@@ -239,97 +266,40 @@ export function BankConnectionPanel({
 
       <details className="group border-t border-line pt-3 text-sm">
         <summary className="cursor-pointer list-none text-xs font-medium text-ink-soft [&::-webkit-details-marker]:hidden">
-          Sync settings
+          Auto-ignore rules
           <span className="ml-1 text-muted group-open:hidden">▸</span>
           <span className="ml-1 hidden text-muted group-open:inline">▾</span>
         </summary>
 
-        <div className="mt-3 flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-medium text-ink-soft">
-              Tag synced transactions with
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              <button
+        <div className="mt-3 flex flex-col gap-1.5">
+          <p className="text-[11px] text-muted">
+            One case-insensitive regex per line, matched against a
+            transaction&apos;s description and type. Matches come in already
+            ignored. <code>#</code> starts a comment.
+          </p>
+          <textarea
+            aria-label="Auto-ignore rules"
+            rows={5}
+            spellCheck={false}
+            value={patterns}
+            onChange={(e) => {
+              setPatterns(e.target.value);
+              setPatternsDirty(true);
+            }}
+            className="rounded-md border border-line-strong bg-ground px-3 py-2 font-mono text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          {patternsDirty && (
+            <div>
+              <Button
                 type="button"
+                size="sm"
                 disabled={pending}
-                onClick={() => pickBank(null)}
-                className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs font-medium',
-                  connection.bankId == null
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-line-strong text-muted hover:text-ink',
-                )}
+                onClick={savePatterns}
               >
-                None
-              </button>
-              {connection.banks.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => pickBank(b.id)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
-                    connection.bankId === b.id
-                      ? 'border-accent bg-accent/15 text-accent'
-                      : 'border-line-strong text-muted hover:text-ink',
-                  )}
-                >
-                  {b.iconKey || b.logoUrl ? (
-                    <MethodIcon
-                      iconKey={b.iconKey ?? 'bank'}
-                      logoUrl={b.logoUrl}
-                      size={13}
-                    />
-                  ) : (
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ background: b.color }}
-                    />
-                  )}
-                  {b.name}
-                </button>
-              ))}
+                {pending ? 'Saving…' : 'Save rules'}
+              </Button>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="ignore-patterns"
-              className="text-xs font-medium text-ink-soft"
-            >
-              Auto-ignore rules
-            </label>
-            <p className="text-[11px] text-muted">
-              One case-insensitive regex per line, matched against a
-              transaction&apos;s description and type. Matches come in already
-              ignored. <code>#</code> starts a comment.
-            </p>
-            <textarea
-              id="ignore-patterns"
-              rows={5}
-              spellCheck={false}
-              value={patterns}
-              onChange={(e) => {
-                setPatterns(e.target.value);
-                setPatternsDirty(true);
-              }}
-              className="rounded-md border border-line-strong bg-ground px-3 py-2 font-mono text-xs text-ink focus:outline-none focus:ring-2 focus:ring-accent"
-            />
-            {patternsDirty && (
-              <div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={pending}
-                  onClick={savePatterns}
-                >
-                  {pending ? 'Saving…' : 'Save rules'}
-                </Button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </details>
     </div>

@@ -97,8 +97,11 @@ export {
   startBankConnectionAction,
   disconnectBankAction,
   syncNowAction,
-  listBankOptionsAction,
   setConnectionBankAction,
   setIgnorePatternsAction,
-  type BankOption,
 } from './lib/bank-connection-actions';
+export {
+  CONNECTABLE_BANKS,
+  connectableForBankName,
+  type ConnectableBank,
+} from './lib/connectable-banks';

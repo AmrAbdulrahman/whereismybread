@@ -625,18 +625,31 @@ export function PaymentList({
   // unless "unpaid only" is on, in which case they drop out (and days left
   // with nothing at all — no unpaid occurrences, no expenses — drop too).
   const upcoming = (() => {
-    const base = board.groups
-      .map((g) => ({
-        ...g,
-        occurrences: g.occurrences.filter(
-          (o) =>
-            wantPlanned &&
-            matchesFilter(o) &&
-            o.status !== 'skipped' &&
-            (!unpaidOnly || !isPaid(o)),
-        ),
-      }))
-      .filter((g) => g.occurrences.length > 0);
+    const filteredGroups = board.groups.map((g) => ({
+      ...g,
+      occurrences: g.occurrences.filter(
+        (o) =>
+          wantPlanned &&
+          matchesFilter(o) &&
+          o.status !== 'skipped' &&
+          (!unpaidOnly || !isPaid(o)),
+      ),
+    }));
+    const nonEmpty = filteredGroups.filter((g) => g.occurrences.length > 0);
+    const firstMatch = nonEmpty[0]?.date;
+    const lastMatch = nonEmpty[nonEmpty.length - 1]?.date;
+    // With an attribute filter on, keep the emptied-out day headers that sit
+    // *between* matches — so the list keeps its shape and you can see which
+    // days had activity that's now filtered out. (Unpaid-only still prunes
+    // them; empty days there are just noise.)
+    const base =
+      filterActive && !unpaidOnly && firstMatch && lastMatch
+        ? filteredGroups.filter(
+            (g) =>
+              g.occurrences.length > 0 ||
+              (g.date >= firstMatch && g.date <= lastMatch),
+          )
+        : nonEmpty;
     // A date with only an expense, or only a transaction to review, still
     // needs its own day section.
     const seen = new Set(base.map((g) => g.date));
@@ -1076,6 +1089,36 @@ export function PaymentList({
                 ? (expensesByDate.get(group.date) ?? [])
                 : [];
               const dayReview = reviewByDate.get(group.date) ?? [];
+
+              // An in-between day emptied by the active filter — a thin,
+              // non-interactive marker just to keep the timeline continuous.
+              if (
+                group.occurrences.length === 0 &&
+                dayExpenses.length === 0 &&
+                dayReview.length === 0
+              ) {
+                return (
+                  <Fragment key={group.date}>
+                    {todayMarkerAt === gi && gi > 0 ? (
+                      <TodayMarker label="Nothing due today" />
+                    ) : null}
+                    <div
+                      className="flex items-baseline justify-between border-b border-line/60 pb-1 text-xs text-muted/70"
+                      data-day={group.date}
+                    >
+                      <span className="font-display font-medium">
+                        {new Intl.DateTimeFormat('en-GB', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                          timeZone: 'UTC',
+                        }).format(new Date(`${group.date}T00:00:00Z`))}
+                      </span>
+                      <span>no matches</span>
+                    </div>
+                  </Fragment>
+                );
+              }
               const dayUnbudgetedExpenses = dayExpenses.filter(
                 (e) => !e.budgetId,
               );

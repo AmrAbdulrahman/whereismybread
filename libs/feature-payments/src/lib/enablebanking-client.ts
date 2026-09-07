@@ -184,6 +184,25 @@ export async function listAspsps(country: string): Promise<EbAspsp[]> {
   return res.aspsps ?? [];
 }
 
+let aspspNameCache: { at: number; names: { name: string; country: string }[] } | null =
+  null;
+
+/** Every (name, country) pair this application can see. Cached ~1h. */
+export async function listAspspNames(): Promise<
+  { name: string; country: string }[]
+> {
+  if (aspspNameCache && Date.now() - aspspNameCache.at < 60 * 60 * 1000) {
+    return aspspNameCache.names;
+  }
+  const res = await ebFetch<{ aspsps: EbAspsp[] }>('/aspsps');
+  const names = (res.aspsps ?? []).map((a) => ({
+    name: a.name,
+    country: a.country,
+  }));
+  aspspNameCache = { at: Date.now(), names };
+  return names;
+}
+
 export interface StartAuthInput {
   aspspName: string;
   aspspCountry: string;

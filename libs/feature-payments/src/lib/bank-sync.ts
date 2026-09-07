@@ -5,8 +5,10 @@ import {
   activateConnection,
   backfillTransactionsBank,
   createBank,
-  getBankConnection,
+  getBankConnectionById,
+  getConnectionByAuthState,
   listBankAccounts,
+  listBankConnections,
   listPendingBankTransactions,
   listSyncableConnections,
   markBankAccountSynced,
@@ -49,8 +51,12 @@ function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function accountLabel(name: string | null, currency: string): string {
-  return name ? `${name} · ${currency}` : `Wise · ${currency}`;
+function accountLabel(
+  aspsp: string,
+  name: string | null,
+  currency: string,
+): string {
+  return name ? `${name} · ${currency}` : `${aspsp} · ${currency}`;
 }
 
 /**
@@ -79,16 +85,17 @@ export async function syncConnection(
   // Seed the auto-ignore rules on connections that predate the feature.
   let ignorePatterns = connection.ignorePatterns;
   if (ignorePatterns == null) {
-    await setConnectionIgnorePatterns(connection.userId, DEFAULT_IGNORE_PATTERNS);
+    await setConnectionIgnorePatterns(connection.id, DEFAULT_IGNORE_PATTERNS);
     ignorePatterns = DEFAULT_IGNORE_PATTERNS;
   }
 
   // Ensure the connection has a bank (predates the feature, or was cleared)
   // so synced + triaged transactions get tagged and land in the right tab.
+  // `createBank` dedupes on name, so this reuses the tab's existing bank.
   let bankId = connection.bankId;
   if (!bankId) {
     const bank = await createBank(connection.userId, {
-      name: connection.aspspName || 'Wise',
+      name: connection.aspspName || 'Bank',
       color: '#37e2b8',
     }).catch(() => null);
     if (bank) {
@@ -125,7 +132,11 @@ export async function syncConnection(
         : new Date(Date.now() - FIRST_SYNC_DAYS * 24 * 60 * 60 * 1000);
 
       const raw = await fetchAllTransactions(account.uid, ymd(since));
-      const label = accountLabel(account.name, account.currency);
+      const label = accountLabel(
+        connection.aspspName,
+        account.name,
+        account.currency,
+      );
       const rows = raw
         .map((t) => mapEbTransaction(t, label))
         .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -164,14 +175,14 @@ export async function syncConnection(
     return { ok: false, imported, error: message };
   }
 
-  // Retro-apply the ignore rules to anything still pending (rules that were
-  // added, or defaults just seeded, after those rows first came in).
-  if (ignoreMatchers.length > 0) {
+  // Retro-apply the ignore rules to anything still pending for this bank
+  // (rules added, or defaults just seeded, after those rows first came in).
+  if (ignoreMatchers.length > 0 && bankId) {
     const pending = await listPendingBankTransactions(connection.userId);
     const stale = pending
       .filter(
         (t) =>
-          (bankId == null || t.bankId === bankId) &&
+          t.bankId === bankId &&
           shouldIgnore(ignoreMatchers, t.description, t.rawType),
       )
       .map((t) => t.id);
@@ -207,18 +218,16 @@ export interface CompleteResult {
 
 /**
  * Exchange the auth `code` from the redirect for a session, store it, record
- * the accounts, and run a first backfill. `state` must match what we issued.
+ * the accounts, and run a first backfill. The pending connection is found by
+ * the `state` we issued (unique per attempt).
  */
 export async function completeConnection(
   userId: string,
   code: string,
   state: string,
 ): Promise<CompleteResult> {
-  const connection = await getBankConnection(userId);
-  if (!connection) return { ok: false, error: 'No pending connection.' };
-  if (!connection.authState || connection.authState !== state) {
-    return { ok: false, error: 'Authorization state mismatch.' };
-  }
+  const connection = await getConnectionByAuthState(userId, state);
+  if (!connection) return { ok: false, error: 'Unknown authorization state.' };
 
   let session;
   try {
@@ -247,42 +256,69 @@ export async function completeConnection(
   );
 
   // `syncConnection` (below) associates the bank and seeds ignore rules.
-  const fresh = await getBankConnection(userId);
+  const fresh = await getBankConnectionById(userId, connection.id);
   if (!fresh) return { ok: true, imported: 0 };
   const res = await syncConnection(fresh);
   return { ok: true, imported: res.imported, error: res.error };
 }
 
 /**
- * Retroactively apply the ignore rules to transactions still `pending` for
- * this user's connection bank — so editing the rules (or seeding the
- * defaults) also cleans up what's already in the inbox. Returns how many
- * were newly ignored.
+ * Retroactively apply one connection's ignore rules to its own transactions
+ * still `pending` — so editing the rules (or seeding defaults) cleans up
+ * what's already in the inbox. Returns how many were newly ignored.
  */
-export async function reapplyIgnoreRules(userId: string): Promise<number> {
-  const connection = await getBankConnection(userId);
-  if (!connection) return 0;
+export async function reapplyIgnoreRules(
+  userId: string,
+  connectionId: string,
+): Promise<number> {
+  const connection = await getBankConnectionById(userId, connectionId);
+  if (!connection || !connection.bankId) return 0;
   const matchers = parseIgnorePatterns(connection.ignorePatterns);
   if (matchers.length === 0) return 0;
   const pending = await listPendingBankTransactions(userId);
   const ids = pending
     .filter(
       (t) =>
-        (connection.bankId == null || t.bankId === connection.bankId) &&
+        t.bankId === connection.bankId &&
         shouldIgnore(matchers, t.description, t.rawType),
     )
     .map((t) => t.id);
   return markBankTransactionsIgnored(userId, ids);
 }
 
-/** Sync the signed-in user's connection on demand. */
-export async function syncUserConnection(userId: string): Promise<SyncResult> {
-  const connection = await getBankConnection(userId);
+/** Sync one of the user's connections by id. */
+export async function syncConnectionById(
+  userId: string,
+  connectionId: string,
+): Promise<SyncResult> {
+  const connection = await getBankConnectionById(userId, connectionId);
   if (!connection) return { ok: false, imported: 0, error: 'No bank connected.' };
   if (connection.status === 'pending') {
-    return { ok: false, imported: 0, error: 'Finish connecting your bank first.' };
+    return {
+      ok: false,
+      imported: 0,
+      error: 'Finish connecting your bank first.',
+    };
   }
   return syncConnection(connection);
+}
+
+/** Sync every non-pending connection the signed-in user has. */
+export async function syncUserConnections(userId: string): Promise<SyncResult> {
+  const connections = (await listBankConnections(userId)).filter(
+    (c) => c.status !== 'pending',
+  );
+  if (connections.length === 0) {
+    return { ok: false, imported: 0, error: 'No bank connected.' };
+  }
+  let imported = 0;
+  let lastError: string | undefined;
+  for (const connection of connections) {
+    const res = await syncConnection(connection);
+    imported += res.imported;
+    if (!res.ok) lastError = res.error;
+  }
+  return { ok: !lastError, imported, error: lastError };
 }
 
 /**

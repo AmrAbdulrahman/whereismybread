@@ -26,6 +26,7 @@ import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
 import { PaymentForm } from './payment-form';
 import { PaymentList } from './payment-list';
+import { SyncButton } from './sync-button';
 import {
   EMPTY_LIST_FILTER,
   ListFilters,
@@ -40,7 +41,10 @@ import {
   categorizeBankTransactionAction,
   ignoreBankTransactionAction,
 } from '../lib/bank-transaction-actions';
-import type { BankTransactionRow } from '../lib/bank-sync-queries';
+import type {
+  BankTransactionRow,
+  SyncTarget,
+} from '../lib/bank-sync-queries';
 import { riskFor, sumInDisplay } from '../lib/risk';
 import type {
   BudgetSummary,
@@ -130,6 +134,7 @@ export function PaymentsView({
   budgets = [],
   expenses = [],
   reviewTransactions = [],
+  syncTargets = [],
 }: {
   board: PaymentBoard;
   methods: PaymentMethod[];
@@ -144,6 +149,8 @@ export function PaymentsView({
   expenses?: ExpenseLine[];
   /** Uncategorized imported bank transactions, surfaced per-day in the list. */
   reviewTransactions?: BankTransactionRow[];
+  /** Banks with a live integration — enables the toolbar sync button. */
+  syncTargets?: SyncTarget[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -542,20 +549,22 @@ export function PaymentsView({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            <SyncButton targets={syncTargets} />
             {view === 'list' ? (
               <button
                 type="button"
                 onClick={() => setFiltersOpen((o) => !o)}
                 aria-expanded={filtersOpen}
+                aria-label="Filters"
                 className={cn(
-                  'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[13px] font-medium',
+                  'inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-[13px] font-medium sm:px-3',
                   filterBadge > 0 || filtersOpen
                     ? 'border-accent text-accent'
                     : 'border-line-strong text-muted hover:text-ink',
                 )}
               >
                 <SlidersHorizontal size={15} />
-                Filters
+                <span className="hidden sm:inline">Filters</span>
                 {filterBadge > 0 ? (
                   <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg">
                     {filterBadge}
@@ -567,14 +576,16 @@ export function PaymentsView({
               type="button"
               onClick={() => changeView(view === 'list' ? 'calendar' : 'list')}
               aria-label={`Switch to ${view === 'list' ? 'calendar' : 'list'} view`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line-strong px-3 text-[13px] font-medium text-muted hover:text-ink"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line-strong px-2.5 text-[13px] font-medium text-muted hover:text-ink sm:px-3"
             >
               {view === 'list' ? (
                 <CalendarDays size={15} />
               ) : (
                 <List size={15} />
               )}
-              {view === 'list' ? 'Calendar' : 'List'}
+              <span className="hidden sm:inline">
+                {view === 'list' ? 'Calendar' : 'List'}
+              </span>
             </button>
           </div>
         </header>

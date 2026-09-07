@@ -192,13 +192,61 @@ export async function insertSyncedTransactions(
 
 // --- Live connections (Enable Banking) -----------------------------------
 
-export async function getBankConnection(
+/** Every bank connection the user has, newest first. */
+export async function listBankConnections(
   userId: string,
+): Promise<BankConnection[]> {
+  return getDb()
+    .select()
+    .from(bankConnections)
+    .where(eq(bankConnections.userId, userId))
+    .orderBy(desc(bankConnections.createdAt));
+}
+
+export async function getBankConnectionById(
+  userId: string,
+  id: string,
 ): Promise<BankConnection | null> {
   const rows = await getDb()
     .select()
     .from(bankConnections)
-    .where(eq(bankConnections.userId, userId))
+    .where(
+      and(eq(bankConnections.id, id), eq(bankConnections.userId, userId)),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getConnectionByBank(
+  userId: string,
+  bankId: string,
+): Promise<BankConnection | null> {
+  const rows = await getDb()
+    .select()
+    .from(bankConnections)
+    .where(
+      and(
+        eq(bankConnections.userId, userId),
+        eq(bankConnections.bankId, bankId),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getConnectionByAuthState(
+  userId: string,
+  authState: string,
+): Promise<BankConnection | null> {
+  const rows = await getDb()
+    .select()
+    .from(bankConnections)
+    .where(
+      and(
+        eq(bankConnections.userId, userId),
+        eq(bankConnections.authState, authState),
+      ),
+    )
     .limit(1);
   return rows[0] ?? null;
 }
@@ -210,16 +258,25 @@ export interface PendingConnectionInput {
 }
 
 /**
- * Create or reset the user's connection to a fresh `pending` row for a new
- * authorization attempt. One connection per user — an existing row (any
- * status) is overwritten.
+ * Create (or reset to `pending`) the connection for a given ASPSP so a new
+ * authorization attempt can run. Keyed on `(user, aspspName, aspspCountry)`.
  */
 export async function upsertPendingConnection(
   userId: string,
   input: PendingConnectionInput,
 ): Promise<BankConnection> {
   const db = getDb();
-  const existing = await getBankConnection(userId);
+  const existing = await db
+    .select()
+    .from(bankConnections)
+    .where(
+      and(
+        eq(bankConnections.userId, userId),
+        eq(bankConnections.aspspName, input.aspspName),
+        eq(bankConnections.aspspCountry, input.aspspCountry),
+      ),
+    )
+    .limit(1);
   const patch = {
     provider: 'enablebanking',
     aspspName: input.aspspName,
@@ -233,11 +290,11 @@ export async function upsertPendingConnection(
     lastError: null,
     updatedAt: new Date(),
   };
-  const rows = existing
+  const rows = existing[0]
     ? await db
         .update(bankConnections)
         .set(patch)
-        .where(eq(bankConnections.id, existing.id))
+        .where(eq(bankConnections.id, existing[0].id))
         .returning()
     : await db
         .insert(bankConnections)
@@ -285,23 +342,23 @@ export async function setConnectionStatus(
 }
 
 export async function setConnectionBank(
-  userId: string,
+  id: string,
   bankId: string | null,
 ): Promise<void> {
   await getDb()
     .update(bankConnections)
     .set({ bankId, updatedAt: new Date() })
-    .where(eq(bankConnections.userId, userId));
+    .where(eq(bankConnections.id, id));
 }
 
 export async function setConnectionIgnorePatterns(
-  userId: string,
+  id: string,
   patterns: string | null,
 ): Promise<void> {
   await getDb()
     .update(bankConnections)
     .set({ ignorePatterns: patterns, updatedAt: new Date() })
-    .where(eq(bankConnections.userId, userId));
+    .where(eq(bankConnections.id, id));
 }
 
 /** Set the connection's bank only if it doesn't have one yet (connect-time). */
@@ -330,10 +387,15 @@ export async function listSyncableConnections(): Promise<BankConnection[]> {
     .where(inArray(bankConnections.status, ['active', 'error']));
 }
 
-export async function deleteBankConnection(userId: string): Promise<void> {
+export async function deleteBankConnection(
+  userId: string,
+  id: string,
+): Promise<void> {
   await getDb()
     .delete(bankConnections)
-    .where(eq(bankConnections.userId, userId));
+    .where(
+      and(eq(bankConnections.id, id), eq(bankConnections.userId, userId)),
+    );
 }
 
 export interface BankAccountInput {

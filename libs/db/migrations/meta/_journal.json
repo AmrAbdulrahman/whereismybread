@@ -260,6 +260,13 @@
       "when": 1788738290389,
       "tag": "0036_transaction_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788769969589,
+      "tag": "0037_multi_bank_connections",
+      "breakpoints": true
     }
   ]
 }

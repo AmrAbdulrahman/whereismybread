@@ -18,16 +18,22 @@ export {
 export { getExpensesData } from './lib/expenses';
 export {
   getBankTransactionsData,
-  getBankConnectionData,
+  getBankConnectionsData,
+  getConnectableBanks,
+  getSyncTargets,
   type BankTransactionRow,
   type BankTransactionsData,
   type StatementImportSummary,
   type BankConnectionView,
   type BankConnectionAccountView,
+  type BankConnectionBankOption,
+  type ConnectableBankOption,
+  type SyncTarget,
 } from './lib/bank-sync-queries';
 export {
   syncAllConnections,
-  syncUserConnection,
+  syncUserConnections,
+  syncConnectionById,
   completeConnection,
 } from './lib/bank-sync';
 export { isEnableBankingConfigured } from './lib/enablebanking-client';
