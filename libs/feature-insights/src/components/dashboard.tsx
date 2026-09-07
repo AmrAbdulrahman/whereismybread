@@ -23,7 +23,9 @@ function monthLabel(month: string): string {
 }
 
 /** Local order state that re-syncs whenever the server's id set changes. */
-function useOrdered<T extends { id: string }>(rows: T[]): {
+function useOrdered<T extends { id: string }>(
+  rows: T[],
+): {
   ordered: T[];
   setOrder: (ids: string[]) => void;
 } {
@@ -59,9 +61,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const { ordered: charts, setOrder: setChartOrder } = useOrdered(data.charts);
 
   const goToMonth = (month: string) =>
-    startNav(() =>
-      router.push(`/insights?m=${month}`, { scroll: false }),
-    );
+    startNav(() => router.push(`/insights?m=${month}`, { scroll: false }));
 
   const persist = (statIds: string[], chartIds: string[]) =>
     startReorder(async () => {
@@ -127,7 +127,14 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {/* Dim the figures while a month change is in flight so a stale value is
+          never mistaken for the newly-picked month's. */}
+      <div
+        className={cn(
+          'grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3',
+          navPending && 'pointer-events-none opacity-40',
+        )}
+      >
         <StatTile
           label="This month"
           value={moneyLabel(stat.totalMinor, stat.currency)}
@@ -161,7 +168,12 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </button>
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-2">
+      <div
+        className={cn(
+          'grid items-start gap-3 transition-opacity lg:grid-cols-2',
+          navPending && 'pointer-events-none opacity-40',
+        )}
+      >
         {charts.map((c) => (
           <ChartCard
             key={c.id}

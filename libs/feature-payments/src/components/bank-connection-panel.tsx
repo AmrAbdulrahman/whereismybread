@@ -25,20 +25,18 @@ function fmtDate(iso: string | null): string | null {
   });
 }
 
-/** "just now" / "12 min ago" / "3 h ago" within a day, else "5 Sept, 14:07". */
+/** The exact local date + time of the last sync, e.g. "5 Sept 2026, 14:07:32". */
 function fmtSynced(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const mins = Math.round((Date.now() - d.getTime()) / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
-  if (mins < 60 * 24) return `${Math.round(mins / 60)} h ago`;
   return d.toLocaleString('en-GB', {
     day: 'numeric',
     month: 'short',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
   });
 }
 
@@ -86,7 +84,11 @@ export function BankConnectionPanel({
         window.location.href = res.url;
         return;
       }
-      toast({ title: "Couldn't start", description: res.error, duration: 6000 });
+      toast({
+        title: "Couldn't start",
+        description: res.error,
+        duration: 6000,
+      });
     } finally {
       setConnecting(false);
     }
@@ -209,9 +211,7 @@ export function BankConnectionPanel({
           </p>
           {connection.accounts.length > 0 && (
             <p className="text-xs text-muted">
-              {connection.accounts
-                .map((a) => a.name ?? a.currency)
-                .join(' · ')}
+              {connection.accounts.map((a) => a.name ?? a.currency).join(' · ')}
             </p>
           )}
         </div>
@@ -239,7 +239,12 @@ export function BankConnectionPanel({
 
       <div className="flex flex-wrap gap-2">
         {needsReconnect ? (
-          <Button type="button" size="sm" disabled={connecting} onClick={connect}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={connecting}
+            onClick={connect}
+          >
             {connecting ? 'Starting…' : 'Reconnect'}
           </Button>
         ) : (

@@ -54,6 +54,14 @@ export function BudgetMonthGroup({
         aria-expanded={open}
         className="flex items-center gap-2 text-xs"
       >
+        <ChevronDown
+          size={12}
+          strokeWidth={2.5}
+          className={cn(
+            'shrink-0 text-muted transition-transform',
+            !open && '-rotate-90',
+          )}
+        />
         <PiggyBank size={12} strokeWidth={2} className="shrink-0 text-muted" />
         <span className="shrink-0 font-medium text-ink-soft">
           {budgets.length === 1 ? '1 budget' : `${budgets.length} budgets`}
@@ -75,14 +83,6 @@ export function BudgetMonthGroup({
           {formatMoney(money(spentMinor, displayCurrency))} /{' '}
           {formatMoney(money(totalMinor, displayCurrency))}
         </span>
-        <ChevronDown
-          size={12}
-          strokeWidth={2.5}
-          className={cn(
-            'shrink-0 text-muted transition-transform',
-            open && 'rotate-180',
-          )}
-        />
       </button>
 
       {open ? (
