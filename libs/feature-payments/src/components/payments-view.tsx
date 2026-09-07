@@ -595,7 +595,6 @@ export function PaymentsView({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <SyncButton targets={syncTargets} />
             {view === 'list' ? (
               <button
                 type="button"
@@ -605,6 +604,7 @@ export function PaymentsView({
                 Today
               </button>
             ) : null}
+            <SyncButton targets={syncTargets} />
             <button
               type="button"
               onClick={() => changeView(view === 'list' ? 'calendar' : 'list')}

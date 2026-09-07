@@ -17,7 +17,7 @@ import type {
   Tag,
 } from '@wib/db';
 import type { RateMap } from '@wib/domain';
-import { ResponsiveModal, cn } from '@wib/ui';
+import { ResponsiveModal, cn, useMediaQuery } from '@wib/ui';
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -99,6 +99,14 @@ function DraggableCard({
   const [over, setOver] = useState(false);
   const [resizing, setResizing] = useState(false);
 
+  // Clamp the saved span to however many columns the current breakpoint shows
+  // (grid is 1 / sm:2 / xl:3) — a `span 2` on a 1-column mobile grid otherwise
+  // spawns an implicit second column and the card stops being full width.
+  const sm = useMediaQuery('(min-width: 640px)');
+  const xl = useMediaQuery('(min-width: 1280px)');
+  const cols = xl ? 3 : sm ? 2 : 1;
+  const effSpan = Math.min(Math.max(1, span), cols);
+
   // Drag the right edge; snap to whole grid columns.
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -135,7 +143,7 @@ function DraggableCard({
     <div
       ref={ref}
       draggable={!resizing}
-      style={span > 1 ? { gridColumn: `span ${span}` } : undefined}
+      style={effSpan > 1 ? { gridColumn: `span ${effSpan}` } : undefined}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', id);
         e.dataTransfer.effectAllowed = 'move';

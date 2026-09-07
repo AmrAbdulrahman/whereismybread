@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { cn } from '@wib/ui';
+import { cn, useMediaQuery } from '@wib/ui';
 import { GripVertical, SlidersHorizontal, Trash2 } from '@wib/ui/icons';
 import { deleteChartAction, saveChartAction } from '../lib/dashboard-actions';
 import {
@@ -32,6 +32,9 @@ export function ChartCard({
   const [over, setOver] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [span, setSpan] = useState(() => clampSpan(chart.config.span));
+  // The chart grid is 1 column below `lg`; a `span 2` there spawns an implicit
+  // second column and the chart stops being full width on mobile.
+  const wide = useMediaQuery('(min-width: 1024px)');
 
   const persistSpan = (next: number) =>
     start(async () => {
@@ -87,7 +90,7 @@ export function ChartCard({
     <div
       ref={ref}
       draggable={!resizing}
-      style={span > 1 ? { gridColumn: 'span 2' } : undefined}
+      style={wide && span > 1 ? { gridColumn: 'span 2' } : undefined}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', chart.id);
         e.dataTransfer.effectAllowed = 'move';
