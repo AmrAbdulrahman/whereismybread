@@ -238,4 +238,8 @@ export type {
   NewDashboardChart,
   DashboardChartKind,
   DashboardChartConfig,
+  ChartGroupBy,
+  ChartDisplay,
+  SpendFilterConfig,
+  StatMeasure,
 } from './lib/schema/insights';

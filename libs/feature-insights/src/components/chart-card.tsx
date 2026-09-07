@@ -10,25 +10,23 @@ import {
   moneyLabel,
   type ChartSeries,
 } from '../lib/dashboard-compute';
-import type { DashboardOption } from '../lib/dashboard';
-import { CategoryPieChart } from './category-pie-chart';
-import { ChartSettings } from './chart-settings';
-import { SpendBarChart } from './spend-bar-chart';
+import type { DashboardData } from '../lib/dashboard';
+import { ChartBuilder } from './chart-builder';
+import { SeriesBarChart } from './series-bar-chart';
+import { SeriesPieChart } from './series-pie-chart';
 
 export function ChartCard({
   chart,
-  accounts,
-  tags,
+  data,
   onDropBefore,
 }: {
   chart: ChartSeries;
-  accounts: DashboardOption[];
-  tags: DashboardOption[];
+  data: DashboardData;
   onDropBefore: (draggedId: string, targetId: string) => void;
 }) {
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [pending, start] = useTransition();
   const [dragging, setDragging] = useState(false);
   const [over, setOver] = useState(false);
@@ -81,6 +79,10 @@ export function ChartCard({
     document.addEventListener('mouseup', onUp);
   };
 
+  const subtitle = chart.isMoney
+    ? `${moneyLabel(chart.totalMinor, chart.currency)} this month`
+    : `${chart.totalMinor} ${chart.totalMinor === 1 ? 'item' : 'items'} this month`;
+
   return (
     <div
       ref={ref}
@@ -118,14 +120,12 @@ export function ChartCard({
           <p className="truncate text-sm font-semibold text-ink">
             {chart.title}
           </p>
-          <p className="text-[13px] text-ink-soft">
-            {moneyLabel(chart.totalMinor, chart.currency)} this month
-          </p>
+          <p className="text-[13px] text-ink-soft">{subtitle}</p>
         </div>
         <button
           type="button"
-          aria-label="Chart settings"
-          onClick={() => setSettingsOpen(true)}
+          aria-label="Edit chart"
+          onClick={() => setEditing(true)}
           className="shrink-0 rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-ink"
         >
           <SlidersHorizontal size={15} />
@@ -145,10 +145,19 @@ export function ChartCard({
         <p className="rounded-lg border border-dashed border-line py-8 text-center text-sm text-muted">
           Nothing for this month.
         </p>
-      ) : chart.kind === 'month_spend_line' ? (
-        <SpendBarChart points={chart.bars ?? []} currency={chart.currency} />
+      ) : chart.display === 'pie' ? (
+        <SeriesPieChart
+          points={chart.points}
+          currency={chart.currency}
+          isMoney={chart.isMoney}
+        />
       ) : (
-        <CategoryPieChart slices={chart.slices ?? []} currency={chart.currency} />
+        <SeriesBarChart
+          points={chart.points}
+          currency={chart.currency}
+          isMoney={chart.isMoney}
+          categorical={chart.categorical}
+        />
       )}
 
       <span
@@ -161,13 +170,12 @@ export function ChartCard({
         <span className="h-8 w-1 rounded-full bg-line-strong" />
       </span>
 
-      {settingsOpen ? (
-        <ChartSettings
+      {editing ? (
+        <ChartBuilder
+          open={editing}
+          onOpenChange={setEditing}
+          data={data}
           chart={chart}
-          accounts={accounts}
-          tags={tags}
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
         />
       ) : null}
     </div>

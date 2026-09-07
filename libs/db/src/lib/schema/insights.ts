@@ -35,35 +35,91 @@ export const insightsLayouts = pgTable('insights_layouts', {
 export type InsightsLayout = typeof insightsLayouts.$inferSelect;
 
 /**
- * The chart kinds the Stats dashboard can show. `month_spend_line` is the
- * per-day spend chart — it renders as **bars**; the name is kept for the rows
- * already stored with it.
+ * The tile kinds the Stats dashboard can show.
+ *  - `custom` — the current builder output: `config.groupBy` + `measure` + `display`.
+ *  - `stat` — a user-built single-value tile.
+ *  - `month_spend_line` / `account_pie` / `tag_pie` / `category_bar` — legacy
+ *    presets; still rendered (mapped onto the custom pipeline), no longer created.
  */
 export type DashboardChartKind =
+  | 'custom'
+  | 'stat'
   | 'month_spend_line'
   | 'account_pie'
   | 'tag_pie'
   | 'category_bar';
 
+/** What a custom chart groups its rows by. */
+export type ChartGroupBy =
+  | 'account'
+  | 'tag'
+  | 'method'
+  | 'bank'
+  | 'source'
+  | 'budgeted'
+  | 'day'
+  | 'weekday';
+
+/** How a custom chart draws its groups. */
+export type ChartDisplay = 'bar' | 'pie';
+
 /**
- * Per-chart settings. The month and the planned/expenses source toggle are NOT
+ * A faceted filter over spend rows (recorded expenses + planned payment
+ * occurrences), mirroring the payments-list filter. Groups AND together;
+ * values within an id list OR. All fields optional — absent = no constraint.
+ */
+export interface SpendFilterConfig {
+  /** Case-insensitive substring over name / notes / account / tag / method / bank. */
+  search?: string;
+  accountIds?: string[];
+  tagIds?: string[];
+  methodIds?: string[];
+  bankIds?: string[];
+  /** 'planned' | 'expense' — absent = both. */
+  source?: 'planned' | 'expense';
+  /** Expense-with-a-budget filter — absent = either. */
+  budgeted?: boolean;
+  /** Inclusive bounds in display-currency **minor** units. */
+  amountMinMinor?: number;
+  amountMaxMinor?: number;
+}
+
+/** How a `stat` tile reduces its filtered rows to one number. */
+export type StatMeasure = 'sum' | 'count' | 'avg' | 'min' | 'max';
+
+/**
+ * Per-tile settings. The month and the planned/expenses source toggle are NOT
  * stored here — the whole dashboard shares one month picker (`?m=`) and one
- * source filter (`?src=`).
+ * source filter (`?src=`); a `stat` tile's own `filter.source` overrides it.
  */
 export interface DashboardChartConfig {
-  /** account_pie: accounts to leave out of the chart. */
-  excludeAccountIds?: string[];
-  /** tag_pie: tags to include (`undefined`/absent = all). */
-  includeTagIds?: string[];
-  /** category_bar: which dimension to rank. */
-  dimension?: 'account' | 'tag';
   /** How many grid columns the card spans (1–2). Absent = 1. */
   span?: number;
+  /** stat + custom chart: which rows to include. */
+  filter?: SpendFilterConfig;
+  /** stat: how to reduce to one number (default 'sum'). custom chart: 'sum' | 'count'. */
+  measure?: StatMeasure;
+  /** stat tile: show a delta against the previous month. */
+  compare?: 'prev_month';
+  /** custom chart: what to group rows by. */
+  groupBy?: ChartGroupBy;
+  /** custom chart: bar or pie (default 'bar'). */
+  display?: ChartDisplay;
+  /** custom chart: keep the top N groups, roll the rest into "Other". */
+  limit?: number;
+
+  // --- legacy preset settings (read-only; new charts don't write these) ---
+  /** account_pie: accounts to leave out. */
+  excludeAccountIds?: string[];
+  /** tag_pie: tags to include (`undefined` = all). */
+  includeTagIds?: string[];
+  /** category_bar: dimension to rank. */
+  dimension?: 'account' | 'tag';
 }
 
 /**
- * One card on the Stats dashboard. Ordered by `sortOrder`. `config` holds the
- * chart-kind-specific settings.
+ * One tile on the Stats dashboard. Ordered by `sortOrder`. `config` holds the
+ * tile-kind-specific settings.
  */
 export const dashboardCharts = pgTable(
   'dashboard_charts',

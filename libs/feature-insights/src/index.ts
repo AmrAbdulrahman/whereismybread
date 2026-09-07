@@ -4,15 +4,32 @@ export { Dashboard } from './components/dashboard';
 export { saveInsightsLayoutAction } from './lib/actions';
 export {
   addChartAction,
+  addStatAction,
   deleteChartAction,
+  previewChartAction,
+  previewStatAction,
   reorderChartsAction,
   saveChartAction,
+  type ChartPreview,
 } from './lib/dashboard-actions';
 export type { InsightsData } from './lib/insights';
-export type { DashboardData, DashboardOption } from './lib/dashboard';
+export type {
+  DashboardData,
+  DashboardOption,
+  StatCardData,
+} from './lib/dashboard';
 export type {
   InsightsItem,
   NextMonthProjection,
   Unbudgeted,
 } from './lib/insights-compute';
-export type { ChartSeries, SpendSource } from './lib/dashboard-compute';
+export type {
+  ChartSeries,
+  SeriesPoint,
+  SpendSource,
+  SpendFilterConfig,
+  StatMeasure,
+  StatResult,
+  ChartGroupBy,
+  ChartDisplay,
+} from './lib/dashboard-compute';

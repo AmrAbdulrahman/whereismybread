@@ -3,25 +3,27 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { COLOR_PALETTE } from '@wib/ui';
 import { formatMoney, money } from '@wib/domain';
-import type { Slice } from '../lib/dashboard-compute';
+import type { SeriesPoint } from '../lib/dashboard-compute';
 
-function colorFor(slice: Slice, i: number): string {
-  return slice.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length] ?? '#94a3b8';
-}
+const NEUTRAL = '#94a3b8';
 
-export function CategoryPieChart({
-  slices,
+export function SeriesPieChart({
+  points,
   currency,
+  isMoney,
 }: {
-  slices: Slice[];
+  points: SeriesPoint[];
   currency: string;
+  isMoney: boolean;
 }) {
-  const total = slices.reduce((s, x) => s + x.valueMinor, 0);
-  const data = slices.map((s, i) => ({
-    name: s.label,
-    value: s.valueMinor,
-    color: colorFor(s, i),
+  const total = points.reduce((s, p) => s + p.value, 0);
+  const data = points.map((p, i) => ({
+    name: p.label,
+    value: p.value,
+    color: p.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length] ?? NEUTRAL,
   }));
+  const fmt = (v: number) =>
+    isMoney ? formatMoney(money(Math.round(v), currency)) : String(Math.round(v));
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -49,9 +51,7 @@ export function CategoryPieChart({
                 borderRadius: 10,
                 fontSize: 12,
               }}
-              formatter={(value) =>
-                formatMoney(money(Number(value ?? 0), currency))
-              }
+              formatter={(value) => fmt(Number(value ?? 0))}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -68,7 +68,7 @@ export function CategoryPieChart({
               <span className="min-w-0 flex-1 truncate text-ink">{d.name}</span>
               <span className="shrink-0 text-[11px] text-muted">{pct}%</span>
               <span className="shrink-0 font-mono text-xs tabular-nums text-ink-soft">
-                {formatMoney(money(d.value, currency))}
+                {fmt(d.value)}
               </span>
             </li>
           );

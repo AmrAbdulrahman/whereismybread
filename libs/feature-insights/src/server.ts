@@ -5,4 +5,5 @@ export {
   getDashboardData,
   type DashboardData,
   type DashboardOption,
+  type StatCardData,
 } from './lib/dashboard';
