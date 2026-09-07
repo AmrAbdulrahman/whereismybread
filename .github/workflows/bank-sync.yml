@@ -37,33 +37,12 @@ jobs:
             echo "::error::APP_URL var and CRON_SECRET secret must be set on the production environment"
             exit 1
           fi
-          case "$APP_URL" in
-            https://localhost*|http://localhost*|https://127.*|http://127.*)
-              echo "::error::APP_URL is localhost; set the production environment variable to the live site, e.g. https://www.whereismybread.com"
-              exit 1
-              ;;
-            https://*) ;;
-            *)
-              echo "::error::APP_URL must be https with no trailing slash (got: $APP_URL)"
-              exit 1
-              ;;
-          esac
-          url="${APP_URL%/}/api/bank-sync/enable-banking"
-          echo "POST $url"
-          set +e
           code=$(curl --silent --show-error --location \
             --output /tmp/body.txt --write-out '%{http_code}' \
             --max-time 330 --retry 2 --retry-delay 10 --retry-all-errors \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "$url" 2>/tmp/curl.err)
-          curl_exit=$?
-          set -e
-          if [ "$curl_exit" -ne 0 ]; then
-            echo "::error::curl failed with exit $curl_exit (35 = TLS handshake failed — check APP_URL is the production https origin)"
-            cat /tmp/curl.err || true
-            exit "$curl_exit"
-          fi
+            "${APP_URL%/}/api/bank-sync/enable-banking")
           echo "HTTP $code"
           cat /tmp/body.txt || true
           echo
