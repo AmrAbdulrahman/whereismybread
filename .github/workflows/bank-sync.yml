@@ -7,8 +7,11 @@ name: Bank sync
 #
 # Required config on the `production` environment:
 #   - secret  CRON_SECRET  — must match the Vercel env var of the same name
-#   - var     APP_URL      — production base URL, e.g. https://app.example.com
-#                            (no trailing slash)
+#   - var     APP_URL      — the CANONICAL production origin, e.g.
+#                            https://www.whereismybread.com  (https, no trailing
+#                            slash, and the exact host that serves the app so
+#                            there is no redirect — a redirect to another host
+#                            makes curl drop the Authorization header -> 401)
 
 on:
   schedule:
@@ -37,16 +40,45 @@ jobs:
             echo "::error::APP_URL var and CRON_SECRET secret must be set on the production environment"
             exit 1
           fi
-          code=$(curl --silent --show-error --location \
-            --output /tmp/body.txt --write-out '%{http_code}' \
+          case "$APP_URL" in
+            https://*) ;;
+            *) echo "::error::APP_URL must be an https origin with no trailing slash (got: $APP_URL)"; exit 1 ;;
+          esac
+
+          url="${APP_URL%/}/api/bank-sync/enable-banking"
+          echo "POST $url"
+
+          # --location-trusted: first-party call to our own API. A plain
+          # --location would strip the Authorization header on a cross-host
+          # redirect (e.g. apex -> www) and the endpoint would answer 401.
+          # Best practice is still to set APP_URL to the canonical host so no
+          # redirect happens at all.
+          set +o pipefail
+          info=$(curl --silent --show-error --location-trusted \
+            --output /tmp/body.txt \
+            --write-out 'code=%{http_code} redirects=%{num_redirects} final=%{url_effective}' \
             --max-time 330 --retry 2 --retry-delay 10 --retry-all-errors \
             --request POST \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL%/}/api/bank-sync/enable-banking")
-          echo "HTTP $code"
+            "$url" 2>/tmp/curl.err)
+          curl_exit=$?
+          set -o pipefail
+
+          echo "$info"
+          code=$(printf '%s' "$info" | sed -n 's/.*code=\([0-9]*\).*/\1/p')
+
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::error::curl failed with exit $curl_exit (35 = TLS handshake failed — check APP_URL is the production https origin)"
+            cat /tmp/curl.err || true
+            exit "$curl_exit"
+          fi
+
+          echo "--- response body ---"
           cat /tmp/body.txt || true
           echo
+
           case "$code" in
             2*) echo "Bank sync OK" ;;
-            *)  echo "::error::Bank sync failed with HTTP $code"; exit 1 ;;
+            401) echo "::error::401 — Authorization rejected. Check the CRON_SECRET secret matches Vercel, and that APP_URL is the canonical host (a redirect above with redirects>0 means curl dropped the auth header)."; exit 1 ;;
+            *)   echo "::error::Bank sync failed with HTTP $code"; exit 1 ;;
           esac
