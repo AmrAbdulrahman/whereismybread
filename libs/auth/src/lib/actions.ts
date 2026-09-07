@@ -19,7 +19,7 @@ import {
 } from '@wib/db';
 import { parseMoneyInput } from '@wib/domain';
 import { AuthError } from 'next-auth';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { auth, signIn, signOut } from './auth';
@@ -111,9 +111,7 @@ export async function loginAction(
 
 // --- sign up -----------------------------------------------------------------
 
-export async function registerAction(
-  input: SignUpInput,
-): Promise<FormState> {
+export async function registerAction(input: SignUpInput): Promise<FormState> {
   const parsed = signUpSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
@@ -331,6 +329,10 @@ export async function updatePreferencesAction(
     monthlyHours: num(monthlyHours),
   });
   revalidatePath('/', 'layout');
+  // Currency / timezone / income all change what a plan + insights render
+  // computes — bust the shared page-bundle data cache (see
+  // `feature-payments/src/lib/revalidate.ts`; literal string, no cross-lib import).
+  updateTag(`user-data:${id}`);
   return { ok: true, message: 'Preferences saved.' };
 }
 

@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { requireUserId } from '@wib/auth/server';
 import {
   createDashboardChart,
@@ -44,7 +44,9 @@ function cleanIds(v: unknown, max = 40): string[] | undefined {
 }
 
 function cleanInt(v: unknown): number | undefined {
-  return typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : undefined;
+  return typeof v === 'number' && Number.isFinite(v)
+    ? Math.round(v)
+    : undefined;
 }
 
 /** Sanitised faceted filter — bounds every list, drops anything unexpected. */
@@ -128,7 +130,10 @@ export async function previewStatAction(
   };
 }
 
-export type ChartPreview = Omit<ChartSeries, 'id' | 'kind' | 'title' | 'config'>;
+export type ChartPreview = Omit<
+  ChartSeries,
+  'id' | 'kind' | 'title' | 'config'
+>;
 
 /** Run a custom chart's config without saving it — the builder's preview. */
 export async function previewChartAction(
@@ -137,9 +142,11 @@ export async function previewChartAction(
 ): Promise<{ ok: true; series: ChartPreview } | { ok: false }> {
   await requireUserId();
   const clean = cleanConfig(config);
-  const { allItems, month: resolvedMonth, currency } = await loadSpendItems(
-    typeof month === 'string' ? month : undefined,
-  );
+  const {
+    allItems,
+    month: resolvedMonth,
+    currency,
+  } = await loadSpendItems(typeof month === 'string' ? month : undefined);
   return {
     ok: true,
     series: buildCustomSeries(clean, allItems, resolvedMonth, currency),
@@ -161,6 +168,7 @@ export async function addStatAction(patch: {
     config: cleanConfig(patch.config),
   });
   revalidatePath('/insights');
+  updateTag(`user-data:${userId}`);
   return { ok: true };
 }
 
@@ -179,6 +187,7 @@ export async function addChartAction(patch: {
     config: cleanConfig(patch.config),
   });
   revalidatePath('/insights');
+  updateTag(`user-data:${userId}`);
   return { ok: true };
 }
 
@@ -195,6 +204,7 @@ export async function saveChartAction(
   if (patch.config !== undefined) next.config = cleanConfig(patch.config);
   await updateDashboardChart(userId, id, next);
   revalidatePath('/insights');
+  updateTag(`user-data:${userId}`);
   return { ok: true };
 }
 
@@ -203,6 +213,7 @@ export async function deleteChartAction(id: string): Promise<{ ok: boolean }> {
   if (typeof id !== 'string' || !id) return { ok: false };
   await deleteDashboardChart(userId, id);
   revalidatePath('/insights');
+  updateTag(`user-data:${userId}`);
   return { ok: true };
 }
 
@@ -214,5 +225,6 @@ export async function reorderChartsAction(
   if (!clean || clean.length === 0) return { ok: false };
   await reorderDashboardCharts(userId, clean);
   revalidatePath('/insights');
+  updateTag(`user-data:${userId}`);
   return { ok: true };
 }

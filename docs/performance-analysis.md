@@ -175,3 +175,30 @@ transatlantic latency that `lhr1` removes.
 _Dev double-render inflates the raw wall-clock numbers; the per-render query
 counts and the `GET /plan?month=…` figure (14 queries / 1.24 s) are
 production-representative._
+
+---
+
+## Round 2 — `/plan` + `/insights` re-diluted by feature growth (2026-09-07)
+
+Budgets, expenses, bank-sync, the dashboard and the insights layout all landed
+after the round-1 megaquery, each as its own sequential read. Measured again:
+
+| Page | round trips before | after |
+|---|---|---|
+| `/plan` | ~11 (board bundle · `materializeRecurringBudgets` · budgets bundle · expenses · pending txns · statement imports · connections · **connections again** · banks) | **1** bundle + rates memo (steady state) |
+| `/insights` | ~18–20 — `getInsightsData` did everything `/plan` does, then `getDashboardData` → `loadSpendItems` **re-fetched the board bundle + expenses** with a different window, plus layout, charts, accounts, tags, banks | **1** bundle (cold) + 3 bank-txn + layout + charts; **0** on a warm repeat within 60 s |
+
+### Changes
+
+| # | Change | Where | Effect |
+|---|---|---|---|
+| 1 | `insights/loading.tsx` skeleton (`/plan` already had one) | `apps/web/src/app/(app)/insights/loading.tsx` | instant paint on nav |
+| 2 | **One shared page bundle** — `getBoardBundle` extended with `budgets` + `expenses` + `hasRecurringBudgets` columns (same `jsonb_agg` CTE pattern). `getBudgetsData` / `getExpensesData` read slices of it instead of their own queries | `libs/db/.../board-bundle.ts`, `feature-payments/src/lib/{queries,budgets,expenses}.ts` | `/plan` 11 → 1 |
+| 3 | **Canonical window** — `/plan`, `/insights` and the budget/expense reads all resolve to `canonicalWindow(today)` (this month → +4), so they share one cached bundle per request and across a plan → insights nav | `feature-payments/src/lib/queries.ts` | `/insights` stops double-fetching the board |
+| 4 | `getDashboardData` no longer calls `getAccounts/getBanks/getTags` — uses the board context lists it already has | `feature-insights/src/lib/dashboard.ts` | −3 |
+| 5 | Per-request `cache()` on the shared connection list (was read twice on `/plan`) | `feature-payments/src/lib/bank-sync-queries.ts` | −1 |
+| 6 | **Cache-through** — `loadBundle` wrapped in `unstable_cache` keyed `['page-bundle', userId, from, to]`, tag `user-data:<id>`, `revalidate: 60`. `getBankTransactionsData`, the insights layout and the dashboard-charts reads wrapped the same way. Every board-relevant mutation calls `revalidateUserData(userId)` (→ `updateTag`, Next 16 read-your-own-writes) next to its existing `revalidatePath` | `feature-payments/src/lib/revalidate.ts` + all mutation action files (payments, budgets, bank sync, tags, insights, auth preferences) | warm `/plan` + `/insights` renders serve 0 DB; also **fixes `/insights` showing stale data after a payment/budget edit** — those actions only busted `/plan` before |
+| 7 | `materializeRecurringBudgets` skipped unless a recurring series' latest instance is actually behind the window (checked against the bundle, no query) | `feature-payments/src/lib/budgets.ts` | −1 write in steady state |
+
+`materializeRecurringBudgets` still runs one catch-up write + a fresh budgets
+read the first time a new month rolls over. Not yet folded into a cron.

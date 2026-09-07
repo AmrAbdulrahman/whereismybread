@@ -1,5 +1,6 @@
 'use server';
 
+import { updateTag } from 'next/cache';
 import { requireUserId } from '@wib/auth/server';
 import { setInsightsLayout, type InsightsLayoutData } from '@wib/db';
 
@@ -42,5 +43,6 @@ export async function saveInsightsLayoutAction(
     spans[k.slice(0, 64)] = Math.min(6, Math.max(1, Math.round(n)));
   }
   await setInsightsLayout(userId, { order, spans });
+  updateTag(`user-data:${userId}`);
   return { ok: true };
 }

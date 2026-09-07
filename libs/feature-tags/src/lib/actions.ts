@@ -9,7 +9,7 @@ import {
   listTagsWithUsage,
   updateTag,
 } from '@wib/db';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag as bustCacheTag } from 'next/cache';
 import { tagFormSchema } from './schema';
 
 /** `{id,name,color,usageCount}` — the shape `@wib/ui`'s LabelManager consumes. */
@@ -20,10 +20,14 @@ export interface TagRow {
   usageCount: number;
 }
 
-/** Payments show tags, so a rename / recolour / delete needs the plan re-rendered. */
-function revalidate() {
+/** Payments show tags, so a rename / recolour / delete needs the plan re-rendered.
+ * `user-data:<id>` busts the shared page-bundle data cache (see
+ * `feature-payments/src/lib/revalidate.ts`) — kept as a literal here because a
+ * feature lib can't import another feature lib. */
+function revalidate(userId: string) {
   revalidatePath('/tags');
   revalidatePath('/plan');
+  bustCacheTag(`user-data:${userId}`);
 }
 
 export async function saveTagAction(
@@ -45,7 +49,7 @@ export async function saveTagAction(
       };
     }
     const tag = await createTag(userId, parsed.data.name, parsed.data.color);
-    revalidate();
+    revalidate(userId);
     return {
       ok: true,
       item: { id: tag.id, name: tag.name, color: tag.color, usageCount: 0 },
@@ -59,7 +63,7 @@ export async function saveTagAction(
       fieldErrors: { name: ['You already have a tag with that name'] },
     };
   }
-  revalidate();
+  revalidate(userId);
   return {
     ok: true,
     item: { id: tag.id, name: tag.name, color: tag.color, usageCount: 0 },
@@ -72,7 +76,7 @@ export async function deleteTagAction(id: string): Promise<FormState> {
     return { ok: false, error: 'That tag no longer exists.' };
   }
   await deleteTag(userId, id);
-  revalidate();
+  revalidate(userId);
   return { ok: true };
 }
 

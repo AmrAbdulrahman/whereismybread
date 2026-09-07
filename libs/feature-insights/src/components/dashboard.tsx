@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Spinner, cn } from '@wib/ui';
 import { ChevronLeft, ChevronRight, Plus } from '@wib/ui/icons';
-import { moneyLabel, type SpendSource } from '../lib/dashboard-compute';
+import { moneyLabel } from '../lib/dashboard-compute';
 import type { DashboardData } from '../lib/dashboard';
 import { reorderChartsAction } from '../lib/dashboard-actions';
 import { AddChartMenu } from './add-chart-menu';
@@ -21,11 +21,6 @@ function monthLabel(month: string): string {
     timeZone: 'UTC',
   });
 }
-
-const SOURCE_LABEL: Record<SpendSource, string> = {
-  planned: 'Planned',
-  expense: 'Expenses',
-};
 
 /** Local order state that re-syncs whenever the server's id set changes. */
 function useOrdered<T extends { id: string }>(rows: T[]): {
@@ -63,28 +58,10 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const { ordered: stats, setOrder: setStatOrder } = useOrdered(data.stats);
   const { ordered: charts, setOrder: setChartOrder } = useOrdered(data.charts);
 
-  const hrefFor = (month: string, sources: SpendSource[]) => {
-    const params = new URLSearchParams();
-    params.set('m', month);
-    if (sources.length === 1) params.set('src', sources[0] as string);
-    return `/insights?${params.toString()}`;
-  };
-
   const goToMonth = (month: string) =>
     startNav(() =>
-      router.push(hrefFor(month, data.sources), { scroll: false }),
+      router.push(`/insights?m=${month}`, { scroll: false }),
     );
-
-  const toggleSource = (s: SpendSource) => {
-    const has = data.sources.includes(s);
-    const next: SpendSource[] = has
-      ? data.sources.filter((x) => x !== s)
-      : [...data.sources, s];
-    if (next.length === 0) return;
-    startNav(() =>
-      router.push(hrefFor(data.month, next), { scroll: false }),
-    );
-  };
 
   const persist = (statIds: string[], chartIds: string[]) =>
     startReorder(async () => {
@@ -116,7 +93,6 @@ export function Dashboard({ data }: { data: DashboardData }) {
   const moveChart = reorder(charts, setChartOrder, false);
 
   const { stat } = data;
-  const on = (s: SpendSource) => data.sources.includes(s);
 
   return (
     <section className="flex flex-col gap-4">
@@ -151,48 +127,21 @@ export function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-          Include
-        </span>
-        {(['planned', 'expense'] as SpendSource[]).map((s) => {
-          const active = on(s);
-          return (
-            <button
-              key={s}
-              type="button"
-              aria-pressed={active}
-              onClick={() => toggleSource(s)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                active
-                  ? 'border-accent bg-accent/10 text-ink'
-                  : 'border-line text-muted hover:text-ink-soft',
-              )}
-            >
-              {SOURCE_LABEL[s]}
-            </button>
-          );
-        })}
-      </div>
-
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile
           label="This month"
           value={moneyLabel(stat.totalMinor, stat.currency)}
-          sub={data.sources.map((s) => SOURCE_LABEL[s].toLowerCase()).join(' + ')}
+          sub="recorded + planned"
         />
         <StatTile
           label="Expenses"
           value={moneyLabel(stat.recordedMinor, stat.currency)}
           sub={`${stat.recordedCount} recorded`}
-          muted={!on('expense')}
         />
         <StatTile
           label="Planned"
           value={moneyLabel(stat.plannedMinor, stat.currency)}
           sub={`${stat.plannedCount} ${stat.plannedCount === 1 ? 'payment' : 'payments'}`}
-          muted={!on('planned')}
         />
         {stats.map((s) => (
           <StatValueCard

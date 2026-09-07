@@ -8,15 +8,22 @@ import {
   markBankTransactionsIgnored,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
+import { revalidateUserData } from './revalidate';
 
 export async function categorizeBankTransactionAction(
   transactionId: string,
   result: { type: 'expense' | 'payment'; id: string },
 ): Promise<FormState> {
   const userId = await requireUserId();
-  await markBankTransactionCategorized(userId, transactionId, result.type, result.id);
+  await markBankTransactionCategorized(
+    userId,
+    transactionId,
+    result.type,
+    result.id,
+  );
   revalidatePath('/integrations');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -27,6 +34,7 @@ export async function ignoreBankTransactionAction(
   await markBankTransactionIgnored(userId, transactionId);
   revalidatePath('/integrations');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -37,8 +45,12 @@ export async function bulkIgnoreBankTransactionsAction(
   const clean = (Array.isArray(ids) ? ids : []).filter(
     (id) => typeof id === 'string' && id.length > 0,
   );
-  const ignored = await markBankTransactionsIgnored(userId, clean.slice(0, 500));
+  const ignored = await markBankTransactionsIgnored(
+    userId,
+    clean.slice(0, 500),
+  );
   revalidatePath('/integrations');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, ignored };
 }

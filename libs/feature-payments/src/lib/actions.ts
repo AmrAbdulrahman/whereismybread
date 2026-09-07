@@ -54,6 +54,7 @@ import {
   todayIn,
 } from '@wib/domain';
 import { revalidatePath } from 'next/cache';
+import { revalidateUserData } from './revalidate';
 import { getBoardData } from './queries';
 import type { AttachmentDraft, PaymentBoard } from './types';
 import { paymentFormSchema, type PaymentFormValues } from './schema';
@@ -132,11 +133,18 @@ export async function savePaymentAction(
         color: li.color,
       }));
     } catch {
-      return { ok: false, fieldErrors: { lineItems: ['A record has a bad value'] } };
+      return {
+        ok: false,
+        fieldErrors: { lineItems: ['A record has a bad value'] },
+      };
     }
     const rates = await getRates();
     amountMinor = lineItems.reduce((sum, li) => {
-      const c = convertMoney(money(li.valueMinor, li.currency), v.currency, rates);
+      const c = convertMoney(
+        money(li.valueMinor, li.currency),
+        v.currency,
+        rates,
+      );
       return c.currency === v.currency.toUpperCase() ? sum + c.minorUnits : sum;
     }, 0);
   } else {
@@ -154,10 +162,7 @@ export async function savePaymentAction(
   const perUnit = v.amountKind === 'per_unit';
   const units = Number(String(v.defaultUnits).replace(/[, ]/g, '') || '1');
   const domDay = Math.min(31, Math.max(1, Number(v.dayOfMonth || '1') || 1));
-  const domMonth = Math.min(
-    12,
-    Math.max(1, Number(v.monthOfYear || '1') || 1),
-  );
+  const domMonth = Math.min(12, Math.max(1, Number(v.monthOfYear || '1') || 1));
   const annual = v.recurrence === 'annual';
   const anchorForRecurrence = (existing?: string | null) =>
     annual
@@ -222,6 +227,7 @@ export async function savePaymentAction(
       );
     }
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return { ok: true, item: created };
   }
 
@@ -240,12 +246,14 @@ export async function savePaymentAction(
   if (original.recurrence === 'one_time' || scope == null) {
     await updatePayment(userId, paymentId, input);
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return { ok: true };
   }
 
   if (scope.scope === 'future') {
     await splitPaymentForward(userId, paymentId, scope.occurrenceDate, input);
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return { ok: true };
   }
 
@@ -278,6 +286,7 @@ export async function savePaymentAction(
     overrides,
   });
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -293,6 +302,7 @@ export async function createMethodAction(
 
   const method = await createPaymentMethod(userId, parsed.data);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, method };
 }
 
@@ -308,6 +318,7 @@ export async function createRecipientMethodAction(
 
   const recipientMethod = await createRecipientMethod(userId, parsed.data);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, recipientMethod };
 }
 
@@ -323,6 +334,7 @@ export async function createAccountAction(
 
   const account = await createAccount(userId, parsed.data);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, account };
 }
 
@@ -338,6 +350,7 @@ export async function createBankAction(
 
   const bank = await createBank(userId, parsed.data);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, bank };
 }
 
@@ -396,9 +409,15 @@ export async function saveAccountAction(
     const account = await createAccount(userId, parsed.data);
     revalidatePath('/accounts');
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return {
       ok: true,
-      item: { id: account.id, name: account.name, color: account.color, usageCount: 0 },
+      item: {
+        id: account.id,
+        name: account.name,
+        color: account.color,
+        usageCount: 0,
+      },
     };
   }
 
@@ -411,9 +430,15 @@ export async function saveAccountAction(
   }
   revalidatePath('/accounts');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return {
     ok: true,
-    item: { id: account.id, name: account.name, color: account.color, usageCount: 0 },
+    item: {
+      id: account.id,
+      name: account.name,
+      color: account.color,
+      usageCount: 0,
+    },
   };
 }
 
@@ -425,6 +450,7 @@ export async function deleteAccountAction(id: string): Promise<FormState> {
   await deleteAccount(userId, id);
   revalidatePath('/accounts');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -472,6 +498,7 @@ export async function saveBankAction(
     const bank = await createBank(userId, parsed.data);
     revalidatePath('/banks');
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return { ok: true, item: row(bank) };
   }
 
@@ -484,6 +511,7 @@ export async function saveBankAction(
   }
   revalidatePath('/banks');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, item: row(bank) };
 }
 
@@ -495,6 +523,7 @@ export async function deleteBankAction(id: string): Promise<FormState> {
   await deleteBank(userId, id);
   revalidatePath('/banks');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -535,6 +564,7 @@ export async function deletePaymentAction(
   scopeInput?: ScopeInput,
 ): Promise<FormState> {
   const user = await requireUser();
+  const userId = user.id;
   const scope = normalizeScope(scopeInput);
 
   const original = await getPaymentRow(user.id, paymentId);
@@ -547,6 +577,7 @@ export async function deletePaymentAction(
       status: 'skipped',
     });
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return { ok: true, message: 'This occurrence removed.' };
   }
 
@@ -555,6 +586,7 @@ export async function deletePaymentAction(
     : startOfMonth(todayIn(user.timezone));
   const result = await deletePaymentFrom(user.id, paymentId, cutoff);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return {
     ok: true,
     message: result.removed
@@ -570,9 +602,7 @@ export async function deletePaymentAction(
 export async function loadListWindowAction(range: {
   from: string;
   to: string;
-}): Promise<
-  { ok: true; board: PaymentBoard } | { ok: false; error: string }
-> {
+}): Promise<{ ok: true; board: PaymentBoard } | { ok: false; error: string }> {
   await requireUserId();
   if (
     !range ||
@@ -600,6 +630,7 @@ export async function markOccurrenceAction(input: {
   const userId = await requireUserId();
   await markOccurrence(userId, input);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   revalidatePath('/checklist');
   return { ok: true };
 }
@@ -611,6 +642,7 @@ export async function clearOccurrenceAction(
   const userId = await requireUserId();
   await clearOccurrence(userId, paymentId, dueDate);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   revalidatePath('/checklist');
   return { ok: true };
 }
@@ -626,6 +658,7 @@ export async function setMonthIncomeAction(
   input: { amount?: string; currency?: string; hours?: string },
 ): Promise<FormState> {
   const user = await requireUser();
+  const userId = user.id;
   if (typeof month !== 'string' || !ISO_MONTH.test(month)) {
     return { ok: false, error: 'Not a valid month.' };
   }
@@ -637,6 +670,7 @@ export async function setMonthIncomeAction(
     }
     await setMonthIncome(user.id, month, { hours });
     revalidatePath('/plan');
+    revalidateUserData(userId);
     return { ok: true };
   }
 
@@ -655,17 +689,21 @@ export async function setMonthIncomeAction(
   }
   await setMonthIncome(user.id, month, { amountMinor, currency });
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
 /** Drop a month's income override — it falls back to the global setting. */
-export async function resetMonthIncomeAction(month: string): Promise<FormState> {
+export async function resetMonthIncomeAction(
+  month: string,
+): Promise<FormState> {
   const userId = await requireUserId();
   if (typeof month !== 'string' || !ISO_MONTH.test(month)) {
     return { ok: false, error: 'Not a valid month.' };
   }
   await clearMonthIncome(userId, month);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -677,6 +715,7 @@ export async function resetOccurrenceAction(
   const userId = await requireUserId();
   await setOccurrenceOverride(userId, { paymentId, dueDate, overrides: {} });
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -717,6 +756,7 @@ export async function flagPaymentAction(input: {
   }
 
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 
@@ -776,7 +816,10 @@ export async function uploadAttachmentAction(
   }
   const contentType = resolveAttachmentType(file.name, file.type);
   if (!contentType) {
-    return { ok: false, error: 'Only images, PDFs and text files are allowed.' };
+    return {
+      ok: false,
+      error: 'Only images, PDFs and text files are allowed.',
+    };
   }
 
   const safeName = file.name.replace(SAFE_NAME, '_').slice(0, 120) || 'file';
@@ -803,6 +846,7 @@ export async function uploadAttachmentAction(
     return { ok: false, error: 'That payment no longer exists.' };
   }
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, draft, attachment };
 }
 
@@ -815,6 +859,7 @@ export async function removeAttachmentAction(id: string): Promise<FormState> {
   const row = await deleteAttachment(userId, id);
   if (row) await del(row.url).catch(() => undefined);
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true };
 }
 

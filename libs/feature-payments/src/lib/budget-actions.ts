@@ -21,6 +21,7 @@ import {
 } from '@wib/db';
 import { parseMoneyInput } from '@wib/domain';
 import { revalidatePath } from 'next/cache';
+import { revalidateUserData } from './revalidate';
 import { budgetFormSchema, type BudgetFormValues } from './budget-schema';
 import { expenseFormSchema, type ExpenseFormValues } from './expense-schema';
 import {
@@ -31,9 +32,10 @@ import {
 } from './attachments';
 import type { AttachmentDraft } from './types';
 
-function revalidateBudgets() {
+function revalidateBudgets(userId: string) {
   revalidatePath('/budgets');
   revalidatePath('/plan');
+  revalidateUserData(userId);
 }
 
 // --- Budgets -----------------------------------------------------------
@@ -74,7 +76,7 @@ export async function saveBudgetAction(
     : await createBudget(userId, input);
   if (!budget) return { ok: false, error: 'That budget no longer exists.' };
 
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true, item: budget };
 }
 
@@ -88,7 +90,7 @@ export async function setBudgetClosedAction(
   }
   const budget = await setBudgetClosed(userId, id, closed);
   if (!budget) return { ok: false, error: 'That budget no longer exists.' };
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true, item: budget };
 }
 
@@ -98,7 +100,7 @@ export async function deleteBudgetAction(id: string): Promise<FormState> {
     return { ok: false, error: 'That budget no longer exists.' };
   }
   await deleteBudget(userId, id);
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true };
 }
 
@@ -176,7 +178,7 @@ export async function saveExpenseAction(
         () => undefined,
       );
     }
-    revalidateBudgets();
+    revalidateBudgets(userId);
     return { ok: true, item: expense };
   }
 
@@ -190,7 +192,7 @@ export async function saveExpenseAction(
           : 'That expense no longer exists.',
     };
   }
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true, item: expense };
 }
 
@@ -200,7 +202,7 @@ export async function deleteExpenseAction(id: string): Promise<FormState> {
     return { ok: false, error: 'That expense no longer exists.' };
   }
   await deleteExpense(userId, id);
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true };
 }
 
@@ -263,7 +265,7 @@ export async function uploadExpenseAttachmentAction(
     await del(blob.url).catch(() => undefined);
     return { ok: false, error: 'That expense no longer exists.' };
   }
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true, draft, attachment };
 }
 
@@ -276,6 +278,6 @@ export async function removeExpenseAttachmentAction(
   }
   const row = await deleteExpenseAttachment(userId, id);
   if (row) await del(row.url).catch(() => undefined);
-  revalidateBudgets();
+  revalidateBudgets(userId);
   return { ok: true };
 }

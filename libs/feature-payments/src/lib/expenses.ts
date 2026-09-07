@@ -1,12 +1,15 @@
-import { requireUserId } from '@wib/auth/server';
-import { listExpenses } from '@wib/db';
-import { money } from '@wib/domain';
+import { cache } from 'react';
+import { requireUser } from '@wib/auth/server';
+import { money, todayIn } from '@wib/domain';
+import { canonicalWindow, loadBundle } from './queries';
 import type { ExpenseLine } from './types';
 
 /** Every expense the signed-in user has (budgeted or not). */
-export async function getExpensesData(): Promise<ExpenseLine[]> {
-  const userId = await requireUserId();
-  const rows = await listExpenses(userId);
+export const getExpensesData = cache(async (): Promise<ExpenseLine[]> => {
+  const user = await requireUser();
+  const { from, to } = canonicalWindow(todayIn(user.timezone));
+  // Rides on the shared page bundle — no extra round trip on `/plan` / `/insights`.
+  const rows = (await loadBundle(user.id, from, to)).expenses;
   return rows.map((e) => ({
     id: e.id,
     name: e.name,
@@ -28,4 +31,4 @@ export async function getExpensesData(): Promise<ExpenseLine[]> {
     tags: e.tags,
     attachments: e.attachments,
   }));
-}
+});

@@ -10,6 +10,8 @@ import type {
   Tag,
 } from '../schema/payments';
 import type { MonthIncome } from '../schema/users';
+import type { BudgetWithExpenses } from './budgets';
+import type { ExpenseLine } from './expenses';
 
 /** An attachment as the board needs it (its `createdAt` comes back an ISO string). */
 export type BoardAttachment = Pick<
@@ -32,6 +34,13 @@ export interface BoardBundle {
   payments: PaymentWithTags[];
   events: PaymentEvent[];
   incomes: MonthIncome[];
+  /** Every budget the user owns, expenses folded in (whole account, no window). */
+  budgets: BudgetWithExpenses[];
+  /** Every expense the user has, budgeted or not (whole account, no window). */
+  expenses: ExpenseLine[];
+  /** Whether any recurring monthly budget exists — lets callers skip the
+   * `materializeRecurringBudgets` write entirely when there's nothing to do. */
+  hasRecurringBudgets: boolean;
 }
 
 const camelCache: Record<string, string> = {};
@@ -82,6 +91,9 @@ export async function getBoardBundle(
       payments: unknown;
       events: unknown;
       incomes: unknown;
+      budgets: unknown;
+      expenses: unknown;
+      has_recurring_budgets: boolean;
     }>
   >`
     select
@@ -141,7 +153,91 @@ export async function getBoardBundle(
         from month_incomes mi
         where mi.user_id = ${userId}
           and mi.month between ${window.monthFrom} and ${window.monthTo}
-      ), '[]'::jsonb) as incomes
+      ), '[]'::jsonb) as incomes,
+      coalesce((
+        select jsonb_agg(
+          to_jsonb(b) || jsonb_build_object(
+            'expenses', coalesce((
+              select jsonb_agg(
+                jsonb_build_object(
+                  'id', e.id, 'userId', e.user_id, 'budgetId', e.budget_id,
+                  'accountId', e.account_id,
+                  'accountName', ac.name, 'accountColor', ac.color,
+                  'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,
+                  'bankIconKey', bk.icon_key, 'bankLogoUrl', bk.logo_url,
+                  'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
+                  'amountMinor', e.amount_minor,
+                  'currency', e.currency, 'notes', e.notes,
+                  'createdAt', e.created_at, 'updatedAt', e.updated_at,
+                  'tags', coalesce((
+                    select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
+                      order by t.name)
+                    from expense_tags et join tags t on t.id = et.tag_id
+                    where et.expense_id = e.id
+                  ), '[]'::jsonb),
+                  'attachments', coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                      'id', a.id, 'name', a.name,
+                      'contentType', a.content_type, 'size', a.size,
+                      'url', a.url, 'pathname', a.pathname)
+                      order by a.created_at, a.id)
+                    from expense_attachments a
+                    where a.expense_id = e.id
+                  ), '[]'::jsonb)
+                )
+                order by e.date, e.created_at
+              )
+              from expenses e
+              left join accounts ac on ac.id = e.account_id
+              left join banks bk on bk.id = e.bank_id
+              where e.budget_id = b.id
+            ), '[]'::jsonb)
+          )
+          order by b.start_date desc, b.created_at desc
+        )
+        from budgets b
+        where b.user_id = ${userId}
+      ), '[]'::jsonb) as budgets,
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', e.id, 'name', e.name, 'date', e.date,
+            'occurredAt', e.occurred_at,
+            'amountMinor', e.amount_minor, 'currency', e.currency,
+            'notes', e.notes,
+            'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
+            'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
+            'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,
+            'bankIconKey', bk.icon_key, 'bankLogoUrl', bk.logo_url,
+            'tags', coalesce((
+              select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
+                order by t.name)
+              from expense_tags et join tags t on t.id = et.tag_id
+              where et.expense_id = e.id
+            ), '[]'::jsonb),
+            'attachments', coalesce((
+              select jsonb_agg(jsonb_build_object(
+                'id', a.id, 'name', a.name,
+                'contentType', a.content_type, 'size', a.size,
+                'url', a.url, 'pathname', a.pathname)
+                order by a.created_at, a.id)
+              from expense_attachments a
+              where a.expense_id = e.id
+            ), '[]'::jsonb)
+          )
+          order by e.date, e.created_at
+        )
+        from expenses e
+        left join budgets b on b.id = e.budget_id
+        left join accounts ac on ac.id = e.account_id
+        left join banks bk on bk.id = e.bank_id
+        where e.user_id = ${userId}
+      ), '[]'::jsonb) as expenses,
+      exists(
+        select 1 from budgets b
+        where b.user_id = ${userId}
+          and b.recurring = true and b.period = 'month'
+      ) as has_recurring_budgets
   `;
 
   const row = rows[0];
@@ -154,5 +250,17 @@ export async function getBoardBundle(
     payments: camelRows<PaymentWithTags>(row?.payments),
     events: camelRows<PaymentEvent>(row?.events),
     incomes: camelRows<MonthIncome>(row?.incomes),
+    // `budgets` rows are shaped by `jsonb_build_object` with camelCase keys
+    // already (matching `getBudgetsBundle` / `listExpenses`) — only the
+    // top-level budget columns from `to_jsonb(b)` are snake_case.
+    budgets: Array.isArray(row?.budgets)
+      ? (row.budgets as Array<Record<string, unknown>>).map((b) =>
+          camelRow<BudgetWithExpenses>(b),
+        )
+      : [],
+    expenses: Array.isArray(row?.expenses)
+      ? (row.expenses as ExpenseLine[])
+      : [],
+    hasRecurringBudgets: row?.has_recurring_budgets ?? false,
   };
 }

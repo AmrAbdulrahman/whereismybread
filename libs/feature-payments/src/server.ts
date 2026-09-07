@@ -3,8 +3,12 @@ export {
   getAccounts,
   getBanks,
   getTags,
+  canonicalWindow,
+  loadBundle,
+  userDataTag,
   type PaymentsContext,
 } from './lib/queries';
+export { revalidateUserData } from './lib/revalidate';
 export {
   getChecklistData,
   checklistMonthKey,

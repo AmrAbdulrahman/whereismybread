@@ -1,3 +1,5 @@
+import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import {
   ensureDefaultMethods,
   getBoardBundle,
@@ -24,11 +26,7 @@ import {
   type IsoDate,
   type RateMap,
 } from '@wib/domain';
-import {
-  requireUser,
-  requireUserId,
-  type SessionUser,
-} from '@wib/auth/server';
+import { requireUser, requireUserId, type SessionUser } from '@wib/auth/server';
 import { feeMinor, type FeeKind } from './fees';
 import type {
   BoardOccurrence,
@@ -60,10 +58,54 @@ function relativeLabel(today: IsoDate, date: IsoDate): string {
 
 export type { PaymentsContext };
 
+/** The tag every mutation busts to force the next page bundle read to be fresh. */
+export const userDataTag = (userId: string): string => `user-data:${userId}`;
+
+/**
+ * The canonical `{ from, to }` window every page uses by default: this month
+ * through four months out. `/plan`, `/insights` and the budget/expense reads
+ * all resolve to this window so they share **one** cached bundle per request
+ * (and across a plan → insights navigation).
+ */
+export function canonicalWindow(today: IsoDate): {
+  from: IsoDate;
+  to: IsoDate;
+} {
+  return {
+    from: startOfMonth(today),
+    to: endOfMonth(addMonths(today, 4)),
+  };
+}
+
+/**
+ * Raw page bundle for a user + window. Deduped within a request (`cache`) and
+ * held in the Next data cache for 60 s, tag-busted by every mutation
+ * (`userDataTag`). The bundle is one DB round trip; everything a `/plan` or
+ * `/insights` render needs (payments, events, incomes, lookups, budgets,
+ * expenses) rides on it.
+ */
+export const loadBundle = cache(
+  async (userId: string, from: IsoDate, to: IsoDate): Promise<BoardBundle> => {
+    const read = unstable_cache(
+      () =>
+        getBoardBundle(userId, {
+          from,
+          to,
+          monthFrom: from.slice(0, 7),
+          monthTo: to.slice(0, 7),
+        }),
+      ['page-bundle', userId, from, to],
+      { tags: [userDataTag(userId)], revalidate: 60 },
+    );
+    return read();
+  },
+);
+
 /**
  * The board and its lookup lists in a **single** DB round trip (+ a memoised
- * rates read). Replaces the old `getPaymentsContext()` + `getPaymentBoard()`
- * pair, which together fired ~11 queries.
+ * rates read), served from the per-user page-bundle cache. Replaces the old
+ * `getPaymentsContext()` + `getPaymentBoard()` pair, which together fired ~11
+ * queries.
  */
 export async function getBoardData(opts?: {
   from?: IsoDate;
@@ -75,22 +117,20 @@ export async function getBoardData(opts?: {
   const today = todayIn(user.timezone);
 
   // One window that covers the upcoming list and the visible calendar month.
+  // With no opts this is `canonicalWindow(today)` — the shared cache key.
+  const canonical = canonicalWindow(today);
   const month = opts?.month ?? startOfMonth(today);
   const from =
     opts?.from ??
-    (month < startOfMonth(today) ? startOfMonth(month) : startOfMonth(today));
+    (month < startOfMonth(today) ? startOfMonth(month) : canonical.from);
   const farByMonth = endOfMonth(addMonths(month, 1));
-  const farByToday = endOfMonth(addMonths(today, 3));
-  const to = opts?.to ?? (farByMonth > farByToday ? farByMonth : farByToday);
+  const to =
+    opts?.to ?? (farByMonth > canonical.to ? farByMonth : canonical.to);
 
-  let bundle = await getBoardBundle(user.id, {
-    from,
-    to,
-    monthFrom: from.slice(0, 7),
-    monthTo: to.slice(0, 7),
-  });
+  let bundle = await loadBundle(user.id, from, to);
 
   // Brand-new account → seed the four default methods, then re-read just those.
+  // (Post-cache patch; the seed is idempotent and the entry self-heals in 60 s.)
   if (bundle.methods.length === 0) {
     await ensureDefaultMethods(user.id);
     bundle = { ...bundle, methods: await listPaymentMethods(user.id) };
@@ -240,9 +280,7 @@ function buildBoard({
         amountKind: isGroup ? 'group' : isPerUnit ? 'per_unit' : 'fixed',
         unitName: isPerUnit ? p.unitName : null,
         units: isPerUnit ? units : null,
-        rate: isPerUnit
-          ? money(rateMinor, ov?.currency ?? p.currency)
-          : null,
+        rate: isPerUnit ? money(rateMinor, ov?.currency ?? p.currency) : null,
         lineItems: isGroup ? lineItems : null,
         attachments: p.attachments ?? [],
         recurrence: p.recurrence,
@@ -342,7 +380,9 @@ function buildBoard({
       anchorDate: p.anchorDate,
       dayOfMonth: p.dayOfMonth == null ? '' : String(p.dayOfMonth),
       monthOfYear:
-        p.recurrence === 'annual' ? String(Number(p.anchorDate.slice(5, 7))) : '',
+        p.recurrence === 'annual'
+          ? String(Number(p.anchorDate.slice(5, 7)))
+          : '',
       endsOn: p.endsOn,
       url: p.url,
       logoUrl: p.logoUrl,
@@ -410,20 +450,18 @@ function buildBoard({
   const defaultIncomeMinor = toDisplay(globalIncomeMinor, incomeCurrency);
   const incomeByMonth: Record<string, number> = {};
   /** For the editor: the effective figure and the currency it's in. */
-  const incomeRawByMonth: Record<
-    string,
-    { minor: number; currency: string }
-  > = {};
+  const incomeRawByMonth: Record<string, { minor: number; currency: string }> =
+    {};
   /** For the editor: what a month's override actually stores. */
   const incomeOverrideByMonth: Record<
     string,
-    { amountMinor: number | null; currency: string | null; hours: number | null }
+    {
+      amountMinor: number | null;
+      currency: string | null;
+      hours: number | null;
+    }
   > = {};
-  for (
-    let m = startOfMonth(from);
-    m <= to;
-    m = startOfMonth(addMonths(m, 1))
-  ) {
+  for (let m = startOfMonth(from); m <= to; m = startOfMonth(addMonths(m, 1))) {
     const key = m.slice(0, 7);
     const row = incomeRow.get(key);
     let raw = globalIncomeMinor;

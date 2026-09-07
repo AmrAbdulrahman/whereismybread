@@ -9,14 +9,14 @@ export const dynamic = 'force-dynamic';
 export default async function InsightsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ m?: string; src?: string }>;
+  searchParams: Promise<{ m?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const { m, src } = await searchParams;
+  const { m } = await searchParams;
   const data = await getInsightsData();
-  const dashboard = await getDashboardData(m, src);
+  const dashboard = await getDashboardData(m);
 
   return (
     <div className="flex flex-col gap-8">

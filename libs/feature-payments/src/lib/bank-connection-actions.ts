@@ -11,16 +11,14 @@ import {
   upsertPendingConnection,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
+import { revalidateUserData } from './revalidate';
 import {
   deleteSession,
   isEnableBankingConfigured,
   listAspsps,
   startAuthorization,
 } from './enablebanking-client';
-import {
-  CONNECTABLE_BANKS,
-  connectableForBankName,
-} from './connectable-banks';
+import { CONNECTABLE_BANKS, connectableForBankName } from './connectable-banks';
 import { reapplyIgnoreRules, syncConnectionById } from './bank-sync';
 
 /** Most ASPSPs cap consent at 180 days — stay just under. */
@@ -129,6 +127,7 @@ export async function syncNowAction(
   revalidatePath('/integrations');
   revalidatePath('/plan');
   revalidatePath('/settings');
+  revalidateUserData(userId);
   return res.ok
     ? { ok: true, imported: res.imported }
     : { ok: false, error: res.error };
@@ -167,5 +166,6 @@ export async function setIgnorePatternsAction(
   revalidatePath('/settings');
   revalidatePath('/integrations');
   revalidatePath('/plan');
+  revalidateUserData(userId);
   return { ok: true, ignored };
 }

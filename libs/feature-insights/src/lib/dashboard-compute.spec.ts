@@ -134,21 +134,14 @@ describe('statStrip', () => {
     item({ source: 'expense', minor: 9999, date: '2026-05-01' }),
   ];
 
-  it('breaks down recorded vs planned; total follows the source filter', () => {
-    const both = statStrip(rows, MONTH, 'GBP', new Set(['planned', 'expense']));
-    expect(both).toMatchObject({
+  it('breaks this month down into recorded vs planned', () => {
+    expect(statStrip(rows, MONTH, 'GBP')).toMatchObject({
       recordedMinor: 1400,
       recordedCount: 2,
       plannedMinor: 2500,
       plannedCount: 1,
       totalMinor: 3900,
     });
-
-    const expensesOnly = statStrip(rows, MONTH, 'GBP', new Set(['expense']));
-    expect(expensesOnly.totalMinor).toBe(1400);
-
-    const plannedOnly = statStrip(rows, MONTH, 'GBP', new Set(['planned']));
-    expect(plannedOnly.totalMinor).toBe(2500);
   });
 });
 

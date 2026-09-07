@@ -1,8 +1,10 @@
+import { cache } from 'react';
 import { requireUser } from '@wib/auth/server';
 import {
   getBudgetsBundle,
   getRates,
   materializeRecurringBudgets,
+  type BudgetWithExpenses,
 } from '@wib/db';
 import {
   addMonths,
@@ -11,22 +13,41 @@ import {
   money,
   todayIn,
 } from '@wib/domain';
+import { canonicalWindow, loadBundle } from './queries';
 import type { BudgetExpenseView, BudgetSummary } from './types';
 
 /** Every budget the signed-in user owns, with its spend computed. */
-export async function getBudgetsData(): Promise<BudgetSummary[]> {
+export const getBudgetsData = cache(async (): Promise<BudgetSummary[]> => {
   const user = await requireUser();
   const today = todayIn(user.timezone);
+  const { from, to } = canonicalWindow(today);
+  // Budgets + expenses ride on the shared page bundle — no extra round trip
+  // on the `/plan` and `/insights` paths (both use the canonical window).
+  const bundleData = await loadBundle(user.id, from, to);
+
   // Catch a recurring budget up through the same forward window the plan
-  // board itself defaults to, so browsing a few months ahead always finds
-  // one already materialized instead of a gap.
+  // board defaults to, so browsing a few months ahead finds one already
+  // materialized instead of a gap. Steady state (latest instance already
+  // covers the window) does zero work; only a month rollover pays for the
+  // materialize + one fresh budgets read.
   const through = endOfMonth(addMonths(today, 3));
-  // Sequential — the Supabase transaction pooler punishes concurrent reads.
-  await materializeRecurringBudgets(user.id, through);
-  const bundle = await getBudgetsBundle(user.id);
+  let budgets: BudgetWithExpenses[] = bundleData.budgets;
+  // Latest instance per recurring series (mirrors `materializeRecurringBudgets`'
+  // own name-grouping) — catch up only if a series' newest month is behind.
+  const latestByName = new Map<string, string>();
+  for (const b of budgets) {
+    if (!b.recurring || b.period !== 'month') continue;
+    const cur = latestByName.get(b.name);
+    if (cur == null || b.endDate > cur) latestByName.set(b.name, b.endDate);
+  }
+  const behind = [...latestByName.values()].some((end) => end < through);
+  if (behind) {
+    await materializeRecurringBudgets(user.id, through);
+    budgets = await getBudgetsBundle(user.id);
+  }
   const rates = await getRates();
 
-  return bundle.map((b) => {
+  return budgets.map((b) => {
     const settleCurrency = b.currency.toUpperCase();
     const expenses: BudgetExpenseView[] = b.expenses.map((e) => ({
       id: e.id,
@@ -69,7 +90,7 @@ export async function getBudgetsData(): Promise<BudgetSummary[]> {
       expenses,
     };
   });
-}
+});
 
 /** The budgets whose period overlaps a given `YYYY-MM-DD`…`YYYY-MM-DD` range. */
 export function budgetsOverlapping(

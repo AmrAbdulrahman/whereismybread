@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import { requireUserId } from '@wib/auth/server';
 import {
   listBankAccounts,
@@ -7,13 +9,21 @@ import {
   listBanks,
   listPendingBankTransactions,
   listStatementImports,
+  type BankConnection,
 } from '@wib/db';
+
 import {
   isEnableBankingConfigured,
   listAspspNames,
 } from './enablebanking-client';
 import { CONNECTABLE_BANKS } from './connectable-banks';
 import { cleanMerchant } from './merchant';
+
+/** Per-request memo — `getBankTransactionsData` and `getSyncTargets` both need
+ * the connection list on a single `/plan` render. */
+const connectionsFor = cache((userId: string): Promise<BankConnection[]> =>
+  listBankConnections(userId),
+);
 
 export interface BankTransactionRow {
   id: string;
@@ -90,11 +100,10 @@ export interface ConnectableBankOption {
 /** Every live bank connection the user has (no secrets). */
 export async function getBankConnectionsData(): Promise<BankConnectionView[]> {
   const userId = await requireUserId();
-  const connections = await listBankConnections(userId);
+  const connections = await connectionsFor(userId);
   const out: BankConnectionView[] = [];
   for (const c of connections) {
-    const accounts =
-      c.status === 'pending' ? [] : await listBankAccounts(c.id);
+    const accounts = c.status === 'pending' ? [] : await listBankAccounts(c.id);
     out.push({
       id: c.id,
       status: c.status as BankConnectionView['status'],
@@ -123,9 +132,7 @@ export async function getConnectableBanks(): Promise<ConnectableBankOption[]> {
   try {
     const names = await listAspspNames();
     available = CONNECTABLE_BANKS.filter((b) =>
-      names.some(
-        (n) => n.name === b.aspspName && n.country === b.aspspCountry,
-      ),
+      names.some((n) => n.name === b.aspspName && n.country === b.aspspCountry),
     );
   } catch {
     /* fall back to the full catalog */
@@ -147,7 +154,7 @@ export type SyncTarget = BankConnectionBankOption & { connectionId: string };
 export async function getSyncTargets(): Promise<SyncTarget[]> {
   const userId = await requireUserId();
   const [connections, banks] = await Promise.all([
-    listBankConnections(userId),
+    connectionsFor(userId),
     listBanks(userId),
   ]);
   const targets: SyncTarget[] = [];
@@ -169,9 +176,19 @@ export async function getSyncTargets(): Promise<SyncTarget[]> {
 
 export async function getBankTransactionsData(): Promise<BankTransactionsData> {
   const userId = await requireUserId();
+  return unstable_cache(
+    () => loadBankTransactionsData(userId),
+    ['bank-transactions-data', userId],
+    { tags: [`user-data:${userId}`], revalidate: 60 },
+  )();
+}
+
+async function loadBankTransactionsData(
+  userId: string,
+): Promise<BankTransactionsData> {
   const transactions = await listPendingBankTransactions(userId);
   const imports = await listStatementImports(userId, 5);
-  const connections = await listBankConnections(userId);
+  const connections = await connectionsFor(userId);
   const connBankByAccountConn = connections[0]?.bankId ?? null;
 
   return {

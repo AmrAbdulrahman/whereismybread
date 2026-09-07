@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { unstable_cache } from 'next/cache';
 import { getCurrentUser } from '@wib/auth/server';
 import {
   getRates,
@@ -16,11 +17,9 @@ import {
   type RateMap,
 } from '@wib/domain';
 import {
-  getAccounts,
-  getBanks,
+  canonicalWindow,
   getBoardData,
   getExpensesData,
-  getTags,
 } from '@wib/feature-payments/server';
 import type { BoardOccurrence, ExpenseLine } from '@wib/feature-payments';
 import {
@@ -29,7 +28,6 @@ import {
   statStrip,
   type ChartSeries,
   type SpendItem,
-  type SpendSource,
   type StatResult,
   type StatStripData,
 } from './dashboard-compute';
@@ -53,8 +51,6 @@ export interface DashboardData {
   prevMonth: string;
   nextMonth: string;
   currency: string;
-  /** Which spend sources feed the charts + headline total. */
-  sources: SpendSource[];
   stat: StatStripData;
   stats: StatCardData[];
   charts: ChartSeries[];
@@ -65,23 +61,12 @@ export interface DashboardData {
 }
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-const ALL_SOURCES: SpendSource[] = ['planned', 'expense'];
 
 function shiftMonth(month: string, by: number): string {
   const year = Number(month.slice(0, 4));
   const monthIndex = Number(month.slice(5, 7)) - 1;
   const d = new Date(Date.UTC(year, monthIndex + by, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-/** Parse `?src=planned,expense` — defaults to both, never empty. */
-function parseSources(raw?: string): SpendSource[] {
-  if (!raw) return ALL_SOURCES;
-  const wanted = raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s): s is SpendSource => s === 'planned' || s === 'expense');
-  return wanted.length > 0 ? [...new Set(wanted)] : ALL_SOURCES;
 }
 
 function minorIn(amount: Money, currency: string, rates: RateMap): number {
@@ -138,7 +123,11 @@ function plannedItems(
 }
 
 const DEFAULT_CHARTS = [
-  { kind: 'month_spend_line' as const, title: 'Spending this month', config: {} },
+  {
+    kind: 'month_spend_line' as const,
+    title: 'Spending this month',
+    config: {},
+  },
   { kind: 'account_pie' as const, title: 'By account', config: {} },
   { kind: 'tag_pie' as const, title: 'By tag', config: {} },
 ];
@@ -150,7 +139,16 @@ export interface SpendItemsBundle {
   prevMonth: string;
   currency: string;
   methods: DashboardOption[];
+  accounts: DashboardOption[];
+  tags: DashboardOption[];
+  banks: DashboardOption[];
 }
+
+const toOption = (x: { id: string; name: string; color: string }) => ({
+  id: x.id,
+  name: x.name,
+  color: x.color,
+});
 
 /**
  * Every spend row for the given month **and the one before it** (so a
@@ -172,10 +170,16 @@ export async function loadSpendItems(
 
   const rates = await getRates();
   const expenses = await getExpensesData();
-  const { context, board } = await getBoardData({
-    from: `${prevMonth}-01`,
-    to: endOfMonth(`${month}-01`),
-  });
+  // The common case (no `?m=`, or `?m=` a month inside the default look-ahead)
+  // reuses the shared page bundle — one cached read, zero extra round trips.
+  // Only browsing to a month outside that window fetches its own slice.
+  const canon = canonicalWindow(today);
+  const wantFrom = `${prevMonth}-01`;
+  const wantTo = endOfMonth(`${month}-01`);
+  const withinCanon = wantFrom >= canon.from && wantTo <= canon.to;
+  const { context, board } = withinCanon
+    ? await getBoardData()
+    : await getBoardData({ from: wantFrom, to: wantTo });
 
   return {
     allItems: [
@@ -185,51 +189,53 @@ export async function loadSpendItems(
     month,
     prevMonth,
     currency,
-    methods: context.methods.map((m) => ({
-      id: m.id,
-      name: m.name,
-      color: m.color,
-    })),
+    methods: context.methods.map(toOption),
+    accounts: context.accounts.map(toOption),
+    tags: context.tags.map(toOption),
+    banks: context.banks.map(toOption),
   };
 }
 
 /**
- * The Stats dashboard for `/insights`. One shared month (`?m=`) and one shared
- * planned/expenses source filter (`?src=`) drive the fixed stat strip and every
- * chart; a `stat` tile carries its own faceted filter + measure and ignores the
- * source toggle. Reads are sequential (Supabase pooler).
+ * The Stats dashboard for `/insights`. The `?m=` month picker scopes the fixed
+ * strip and every tile; each chart / stat is otherwise self-contained — its own
+ * faceted filter (incl. planned vs expense) decides what it counts. Reads are
+ * sequential (Supabase pooler).
  */
 export async function getDashboardData(
   monthParam?: string,
-  sourcesParam?: string,
 ): Promise<DashboardData> {
   const user = await getCurrentUser();
   if (!user) throw new Error('getDashboardData: not signed in');
 
-  const sources = parseSources(sourcesParam);
-
-  let rows: DashboardChart[] = await listDashboardCharts(user.id);
+  let rows: DashboardChart[] = await unstable_cache(
+    () => listDashboardCharts(user.id),
+    ['dashboard-charts', user.id],
+    { tags: [`user-data:${user.id}`], revalidate: 60 },
+  )();
   if (rows.length === 0) {
     rows = await seedDashboardCharts(user.id, DEFAULT_CHARTS);
   }
 
-  const { allItems, month, prevMonth, currency, methods } =
-    await loadSpendItems(monthParam);
-  const accounts = await getAccounts();
-  const tags = await getTags();
-  const banks = await getBanks();
-
-  const active = new Set(sources);
-  const selected = allItems.filter((it) => active.has(it.source));
+  const {
+    allItems,
+    month,
+    prevMonth,
+    currency,
+    methods,
+    accounts,
+    tags,
+    banks,
+  } = await loadSpendItems(monthParam);
 
   const chartRows = rows.filter((r) => r.kind !== 'stat');
   const statRows = rows.filter((r) => r.kind === 'stat');
 
-  const stat = statStrip(allItems, month, currency, active);
+  const stat = statStrip(allItems, month, currency);
   const charts = chartRows.map((c) =>
     buildSeries(
       { id: c.id, kind: c.kind, title: c.title, config: c.config },
-      selected,
+      allItems,
       month,
       currency,
     ),
@@ -241,24 +247,17 @@ export async function getDashboardData(
     result: computeStat(allItems, s.config, month, prevMonth),
   }));
 
-  const opt = (x: { id: string; name: string; color: string }) => ({
-    id: x.id,
-    name: x.name,
-    color: x.color,
-  });
-
   return {
     month,
     prevMonth,
     nextMonth: shiftMonth(month, 1),
     currency: currency.toUpperCase(),
-    sources,
     stat,
     stats,
     charts,
-    accounts: accounts.map(opt),
-    tags: tags.map(opt),
+    accounts,
+    tags,
     methods,
-    banks: banks.map(opt),
+    banks,
   };
 }

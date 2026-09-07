@@ -7,6 +7,7 @@ import {
   insertImportedTransactions,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
+import { revalidateUserData } from './revalidate';
 import {
   dedupKey,
   parseStatement,
@@ -69,7 +70,10 @@ export async function importStatementAction(
     if (err instanceof StatementParseError) {
       return { ok: false, error: err.message };
     }
-    return { ok: false, error: 'That file could not be parsed as a statement.' };
+    return {
+      ok: false,
+      error: 'That file could not be parsed as a statement.',
+    };
   }
 
   const importRow = await createStatementImport(userId, {
@@ -115,6 +119,8 @@ export async function importStatementAction(
   });
 
   revalidatePath('/integrations');
+  revalidatePath('/plan');
+  revalidateUserData(userId);
   return {
     ok: true,
     imported,

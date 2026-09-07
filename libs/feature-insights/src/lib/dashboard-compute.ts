@@ -276,7 +276,7 @@ export function tagPie(
 export interface StatStripData {
   month: string;
   currency: string;
-  /** Total of the currently-selected sources. */
+  /** recorded + planned for the month. */
   totalMinor: number;
   recordedMinor: number;
   recordedCount: number;
@@ -284,16 +284,11 @@ export interface StatStripData {
   plannedCount: number;
 }
 
-/**
- * `all` is every item for the month regardless of the source filter — so the
- * strip can always show the recorded / planned breakdown; `sources` decides
- * which of them the headline total adds up.
- */
+/** The fixed top-of-dashboard summary: this month's recorded vs planned spend. */
 export function statStrip(
   all: SpendItem[],
   month: string,
   currency: string,
-  sources: Set<SpendSource>,
 ): StatStripData {
   let recordedMinor = 0;
   let recordedCount = 0;
@@ -308,13 +303,10 @@ export function statStrip(
       plannedCount += 1;
     }
   }
-  const totalMinor =
-    (sources.has('expense') ? recordedMinor : 0) +
-    (sources.has('planned') ? plannedMinor : 0);
   return {
     month,
     currency: currency.toUpperCase(),
-    totalMinor,
+    totalMinor: recordedMinor + plannedMinor,
     recordedMinor,
     recordedCount,
     plannedMinor,
