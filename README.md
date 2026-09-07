@@ -148,3 +148,22 @@ Import rules are enforced by `@nx/enforce-module-boundaries` in
   `POSTGRES_URL_NON_POOLING` as a repo secret in the `production` environment.
 - Enable **Skew Protection** in the Vercel project so clients that haven't
   reloaded onto a new deployment keep hitting a matching backend.
+
+### Scheduled bank sync
+
+`POST /api/bank-sync/enable-banking` runs the periodic bank sync. It is driven
+by the **Bank sync** GitHub Actions workflow (`.github/workflows/bank-sync.yml`)
+every 15 minutes — not Vercel Cron. The endpoint is protected by a shared
+secret and rejects any request without `Authorization: Bearer <CRON_SECRET>`.
+
+On the repo's `production` environment set:
+
+- secret `CRON_SECRET` — identical to the Vercel env var of the same name
+- variable `APP_URL` — the production base URL (no trailing slash)
+
+Trigger a run by hand from the Actions tab ("Run workflow"), or:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  https://<app-url>/api/bank-sync/enable-banking
+```

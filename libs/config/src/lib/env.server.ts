@@ -52,7 +52,8 @@ const serverSchema = z.object({
   // rest — currently the Enable Banking session id.
   SECRETS_ENCRYPTION_KEY: z.string().optional(),
 
-  // Shared secret for authenticating Vercel Cron calls to /api/bank-sync.
+  // Shared secret for authenticating the bank-sync GitHub Actions workflow
+  // (.github/workflows/bank-sync.yml) calling /api/bank-sync.
   CRON_SECRET: z.string().optional(),
 });
 
