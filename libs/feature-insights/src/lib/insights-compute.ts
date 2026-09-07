@@ -211,7 +211,9 @@ export function flaggedOccurrences(
 /** Budgets at or above 90% used — over, or about to bust. */
 export function overBudget(budgets: BudgetSummary[]): InsightsItem[] {
   return budgets
-    .filter((b) => b.limit.minorUnits > 0 && b.progress >= 0.9)
+    .filter(
+      (b) => !b.closedAt && b.limit.minorUnits > 0 && b.progress >= 0.9,
+    )
     .sort((a, b) => b.progress - a.progress)
     .map((b) => {
       const over = b.remainingMinor < 0;

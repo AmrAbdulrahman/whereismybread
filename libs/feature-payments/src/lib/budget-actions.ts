@@ -12,6 +12,7 @@ import {
   deleteExpenseAttachment,
   getOrCreateTags,
   reconcileExpenseAttachments,
+  setBudgetClosed,
   updateBudget,
   updateExpense,
   type Budget,
@@ -73,6 +74,20 @@ export async function saveBudgetAction(
     : await createBudget(userId, input);
   if (!budget) return { ok: false, error: 'That budget no longer exists.' };
 
+  revalidateBudgets();
+  return { ok: true, item: budget };
+}
+
+export async function setBudgetClosedAction(
+  id: string,
+  closed: boolean,
+): Promise<FormState & { item?: Budget }> {
+  const userId = await requireUserId();
+  if (typeof id !== 'string' || !id) {
+    return { ok: false, error: 'That budget no longer exists.' };
+  }
+  const budget = await setBudgetClosed(userId, id, closed);
+  if (!budget) return { ok: false, error: 'That budget no longer exists.' };
   revalidateBudgets();
   return { ok: true, item: budget };
 }
@@ -217,7 +232,10 @@ export async function uploadExpenseAttachmentAction(
   }
   const contentType = resolveAttachmentType(file.name, file.type);
   if (!contentType) {
-    return { ok: false, error: 'Only images, PDFs and text files are allowed.' };
+    return {
+      ok: false,
+      error: 'Only images, PDFs and text files are allowed.',
+    };
   }
 
   const safeName = file.name.replace(SAFE_NAME, '_').slice(0, 120) || 'file';
@@ -237,7 +255,10 @@ export async function uploadExpenseAttachmentAction(
 
   if (!expenseId) return { ok: true, draft, attachment: null };
 
-  const attachment = await addExpenseAttachment(userId, { expenseId, ...draft });
+  const attachment = await addExpenseAttachment(userId, {
+    expenseId,
+    ...draft,
+  });
   if (!attachment) {
     await del(blob.url).catch(() => undefined);
     return { ok: false, error: 'That expense no longer exists.' };

@@ -21,6 +21,7 @@
     "@wib/db": "workspace:*",
     "@wib/domain": "workspace:*",
     "@wib/feature-payments": "workspace:*",
-    "@wib/ui": "workspace:*"
+    "@wib/ui": "workspace:*",
+    "recharts": "^3.10.1"
   }
 }

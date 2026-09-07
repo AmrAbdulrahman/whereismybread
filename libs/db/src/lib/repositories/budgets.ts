@@ -165,6 +165,23 @@ export async function updateBudget(
   return rows[0] ?? null;
 }
 
+/**
+ * Close (or reopen) a budget. A closed budget stops accepting new expenses and
+ * its unspent remainder is no longer reserved against the plan's "left" figure.
+ */
+export async function setBudgetClosed(
+  userId: string,
+  id: string,
+  closed: boolean,
+): Promise<Budget | null> {
+  const rows = await getDb()
+    .update(budgets)
+    .set({ closedAt: closed ? new Date() : null, updatedAt: new Date() })
+    .where(and(eq(budgets.id, id), eq(budgets.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function deleteBudget(userId: string, id: string): Promise<void> {
   await getDb()
     .delete(budgets)

@@ -20,11 +20,12 @@ export function BudgetMonthLine({
   onEdit: () => void;
 }) {
   const over = budget.progress > 1;
+  const closed = !!budget.closedAt;
   return (
     <div
       role="group"
       aria-label={`${budget.name} budget`}
-      className="flex items-center gap-2 text-xs"
+      className={cn('flex items-center gap-2 text-xs', closed && 'opacity-60')}
     >
       <span
         className="h-2 w-2 shrink-0 rounded-full"
@@ -40,6 +41,11 @@ export function BudgetMonthLine({
           className="shrink-0 text-muted"
           aria-label="Repeats monthly"
         />
+      ) : null}
+      {closed ? (
+        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-muted">
+          Closed
+        </span>
       ) : null}
       <BudgetProgressBar
         progress={budget.progress}

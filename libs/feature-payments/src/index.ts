@@ -73,6 +73,7 @@ export type {
 
 export {
   saveBudgetAction,
+  setBudgetClosedAction,
   deleteBudgetAction,
   saveExpenseAction,
   deleteExpenseAction,

@@ -155,6 +155,7 @@ export {
   getBudgetsBundle,
   createBudget,
   updateBudget,
+  setBudgetClosed,
   deleteBudget,
   materializeRecurringBudgets,
   type BudgetInput,
@@ -222,3 +223,19 @@ export {
   setInsightsLayout,
 } from './lib/repositories/insights-layout';
 export type { InsightsLayout, InsightsLayoutData } from './lib/schema/insights';
+
+export {
+  listDashboardCharts,
+  createDashboardChart,
+  seedDashboardCharts,
+  updateDashboardChart,
+  deleteDashboardChart,
+  reorderDashboardCharts,
+  type NewChartInput,
+} from './lib/repositories/dashboard-charts';
+export type {
+  DashboardChart,
+  NewDashboardChart,
+  DashboardChartKind,
+  DashboardChartConfig,
+} from './lib/schema/insights';

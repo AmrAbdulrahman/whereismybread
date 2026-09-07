@@ -20,7 +20,7 @@ import {
   Label,
   cn,
 } from '@wib/ui';
-import { saveBudgetAction } from '../lib/budget-actions';
+import { saveBudgetAction, setBudgetClosedAction } from '../lib/budget-actions';
 import { budgetFormSchema, type BudgetFormValues } from '../lib/budget-schema';
 
 function formatWeek(start: string, end: string): string {
@@ -44,6 +44,8 @@ export interface BudgetFormInitial {
   currency: string;
   color: string;
   recurring: boolean;
+  /** ISO timestamp when it was closed, or null when still open. */
+  closedAt?: string | null;
 }
 
 export function BudgetForm({
@@ -62,6 +64,8 @@ export function BudgetForm({
   onCancel: () => void;
 }) {
   const [formError, setFormError] = useState<string>();
+  const [closing, setClosing] = useState(false);
+  const isClosed = !!initial?.closedAt;
   const [pickerMonth, setPickerMonth] = useState<IsoDate>(
     startOfMonth(initial?.startDate ?? today),
   );
@@ -152,6 +156,19 @@ export function BudgetForm({
     }
     setFormError(result.error);
   });
+
+  const toggleClosed = async () => {
+    if (!initial) return;
+    setClosing(true);
+    setFormError(undefined);
+    const result = await setBudgetClosedAction(initial.id, !isClosed);
+    setClosing(false);
+    if (result.ok && result.item) {
+      onDone(result.item);
+      return;
+    }
+    setFormError(result.error ?? 'Could not update the budget.');
+  };
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
@@ -281,18 +298,41 @@ export function BudgetForm({
         />
       </Field>
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting
-            ? 'Saving…'
-            : initial
-              ? 'Save changes'
-              : 'Create budget'}
-        </Button>
+      <div className="flex items-center justify-between gap-2 pt-2">
+        {initial ? (
+          <button
+            type="button"
+            onClick={() => void toggleClosed()}
+            disabled={closing || isSubmitting}
+            className={cn(
+              'text-xs font-medium underline-offset-2 hover:underline disabled:opacity-50',
+              isClosed ? 'text-accent' : 'text-muted',
+            )}
+          >
+            {closing ? 'Saving…' : isClosed ? 'Reopen budget' : 'Close budget'}
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting || closing}>
+            {isSubmitting
+              ? 'Saving…'
+              : initial
+                ? 'Save changes'
+                : 'Create budget'}
+          </Button>
+        </div>
       </div>
+      {isClosed ? (
+        <p className="-mt-2 text-[11px] text-muted">
+          Closed — no new expenses, and its remaining amount is freed back into
+          your available total.
+        </p>
+      ) : null}
     </form>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { cn, MethodIcon, useToast } from '@wib/ui';
 import { RefreshCw } from '@wib/ui/icons';
@@ -23,6 +24,8 @@ export function SyncButton({ targets }: { targets: SyncTarget[] }) {
     null,
   );
   const [pending, startTransition] = useTransition();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Position the menu under the button, clamped to the viewport so it never
   // spills off either edge (the button can sit anywhere in the toolbar).
@@ -86,50 +89,59 @@ export function SyncButton({ targets }: { targets: SyncTarget[] }) {
         )}
       >
         <RefreshCw size={15} className={cn(pending && 'animate-spin')} />
-        <span className="hidden sm:inline">{pending ? 'Syncing…' : 'Sync'}</span>
+        <span className="hidden sm:inline">
+          {pending ? 'Syncing…' : 'Sync'}
+        </span>
       </button>
 
-      {open && coords ? (
-        <>
-          <button
-            type="button"
-            aria-hidden
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 cursor-default"
-          />
-          <div
-            style={{ top: coords.top, left: coords.left, width: MENU_WIDTH }}
-            className="fixed z-50 flex flex-col rounded-lg border border-line bg-surface p-1 shadow-lg"
-          >
-            <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
-              Sync now
-            </p>
-            {targets.map((t) => (
+      {mounted && open && coords
+        ? createPortal(
+            <>
               <button
-                key={t.connectionId}
                 type="button"
-                onClick={() => run(t.connectionId)}
-                className="flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-2"
+                aria-hidden
+                tabIndex={-1}
+                onClick={() => setOpen(false)}
+                className="fixed inset-0 z-40 cursor-default"
+              />
+              <div
+                style={{
+                  top: coords.top,
+                  left: coords.left,
+                  width: MENU_WIDTH,
+                }}
+                className="fixed z-50 flex flex-col rounded-lg border border-line bg-surface p-1 shadow-lg"
               >
-                {t.iconKey || t.logoUrl ? (
-                  <MethodIcon
-                    iconKey={t.iconKey ?? 'bank'}
-                    logoUrl={t.logoUrl}
-                    size={15}
-                  />
-                ) : (
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: t.color }}
-                  />
-                )}
-                {t.name}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
+                <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Sync now
+                </p>
+                {targets.map((t) => (
+                  <button
+                    key={t.connectionId}
+                    type="button"
+                    onClick={() => run(t.connectionId)}
+                    className="flex items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-ink hover:bg-surface-2"
+                  >
+                    {t.iconKey || t.logoUrl ? (
+                      <MethodIcon
+                        iconKey={t.iconKey ?? 'bank'}
+                        logoUrl={t.logoUrl}
+                        size={15}
+                      />
+                    ) : (
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: t.color }}
+                      />
+                    )}
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

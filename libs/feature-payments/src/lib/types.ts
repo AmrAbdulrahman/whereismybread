@@ -315,6 +315,12 @@ export interface BudgetSummary {
   color: string;
   /** Month budgets only — an ongoing monthly series. */
   recurring: boolean;
+  /**
+   * ISO timestamp when the budget was closed for its period, else null. A
+   * closed budget takes no new expenses and its remainder is no longer
+   * reserved against the plan's available figure.
+   */
+  closedAt: string | null;
   /** The target, in the budget's own (settle) currency. */
   limit: Money;
   /** Sum of expenses converted into the budget's currency. */

@@ -49,6 +49,7 @@ function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
     currency: b.limit.currency,
     color: b.color,
     recurring: b.recurring,
+    closedAt: b.closedAt,
   };
 }
 
@@ -89,7 +90,9 @@ export function BudgetsView({
   usedCurrencies: string[];
 }) {
   const [formOpen, setFormOpen] = useState<
-    { mode: 'closed' } | { mode: 'new' } | { mode: 'edit'; budget: BudgetSummary }
+    | { mode: 'closed' }
+    | { mode: 'new' }
+    | { mode: 'edit'; budget: BudgetSummary }
   >({ mode: 'closed' });
   const [expenseOpen, setExpenseOpen] = useState<
     | { mode: 'closed' }
@@ -134,12 +137,23 @@ export function BudgetsView({
     }
   };
 
-  const budgetOptions = budgets.map((b) => ({
-    id: b.id,
-    name: b.name,
-    currency: b.limit.currency,
-    startDate: b.startDate,
-  }));
+  // The expense budget picker only offers open budgets — plus, when editing an
+  // expense already tied to a closed one, that budget too so it stays selected.
+  const activeBudgetId =
+    expenseOpen.mode === 'edit' ? expenseOpen.budgetId : null;
+  const budgetOptions = budgets
+    .filter((b) => !b.closedAt || b.id === activeBudgetId)
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      currency: b.limit.currency,
+      startDate: b.startDate,
+    }));
+
+  // Closed budgets sink to the bottom of the list.
+  const orderedBudgets = [...budgets].sort(
+    (a, b) => Number(!!a.closedAt) - Number(!!b.closedAt),
+  );
 
   const emptyState = budgets.length === 0;
 
@@ -149,8 +163,8 @@ export function BudgetsView({
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <h1 className="text-xl font-semibold">No budgets yet</h1>
           <p className="max-w-xs text-sm text-ink-soft">
-            Create a budget for a month or a week, then log expenses against
-            it to track your spending.
+            Create a budget for a month or a week, then log expenses against it
+            to track your spending.
           </p>
           <Button size="lg" onClick={() => setFormOpen({ mode: 'new' })}>
             <Plus size={18} strokeWidth={3} />
@@ -177,13 +191,17 @@ export function BudgetsView({
           </header>
 
           <ul className="flex flex-col gap-3">
-            {budgets.map((b) => {
+            {orderedBudgets.map((b) => {
               const isOpen = expanded.has(b.id);
               const over = b.progress > 1;
+              const closed = !!b.closedAt;
               return (
                 <li
                   key={b.id}
-                  className="rounded-xl border border-line bg-surface p-3.5 sm:p-4"
+                  className={cn(
+                    'rounded-xl border border-line bg-surface p-3.5 sm:p-4',
+                    closed && 'opacity-70',
+                  )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <button
@@ -202,6 +220,11 @@ export function BudgetsView({
                         <span className="shrink-0 rounded-full border border-line-strong px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                           {b.period}
                         </span>
+                        {closed ? (
+                          <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                            Closed
+                          </span>
+                        ) : null}
                         {b.recurring ? (
                           <Repeat
                             size={12}
@@ -258,12 +281,12 @@ export function BudgetsView({
                             over
                           </span>
                         ) : (
-                          <span className="ml-1">
+                          <span className={cn('ml-1', closed && 'text-teal')}>
                             ·{' '}
                             {formatMoney(
                               money(b.remainingMinor, b.limit.currency),
                             )}{' '}
-                            left
+                            {closed ? 'saved' : 'left'}
                           </span>
                         )}
                       </span>
@@ -366,18 +389,20 @@ export function BudgetsView({
                           ))}
                         </ul>
                       )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="self-start"
-                        onClick={() =>
-                          setExpenseOpen({ mode: 'new', budgetId: b.id })
-                        }
-                      >
-                        <Plus size={14} strokeWidth={2.5} />
-                        Add expense
-                      </Button>
+                      {closed ? null : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="self-start"
+                          onClick={() =>
+                            setExpenseOpen({ mode: 'new', budgetId: b.id })
+                          }
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                          Add expense
+                        </Button>
+                      )}
                     </div>
                   ) : null}
                 </li>

@@ -41,10 +41,7 @@ import {
   categorizeBankTransactionAction,
   ignoreBankTransactionAction,
 } from '../lib/bank-transaction-actions';
-import type {
-  BankTransactionRow,
-  SyncTarget,
-} from '../lib/bank-sync-queries';
+import type { BankTransactionRow, SyncTarget } from '../lib/bank-sync-queries';
 import { riskFor, sumInDisplay } from '../lib/risk';
 import type {
   BudgetSummary,
@@ -65,8 +62,7 @@ export function applyOverride(
     name: ov.name ?? base.name,
     amount:
       ov.amountMinor != null ? (ov.amountMinor / 100).toFixed(2) : base.amount,
-    defaultUnits:
-      ov.units != null ? String(ov.units) : base.defaultUnits,
+    defaultUnits: ov.units != null ? String(ov.units) : base.defaultUnits,
     lineItems:
       'lineItems' in ov && ov.lineItems
         ? ov.lineItems.map((li) => ({
@@ -102,6 +98,7 @@ function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
     currency: b.limit.currency,
     color: b.color,
     recurring: b.recurring,
+    closedAt: b.closedAt,
   };
 }
 
@@ -181,7 +178,9 @@ export function PaymentsView({
   const filterBadge = listFilterBadgeCount(listFilter, unpaidOnly);
 
   // Per-day "needs review" transactions, with optimistic removal on triage.
-  const [reviewSheet, setReviewSheet] = useState<TriageSheet>({ mode: 'closed' });
+  const [reviewSheet, setReviewSheet] = useState<TriageSheet>({
+    mode: 'closed',
+  });
   const [reviewHandled, setReviewHandled] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -255,6 +254,10 @@ export function PaymentsView({
   // The form's own mutation action calls `revalidatePath('/plan')`, which
   // re-renders this page — so closing the modal just needs to hide it.
   const close = () => setSheet({ mode: 'closed' });
+
+  // The list fills this with its "scroll to today" jump (the timeline rail is
+  // desktop-only, so mobile needs a button in the header instead).
+  const goTodayRef = useRef<(() => void) | null>(null);
 
   // The top panel (summary + New payment + view switch + filters) is sticky.
   // Measure it so the list's month headers can stick just beneath it.
@@ -340,12 +343,18 @@ export function PaymentsView({
       defaultCurrency,
     ]),
   ];
-  const budgetCurrencyOptions = budgets.map((b) => ({
-    id: b.id,
-    name: b.name,
-    currency: b.limit.currency,
-    startDate: b.startDate,
-  }));
+  // Only open budgets can take a new expense; when editing an expense already
+  // tied to a closed budget, keep that one in the list so it stays selected.
+  const activeExpenseBudgetId =
+    expenseSheet.mode === 'edit' ? expenseSheet.expense.budgetId : null;
+  const budgetCurrencyOptions = budgets
+    .filter((b) => !b.closedAt || b.id === activeExpenseBudgetId)
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      currency: b.limit.currency,
+      startDate: b.startDate,
+    }));
 
   // Header stats follow whatever month the calendar is showing; the list has
   // no single month, so it stays on the current one.
@@ -361,14 +370,19 @@ export function PaymentsView({
   const scopeBudgets = budgets.filter(
     (b) => b.startDate <= scopeEnd && b.endDate >= scopeStart,
   );
-  // A budget's reserved amount counts toward the month like a payment would;
-  // an expense tied to a budget doesn't count separately (its budget already
-  // does) — only unbudgeted ones add on top, same as a one-time payment.
+  const scopeOpenBudgets = scopeBudgets.filter((b) => !b.closedAt);
+  const scopeClosedBudgets = scopeBudgets.filter((b) => b.closedAt);
+  // An open budget's whole reserved amount counts toward the month like a
+  // payment would. A closed budget only commits what it actually spent — its
+  // unspent remainder is released back into "left". An expense tied to a
+  // budget doesn't count separately (its budget already does) — only
+  // unbudgeted ones add on top, same as a one-time payment.
   const scopeUnbudgetedExpenses = expenses.filter(
     (e) => !e.budgetId && e.date >= scopeStart && e.date <= scopeEnd,
   );
   const scopeExtra = [
-    ...scopeBudgets.map((b) => b.limit),
+    ...scopeOpenBudgets.map((b) => b.limit),
+    ...scopeClosedBudgets.map((b) => money(b.spentMinor, b.limit.currency)),
     ...scopeUnbudgetedExpenses.map((e) => e.amount),
   ];
   const scopeIncomeMinor =
@@ -388,7 +402,7 @@ export function PaymentsView({
   // aside, but not gone yet.
   const scopeLeftMinor = scopeIncomeMinor - scopeSpentDisplayMinor;
   const scopeBudgetsRemainingMinor = sumInDisplay(
-    scopeBudgets.map((b) => money(b.remainingMinor, b.limit.currency)),
+    scopeOpenBudgets.map((b) => money(b.remainingMinor, b.limit.currency)),
     board.displayCurrency,
     board.rates,
   );
@@ -467,9 +481,7 @@ export function PaymentsView({
           accounts={accounts}
           banks={banks}
           tags={tags}
-          budgetId={
-            expenseSheet.mode === 'new' ? expenseSheet.budgetId : null
-          }
+          budgetId={expenseSheet.mode === 'new' ? expenseSheet.budgetId : null}
           date={
             expenseSheet.mode === 'new'
               ? expenseSheet.date
@@ -552,15 +564,12 @@ export function PaymentsView({
                 <span
                   className={cn('h-1.5 w-1.5 rounded-full', scopeRisk.bar)}
                 />
-                {formatMoney(
-                  money(scopeTotalLeftMinor, board.displayCurrency),
-                )}{' '}
+                {formatMoney(money(scopeTotalLeftMinor, board.displayCurrency))}{' '}
                 left
-                {scopeBudgets.length > 0 ? (
+                {scopeOpenBudgets.length > 0 ? (
                   <span className="text-muted">
                     {' '}
-                    (
-                    {formatMoney(
+                    ({formatMoney(
                       money(scopeLeftMinor, board.displayCurrency),
                     )}{' '}
                     left +{' '}
@@ -584,6 +593,15 @@ export function PaymentsView({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <SyncButton targets={syncTargets} />
+            {view === 'list' ? (
+              <button
+                type="button"
+                onClick={() => goTodayRef.current?.()}
+                className="inline-flex h-9 items-center rounded-md border border-line-strong px-2.5 text-[13px] font-medium text-muted hover:text-ink sm:hidden"
+              >
+                Today
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => changeView(view === 'list' ? 'calendar' : 'list')}
@@ -648,6 +666,7 @@ export function PaymentsView({
           filter={listFilter}
           unpaidOnly={unpaidOnly}
           stickyTop={panelH}
+          goTodayRef={goTodayRef}
           onEdit={openEdit}
           onFlag={openFlag}
           onEditBudget={(b) => setBudgetSheet({ mode: 'edit', budget: b })}
@@ -679,7 +698,7 @@ export function PaymentsView({
       <TransactionTriageModal
         sheet={reviewSheet}
         context={triageContext}
-        budgets={budgets}
+        budgets={budgets.filter((b) => !b.closedAt)}
         today={board.today}
         defaultCurrency={defaultCurrency}
         rates={board.rates}

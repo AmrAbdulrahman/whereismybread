@@ -17,6 +17,7 @@ const nextConfig = {
     '@wib/auth',
     '@wib/feature-payments',
     '@wib/feature-tags',
+    '@wib/feature-insights',
   ],
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,

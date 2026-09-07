@@ -1,5 +1,9 @@
 import { requireUser } from '@wib/auth/server';
-import { getBudgetsBundle, getRates, materializeRecurringBudgets } from '@wib/db';
+import {
+  getBudgetsBundle,
+  getRates,
+  materializeRecurringBudgets,
+} from '@wib/db';
 import {
   addMonths,
   convertMoney,
@@ -57,6 +61,7 @@ export async function getBudgetsData(): Promise<BudgetSummary[]> {
       endDate: b.endDate,
       color: b.color,
       recurring: b.recurring,
+      closedAt: b.closedAt ? String(b.closedAt) : null,
       limit: money(b.amountMinor, settleCurrency),
       spentMinor,
       remainingMinor: b.amountMinor - spentMinor,

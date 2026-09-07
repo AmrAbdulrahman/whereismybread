@@ -25,7 +25,7 @@ import type {
 } from '../lib/types';
 import { BankTransactionRow as BankTransactionRowComponent } from './bank-transaction-row';
 import type { BankTransactionRow } from '../lib/bank-sync-queries';
-import { BudgetMonthLine } from './budget-month-line';
+import { BudgetMonthGroup } from './budget-month-group';
 import { ExpenseListItem } from './expense-list-item';
 import {
   EMPTY_LIST_FILTER,
@@ -166,6 +166,7 @@ export function PaymentList({
   filter = EMPTY_LIST_FILTER,
   unpaidOnly = false,
   stickyTop = 0,
+  goTodayRef,
   onEdit,
   onFlag,
   onEditBudget,
@@ -185,6 +186,11 @@ export function PaymentList({
   unpaidOnly?: boolean;
   /** Px offset for the sticky month headers — the height of the sticky panel. */
   stickyTop?: number;
+  /**
+   * Filled with a "scroll to today" callback so an outside control (the
+   * mobile header button) can trigger the same jump as the timeline rail.
+   */
+  goTodayRef?: { current: (() => void) | null };
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
   onEditBudget: (budget: BudgetSummary) => void;
@@ -791,6 +797,12 @@ export function PaymentList({
     Number(minimapFrom.slice(5, 7)) +
     1;
   const showMinimap = minimapSpan >= 3;
+  // How far below the viewport top a day section must land to clear BOTH the
+  // sticky panel and the (also sticky) month header that pins beneath it —
+  // otherwise the day's first rows sit hidden behind the month header.
+  const dayScrollOffset = (dateOrKey: string) =>
+    stickyTop + (monthHeaderH[dateOrKey.slice(0, 7)] ?? 0) + 8;
+
   // "Today" jumps to today's own day section, or the "Today" divider when the
   // day has nothing of its own — not just the top of the month.
   const goToday = () => {
@@ -798,12 +810,24 @@ export function PaymentList({
       document.querySelector<HTMLElement>(`[data-day="${board.today}"]`) ??
       document.querySelector<HTMLElement>('[data-plan-today]');
     if (el) {
-      const y = window.scrollY + el.getBoundingClientRect().top - stickyTop - 8;
+      const y =
+        window.scrollY +
+        el.getBoundingClientRect().top -
+        dayScrollOffset(board.today);
       window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
       return;
     }
     jumpToMonth(todayMonth);
   };
+
+  // Expose the jump so the mobile header's "Today" button can call it.
+  useEffect(() => {
+    if (!goTodayRef) return;
+    goTodayRef.current = goToday;
+    return () => {
+      goTodayRef.current = null;
+    };
+  });
 
   // On first load, land on the earliest day this month that still needs
   // action (an unpaid payment or a transaction to review) rather than the
@@ -817,14 +841,19 @@ export function PaymentList({
       didAutoScroll.current = true;
       return;
     }
+    // Wait until the target month's sticky header has been measured, so the
+    // day doesn't land tucked behind it.
+    if (monthHeaderH[firstActionDate.slice(0, 7)] == null) return;
     const el = document.querySelector<HTMLElement>(
       `[data-day="${firstActionDate}"]`,
     );
     if (!el) return;
     didAutoScroll.current = true;
-    const y = window.scrollY + el.getBoundingClientRect().top - stickyTop - 8;
+    const offset =
+      stickyTop + (monthHeaderH[firstActionDate.slice(0, 7)] ?? 0) + 8;
+    const y = window.scrollY + el.getBoundingClientRect().top - offset;
     window.scrollTo({ top: Math.max(0, y) });
-  }, [firstActionDate, stickyTop, monthKeys]);
+  }, [firstActionDate, stickyTop, monthKeys, monthHeaderH]);
 
   useEffect(() => {
     const order = monthKeys ? monthKeys.split(',') : [];
@@ -1096,15 +1125,12 @@ export function PaymentList({
                 </>
               ) : null}
               {monthBudgets.length > 0 ? (
-                <div className="flex flex-col gap-1 border-t border-line pt-1.5">
-                  {monthBudgets.map((b) => (
-                    <BudgetMonthLine
-                      key={b.id}
-                      budget={b}
-                      onEdit={() => onEditBudget(b)}
-                    />
-                  ))}
-                </div>
+                <BudgetMonthGroup
+                  budgets={monthBudgets}
+                  displayCurrency={displayCurrency}
+                  rates={rates}
+                  onEdit={onEditBudget}
+                />
               ) : null}
             </div>
 

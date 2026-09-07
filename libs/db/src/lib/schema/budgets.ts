@@ -52,6 +52,12 @@ export const budgets = pgTable(
     currency: text('currency').notNull().default('EUR'),
     color: text('color').notNull().default('#6321d6'),
     recurring: boolean('recurring').notNull().default(false),
+    /**
+     * When set, the budget is "closed" for its period: no more expenses can be
+     * logged against it and its unspent remainder is released back into the
+     * plan's available ("left") figure instead of staying reserved.
+     */
+    closedAt: timestamp('closed_at', { withTimezone: true }),
     ...audit,
   },
   (t) => [index('budgets_user_range_idx').on(t.userId, t.startDate, t.endDate)],
