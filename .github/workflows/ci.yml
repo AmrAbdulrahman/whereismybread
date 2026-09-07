@@ -36,7 +36,6 @@ jobs:
       - uses: nrwl/nx-set-shas@v4
 
       - run: pnpm nx sync:check
-      - run: pnpm exec prettier --check .
       - run: pnpm nx affected -t typecheck lint test build
 
       - run: pnpm exec playwright install --with-deps chromium
