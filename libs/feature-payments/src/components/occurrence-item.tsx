@@ -1,7 +1,12 @@
 'use client';
 
 import { useOptimistic, useState, useTransition } from 'react';
-import { formatConverted, money, type RateMap } from '@wib/domain';
+import {
+  formatConverted,
+  formatConvertedParts,
+  money,
+  type RateMap,
+} from '@wib/domain';
 import { cn, MethodIcon } from '@wib/ui';
 import {
   ChevronDown,
@@ -134,8 +139,8 @@ export function OccurrenceItem({
         className={cn(
           'flex items-center',
           compact
-            ? 'gap-2 px-2.5 py-2'
-            : 'gap-2 px-2.5 py-2.5 sm:gap-2.5 sm:px-3',
+            ? 'gap-1.5 px-2.5 py-2 sm:gap-2'
+            : 'gap-1.5 px-2.5 py-2.5 sm:gap-2.5 sm:px-3',
         )}
       >
       {skipped ? (
@@ -367,14 +372,30 @@ export function OccurrenceItem({
         </span>
       )}
 
-      <span
-        className={cn(
-          'shrink-0 font-display text-sm font-semibold tabular-nums text-ink',
-          skipped && 'line-through decoration-2',
-        )}
-      >
-        {formatConverted(occ.amount, displayCurrency, rates)}
-      </span>
+      {(() => {
+        const { primary, secondary } = formatConvertedParts(
+          occ.amount,
+          displayCurrency,
+          rates,
+        );
+        return (
+          <span
+            className={cn(
+              'flex shrink-0 flex-col items-end leading-tight',
+              skipped && 'line-through decoration-2',
+            )}
+          >
+            <span className="font-display text-sm font-semibold tabular-nums text-ink">
+              {primary}
+            </span>
+            {secondary ? (
+              <span className="whitespace-nowrap font-mono text-[10px] tabular-nums text-muted">
+                {secondary}
+              </span>
+            ) : null}
+          </span>
+        );
+      })()}
 
       {!skipped && onFlag ? (
         <button
@@ -383,14 +404,14 @@ export function OccurrenceItem({
           aria-label={flagNote ? `Edit flag on ${occ.name}` : `Flag ${occ.name}`}
           aria-pressed={flagNote != null}
           className={cn(
-            'grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors',
+            'grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors sm:h-7 sm:w-7',
             flagNote
               ? 'text-danger hover:bg-danger/10'
               : 'text-muted hover:bg-surface-2 hover:text-ink',
           )}
         >
           <Flag
-            size={14}
+            size={13}
             strokeWidth={2}
             fill={flagNote ? 'currentColor' : 'none'}
           />
@@ -398,15 +419,15 @@ export function OccurrenceItem({
       ) : null}
 
       {onEdit && skipped ? (
-        <span className="h-7 w-7 shrink-0" aria-hidden />
+        <span className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" aria-hidden />
       ) : onEdit ? (
         <button
           type="button"
           onClick={() => onEdit(occ.paymentId, occ.dueDate)}
           aria-label={`Edit ${occ.name}`}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink sm:h-7 sm:w-7"
         >
-          <Pencil size={14} strokeWidth={2} />
+          <Pencil size={13} strokeWidth={2} />
         </button>
       ) : null}
       </div>

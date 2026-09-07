@@ -550,6 +550,21 @@ export function PaymentsView({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <SyncButton targets={syncTargets} />
+            <button
+              type="button"
+              onClick={() => changeView(view === 'list' ? 'calendar' : 'list')}
+              aria-label={`Switch to ${view === 'list' ? 'calendar' : 'list'} view`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line-strong px-2.5 text-[13px] font-medium text-muted hover:text-ink sm:px-3"
+            >
+              {view === 'list' ? (
+                <CalendarDays size={15} />
+              ) : (
+                <List size={15} />
+              )}
+              <span className="hidden sm:inline">
+                {view === 'list' ? 'Calendar' : 'List'}
+              </span>
+            </button>
             {view === 'list' ? (
               <button
                 type="button"
@@ -572,21 +587,6 @@ export function PaymentsView({
                 ) : null}
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => changeView(view === 'list' ? 'calendar' : 'list')}
-              aria-label={`Switch to ${view === 'list' ? 'calendar' : 'list'} view`}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line-strong px-2.5 text-[13px] font-medium text-muted hover:text-ink sm:px-3"
-            >
-              {view === 'list' ? (
-                <CalendarDays size={15} />
-              ) : (
-                <List size={15} />
-              )}
-              <span className="hidden sm:inline">
-                {view === 'list' ? 'Calendar' : 'List'}
-              </span>
-            </button>
           </div>
         </header>
 

@@ -112,6 +112,28 @@ export function formatMoney(
 }
 
 /**
+ * The two halves of a converted amount: the value in `displayCurrency` and,
+ * when the original currency differs, the original (as a `code` string, no
+ * brackets). Lets the UI stack them on two lines on a narrow screen.
+ */
+export function formatConvertedParts(
+  value: Money,
+  displayCurrency: string,
+  rates: RateMap,
+  opts: { locale?: string } = {},
+): { primary: string; secondary: string | null } {
+  const display = displayCurrency.toUpperCase();
+  if (value.currency === display || !rates[value.currency] || !rates[display]) {
+    return { primary: formatMoney(value, opts), secondary: null };
+  }
+  const converted = convertMoney(value, display, rates);
+  return {
+    primary: formatMoney(converted, opts),
+    secondary: formatMoney(value, { ...opts, style: 'code' }),
+  };
+}
+
+/**
  * "£100.00 (6,000.00 EGP)" — converted into `displayCurrency`, original in
  * brackets. Falls back to a plain format when currency matches or no rate.
  */
@@ -121,10 +143,11 @@ export function formatConverted(
   rates: RateMap,
   opts: { locale?: string } = {},
 ): string {
-  const display = displayCurrency.toUpperCase();
-  if (value.currency === display || !rates[value.currency] || !rates[display]) {
-    return formatMoney(value, opts);
-  }
-  const converted = convertMoney(value, display, rates);
-  return `${formatMoney(converted, opts)} (${formatMoney(value, { ...opts, style: 'code' })})`;
+  const { primary, secondary } = formatConvertedParts(
+    value,
+    displayCurrency,
+    rates,
+    opts,
+  );
+  return secondary ? `${primary} (${secondary})` : primary;
 }

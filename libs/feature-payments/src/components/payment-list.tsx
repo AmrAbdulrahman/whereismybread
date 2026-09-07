@@ -738,6 +738,31 @@ export function PaymentList({
   // not once its header reaches the top); the rest fade back.
   const [scrolledKey, setScrolledKey] = useState<string | null>(null);
   const monthKeys = months.map((m) => m.key).join(',');
+
+  // Height of each sticky month header, so day headers can stick just below
+  // it (nested sticky). Tracked with a ResizeObserver since it varies with
+  // the income / progress / budget rows.
+  const [monthHeaderH, setMonthHeaderH] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const ro = new ResizeObserver((entries) => {
+      setMonthHeaderH((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const e of entries) {
+          const key = (e.target as HTMLElement).dataset['monthKey'];
+          if (!key) continue;
+          const h = Math.round(e.contentRect.height);
+          if (next[key] !== h) {
+            next[key] = h;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    });
+    for (const el of headerRefs.current.values()) ro.observe(el);
+    return () => ro.disconnect();
+  }, [monthKeys]);
   const activeKey =
     scrolledKey && months.some((m) => m.key === scrolledKey)
       ? scrolledKey
@@ -1182,8 +1207,11 @@ export function PaymentList({
                   ) : null}
                   <div className="flex flex-col gap-2" data-day={group.date}>
                     <div
+                      style={{
+                        top: stickyTop + (monthHeaderH[mo.key] ?? 0),
+                      }}
                       className={cn(
-                        'flex items-baseline justify-between border-b pb-1',
+                        'sticky z-10 flex items-baseline justify-between border-b bg-ground pb-1 pt-1',
                         isToday
                           ? 'border-accent/50'
                           : dayNeedsReview
