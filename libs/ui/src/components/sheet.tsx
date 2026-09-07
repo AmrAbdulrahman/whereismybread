@@ -17,9 +17,10 @@ const sheet = cva(
     variants: {
       side: {
         bottom:
-          'inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl border-t pb-[env(safe-area-inset-bottom)]',
-        right: 'inset-y-0 right-0 w-[min(24rem,100vw)] border-l',
-        left: 'inset-y-0 left-0 w-[min(20rem,100vw)] border-r',
+          'inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl border-t',
+        right:
+          'inset-y-0 right-0 w-[min(24rem,100vw)] overflow-y-auto overflow-x-hidden border-l',
+        left: 'inset-y-0 left-0 w-[min(20rem,100vw)] overflow-y-auto overflow-x-hidden border-r',
       },
     },
     defaultVariants: { side: 'bottom' },

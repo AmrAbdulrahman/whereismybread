@@ -12,7 +12,7 @@ import type {
 } from '../lib/types';
 import { OccurrenceItem } from './occurrence-item';
 import { PaymentForm } from './payment-form';
-import { applyOverride } from './payments-view';
+import { applyOverride } from '../lib/apply-override';
 
 export function ChecklistView({
   months,
@@ -67,7 +67,11 @@ export function ChecklistView({
     const collapse: string[] = [];
     const reveal: string[] = [];
     for (const m of months) {
-      if (monthDone(m) && open.has(m.key) && !autoCollapsed.current.has(m.key)) {
+      if (
+        monthDone(m) &&
+        open.has(m.key) &&
+        !autoCollapsed.current.has(m.key)
+      ) {
         autoCollapsed.current.add(m.key);
         collapse.push(m.key);
         const nextUp = months.find((x) => x.key > m.key && monthHasWork(x));
@@ -100,7 +104,12 @@ export function ChecklistView({
 
   const [sheet, setSheet] = useState<
     | { mode: 'closed' }
-    | { mode: 'edit'; payment: EditablePayment; occurrenceDate: string; hasOverride: boolean }
+    | {
+        mode: 'edit';
+        payment: EditablePayment;
+        occurrenceDate: string;
+        hasOverride: boolean;
+      }
   >({ mode: 'closed' });
   const close = () => setSheet({ mode: 'closed' });
   const openEdit = (paymentId: string, occurrenceDate: string) => {
@@ -114,9 +123,7 @@ export function ChecklistView({
       hasOverride: ov != null,
     });
   };
-  const usedCurrencies = [
-    ...new Set([displayCurrency, defaultCurrency]),
-  ];
+  const usedCurrencies = [...new Set([displayCurrency, defaultCurrency])];
 
   const current = useMemo(
     () => months.find((m) => m.key === currentMonthKey),

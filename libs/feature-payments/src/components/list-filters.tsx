@@ -65,20 +65,87 @@ export function paymentAttrFilterActive(v: ListFilterValue): boolean {
 /** Filters an expense can't possibly satisfy (it has no bank / method / link). */
 export function expenseIncompatibleFilterActive(v: ListFilterValue): boolean {
   return (
-    v.search.trim() !== '' ||
-    v.bankIds.length > 0 ||
-    v.methodIds.length > 0
+    v.search.trim() !== '' || v.bankIds.length > 0 || v.methodIds.length > 0
   );
 }
 
 const toggle = <T,>(list: T[], id: T): T[] =>
   list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
+export interface FilterChip {
+  key: string;
+  label: string;
+  /** The filter value with just this facet removed. */
+  next: ListFilterValue;
+  /** True for the "Outstanding" chip — it lives outside `ListFilterValue`. */
+  clearsUnpaidOnly?: boolean;
+}
+
 /**
- * The filters panel. The parent owns whether it's shown (behind a single
- * "Filters" button in the header) — this just renders the controls: search,
- * "unpaid only", the "Show" kinds, and the account / bank / method / tag
- * chip groups.
+ * One removable chip per active facet — rendered in the header when the filter
+ * panel is closed, so what's on (and how to drop it) is always visible.
+ */
+export function activeFilterChips(
+  value: ListFilterValue,
+  unpaidOnly: boolean,
+  lookups: {
+    accounts: { id: string; name: string }[];
+    banks: { id: string; name: string }[];
+    tags: { id: string; name: string }[];
+    methods: { id: string; name: string }[];
+  },
+): FilterChip[] {
+  const chips: FilterChip[] = [];
+  const nameOf = (list: { id: string; name: string }[], id: string) =>
+    list.find((x) => x.id === id)?.name ?? '—';
+
+  if (unpaidOnly) {
+    chips.push({
+      key: 'unpaid',
+      label: 'Outstanding',
+      next: value,
+      clearsUnpaidOnly: true,
+    });
+  }
+  if (value.search.trim()) {
+    chips.push({
+      key: 'search',
+      label: `“${value.search.trim()}”`,
+      next: { ...value, search: '' },
+    });
+  }
+  for (const k of value.kinds) {
+    chips.push({
+      key: `kind:${k}`,
+      label: KIND_LABELS[k],
+      next: { ...value, kinds: value.kinds.filter((x) => x !== k) },
+    });
+  }
+  const facet = (
+    key: 'accountIds' | 'bankIds' | 'tagIds' | 'methodIds',
+    list: { id: string; name: string }[],
+  ) => {
+    for (const id of value[key]) {
+      chips.push({
+        key: `${key}:${id}`,
+        label: nameOf(list, id),
+        next: { ...value, [key]: value[key].filter((x) => x !== id) },
+      });
+    }
+  };
+  facet('methodIds', lookups.methods);
+  facet('accountIds', lookups.accounts);
+  facet('bankIds', lookups.banks);
+  facet('tagIds', lookups.tags);
+  return chips;
+}
+
+/**
+ * The filters control body. Rendered inside a `ResponsiveModal` by the parent
+ * (a dialog on desktop, a scrollable bottom sheet on mobile) — this is just the
+ * controls: search, "Outstanding", the "Show" kinds, and the account / bank /
+ * method / tag chip groups. The modal owns the title + close; "Clear all" lives
+ * on the header chip row.
  */
 export function ListFilters({
   value,
@@ -89,7 +156,6 @@ export function ListFilters({
   methods,
   unpaidOnly,
   onUnpaidOnlyChange,
-  onClose,
 }: {
   value: ListFilterValue;
   onChange: (next: ListFilterValue) => void;
@@ -99,7 +165,6 @@ export function ListFilters({
   methods: PaymentMethod[];
   unpaidOnly: boolean;
   onUnpaidOnlyChange: (next: boolean) => void;
-  onClose: () => void;
 }) {
   const count = listFilterCount(value);
 
@@ -147,21 +212,7 @@ export function ListFilters({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Filters
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close filters"
-          className="grid h-6 w-6 place-items-center rounded text-muted hover:bg-surface-2 hover:text-ink"
-        >
-          <X size={15} />
-        </button>
-      </div>
-
+    <div className="flex flex-col gap-4">
       <div className="relative">
         <Search
           size={15}

@@ -23,12 +23,14 @@ export function SeriesPieChart({
     color: p.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length] ?? NEUTRAL,
   }));
   const fmt = (v: number) =>
-    isMoney ? formatMoney(money(Math.round(v), currency)) : String(Math.round(v));
+    isMoney
+      ? formatMoney(money(Math.round(v), currency))
+      : String(Math.round(v));
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <div className="h-[180px] w-full sm:w-[180px] sm:shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
+    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="h-[180px] w-full min-w-0 sm:w-[180px] sm:shrink-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <PieChart>
             <Pie
               data={data}

@@ -65,7 +65,9 @@ export function ChartBuilder({
   }, [chart]);
 
   const [title, setTitle] = useState(chart?.title ?? '');
-  const [groupBy, setGroupBy] = useState<ChartGroupBy>(seed.groupBy ?? 'account');
+  const [groupBy, setGroupBy] = useState<ChartGroupBy>(
+    seed.groupBy ?? 'account',
+  );
   const [count, setCount] = useState(seed.measure === 'count');
   const [display, setDisplay] = useState<ChartDisplay>(seed.display ?? 'bar');
   const [limit, setLimit] = useState<number>(seed.limit ?? 0);
@@ -281,7 +283,7 @@ export function ChartBuilder({
             )}
           </div>
           {preview && !preview.empty ? (
-            <div className="rounded-md bg-surface p-2">
+            <div className="min-w-0 overflow-hidden rounded-md bg-surface p-2">
               {effDisplay === 'pie' ? (
                 <SeriesPieChart
                   points={preview.points}

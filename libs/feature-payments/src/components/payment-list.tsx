@@ -1199,7 +1199,13 @@ export function PaymentList({
               const dayDone =
                 !dayActionable &&
                 group.occurrences.length + dayExpenses.length > 0;
-              const dayMode = dayModeFor(group.date, dayActionable);
+              // While a filter is on, every day that still has rows is force-
+              // expanded so matches in otherwise-collapsed/compact past days
+              // are visible. `dayModes` state is untouched, so clearing the
+              // filter drops each day straight back to its stored/default mode.
+              const dayMode: DayMode = filterActive
+                ? 'expanded'
+                : dayModeFor(group.date, dayActionable);
               const dayCollapsed = dayMode === 'collapsed';
               const dayCompact = dayMode === 'compact';
               // Compact: only what still needs action — unpaid payments and
@@ -1253,9 +1259,17 @@ export function PaymentList({
                     >
                       <button
                         type="button"
-                        onClick={() => cycleDayMode(group.date, dayActionable)}
+                        onClick={() =>
+                          !filterActive &&
+                          cycleDayMode(group.date, dayActionable)
+                        }
+                        disabled={filterActive}
                         aria-expanded={dayMode !== 'collapsed'}
-                        title={modeLabel}
+                        title={
+                          filterActive
+                            ? 'Showing matches — clear the filter to collapse'
+                            : modeLabel
+                        }
                         aria-label={`${new Intl.DateTimeFormat('en-GB', {
                           weekday: 'long',
                           day: 'numeric',

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -8,7 +9,15 @@ import {
   type ReactNode,
 } from 'react';
 import Link from 'next/link';
-import { cn } from '@wib/ui';
+import type {
+  Account,
+  Bank,
+  PaymentMethod,
+  RecipientMethod,
+  Tag,
+} from '@wib/db';
+import type { RateMap } from '@wib/domain';
+import { ResponsiveModal, cn } from '@wib/ui';
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -19,9 +28,29 @@ import {
   Repeat,
   TriangleAlert,
 } from '@wib/ui/icons';
+import {
+  PaymentForm,
+  applyOverride,
+  type EditablePayment,
+  type PaymentBoard,
+} from '@wib/feature-payments';
 import { saveInsightsLayoutAction } from '../lib/actions';
 import type { InsightsData } from '../lib/insights';
 import { InsightCard } from './insight-card';
+
+/** Everything `<PaymentForm>` needs, lifted from the plan board so an insight
+ * row can open the same edit modal without leaving `/insights`. */
+export interface InsightsPaymentContext {
+  methods: PaymentMethod[];
+  accounts: Account[];
+  banks: Bank[];
+  recipientMethods: RecipientMethod[];
+  tags: Tag[];
+  defaultCurrency: string;
+  today: string;
+  usedCurrencies: string[];
+  rates: RateMap;
+}
 
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
@@ -77,9 +106,7 @@ function DraggableCard({
     const grid = ref.current?.parentElement;
     if (!grid) return;
     const styles = getComputedStyle(grid);
-    const cols = styles.gridTemplateColumns
-      .split(' ')
-      .filter(Boolean).length;
+    const cols = styles.gridTemplateColumns.split(' ').filter(Boolean).length;
     const gap = parseFloat(styles.columnGap) || 0;
     const unit = (grid.getBoundingClientRect().width - gap * (cols - 1)) / cols;
     const startX = e.clientX;
@@ -150,8 +177,40 @@ function DraggableCard({
   );
 }
 
-export function InsightsView({ data }: { data: InsightsData }) {
+export function InsightsView({
+  data,
+  editable,
+  overrides,
+  paymentCtx,
+}: {
+  data: InsightsData;
+  editable: Record<string, EditablePayment>;
+  overrides: PaymentBoard['overrides'];
+  paymentCtx: InsightsPaymentContext;
+}) {
   const { comingUp, attention } = data;
+
+  const [editSheet, setEditSheet] = useState<{
+    payment: EditablePayment;
+    occurrenceDate?: string;
+    hasOverride: boolean;
+  } | null>(null);
+
+  const openPayment = useCallback(
+    (paymentId: string, occurrenceDate?: string) => {
+      const base = editable[paymentId];
+      if (!base) return;
+      const ov = occurrenceDate
+        ? overrides[`${paymentId}:${occurrenceDate}`]
+        : undefined;
+      setEditSheet({
+        payment: ov ? applyOverride(base, ov) : base,
+        occurrenceDate,
+        hasOverride: ov != null,
+      });
+    },
+    [editable, overrides],
+  );
 
   const sections: Section[] = useMemo(() => {
     const cu: Card[] = [];
@@ -166,6 +225,7 @@ export function InsightsView({ data }: { data: InsightsData }) {
             summary={`${plural(comingUp.bigSoon.length, 'charge')} of £30+ in the next 10 days`}
             items={comingUp.bigSoon}
             viewAllHref="/plan"
+            onOpenPayment={openPayment}
           />
         ),
       });
@@ -180,6 +240,7 @@ export function InsightsView({ data }: { data: InsightsData }) {
             summary={`${plural(comingUp.annualOrOneTime.length, 'payment')} in the next 4 months`}
             items={comingUp.annualOrOneTime}
             viewAllHref="/plan"
+            onOpenPayment={openPayment}
           />
         ),
       });
@@ -194,6 +255,7 @@ export function InsightsView({ data }: { data: InsightsData }) {
             summary={`${plural(comingUp.annualRenewals.length, 'annual subscription')} renewing in the next 4 months`}
             items={comingUp.annualRenewals}
             viewAllHref="/subscriptions"
+            onOpenPayment={openPayment}
           />
         ),
       });
@@ -232,6 +294,7 @@ export function InsightsView({ data }: { data: InsightsData }) {
             summary={plural(attention.flagged.length, 'flagged payment')}
             items={attention.flagged}
             viewAllHref="/plan"
+            onOpenPayment={openPayment}
           />
         ),
       });
@@ -317,7 +380,7 @@ export function InsightsView({ data }: { data: InsightsData }) {
         cards: at,
       },
     ];
-  }, [comingUp, attention]);
+  }, [comingUp, attention, openPayment]);
 
   const [order, setOrder] = useState<Order>(data.layout.order);
   const [spans, setSpans] = useState<Spans>(data.layout.spans);
@@ -335,7 +398,8 @@ export function InsightsView({ data }: { data: InsightsData }) {
   const setSpan = (id: string, span: number) =>
     setSpans((prev) => (prev[id] === span ? prev : { ...prev, [id]: span }));
 
-  const move = (sectionKey: string, allCards: Card[]) =>
+  const move =
+    (sectionKey: string, allCards: Card[]) =>
     (draggedId: string, targetId: string) => {
       const current = applyOrder(allCards, order[sectionKey]).map((c) => c.id);
       const from = current.indexOf(draggedId);
@@ -378,6 +442,30 @@ export function InsightsView({ data }: { data: InsightsData }) {
           </section>
         );
       })}
+
+      <ResponsiveModal
+        open={editSheet !== null}
+        onOpenChange={(o) => !o && setEditSheet(null)}
+        title="Edit payment"
+      >
+        {editSheet ? (
+          <PaymentForm
+            methods={paymentCtx.methods}
+            accounts={paymentCtx.accounts}
+            banks={paymentCtx.banks}
+            recipientMethods={paymentCtx.recipientMethods}
+            tags={paymentCtx.tags}
+            defaultCurrency={paymentCtx.defaultCurrency}
+            today={paymentCtx.today}
+            usedCurrencies={paymentCtx.usedCurrencies}
+            rates={paymentCtx.rates}
+            initial={editSheet.payment}
+            occurrenceDate={editSheet.occurrenceDate}
+            hasOverride={editSheet.hasOverride}
+            onDone={() => setEditSheet(null)}
+          />
+        ) : null}
+      </ResponsiveModal>
     </div>
   );
 }

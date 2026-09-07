@@ -107,7 +107,7 @@ export function ChartCard({
         if (dragged && dragged !== chart.id) onDropBefore(dragged, chart.id);
       }}
       className={cn(
-        'group relative flex flex-col gap-3 rounded-xl border border-line bg-surface p-4',
+        'group relative flex min-w-0 flex-col gap-3 rounded-xl border border-line bg-surface p-4',
         (dragging || resizing) && 'opacity-60',
         over && 'ring-2 ring-accent ring-offset-2 ring-offset-ground',
       )}

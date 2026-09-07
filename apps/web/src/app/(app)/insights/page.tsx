@@ -1,7 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
 import { Dashboard, InsightsView } from '@wib/feature-insights';
-import { getDashboardData, getInsightsData } from '@wib/feature-insights/server';
+import {
+  getDashboardData,
+  getInsightsData,
+} from '@wib/feature-insights/server';
+import { getBoardData } from '@wib/feature-payments/server';
 
 export const metadata = { title: 'Insights' };
 export const dynamic = 'force-dynamic';
@@ -17,6 +21,9 @@ export default async function InsightsPage({
   const { m } = await searchParams;
   const data = await getInsightsData();
   const dashboard = await getDashboardData(m);
+  // Served from the same cached page bundle `getInsightsData` already read —
+  // no extra round trip. Powers the in-place payment edit modal.
+  const { context, board } = await getBoardData();
 
   return (
     <div className="flex flex-col gap-8">
@@ -28,7 +35,22 @@ export default async function InsightsPage({
         </p>
       </header>
 
-      <InsightsView data={data} />
+      <InsightsView
+        data={data}
+        editable={board.editable}
+        overrides={board.overrides}
+        paymentCtx={{
+          methods: context.methods,
+          accounts: context.accounts,
+          banks: context.banks,
+          recipientMethods: context.recipientMethods,
+          tags: context.tags,
+          defaultCurrency: user.defaultCurrency,
+          today: board.today,
+          usedCurrencies: board.usedCurrencies,
+          rates: board.rates,
+        }}
+      />
       <Dashboard data={dashboard} />
     </div>
   );

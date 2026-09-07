@@ -6,7 +6,6 @@ import type {
   Account,
   Bank,
   PaymentMethod,
-  PaymentOverrides,
   RecipientMethod,
   Tag,
 } from '@wib/db';
@@ -17,8 +16,9 @@ import {
   startOfMonth,
   type IsoDate,
 } from '@wib/domain';
-import { Button, ResponsiveModal, cn } from '@wib/ui';
-import { CalendarDays, List, Plus, SlidersHorizontal } from '@wib/ui/icons';
+import { Button, ResponsiveModal, cn, useMediaQuery } from '@wib/ui';
+import { CalendarDays, List, Plus, SlidersHorizontal, X } from '@wib/ui/icons';
+import { applyOverride } from '../lib/apply-override';
 import { AddFab } from './add-fab';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
 import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
@@ -28,6 +28,7 @@ import { PaymentForm } from './payment-form';
 import { PaymentList } from './payment-list';
 import { SyncButton } from './sync-button';
 import {
+  activeFilterChips,
   EMPTY_LIST_FILTER,
   ListFilters,
   listFilterBadgeCount,
@@ -51,41 +52,6 @@ import type {
 } from '../lib/types';
 
 type View = 'list' | 'calendar';
-
-/** Fold a per-occurrence override onto the payment's editable defaults. */
-export function applyOverride(
-  base: EditablePayment,
-  ov: PaymentOverrides,
-): EditablePayment {
-  return {
-    ...base,
-    name: ov.name ?? base.name,
-    amount:
-      ov.amountMinor != null ? (ov.amountMinor / 100).toFixed(2) : base.amount,
-    defaultUnits: ov.units != null ? String(ov.units) : base.defaultUnits,
-    lineItems:
-      'lineItems' in ov && ov.lineItems
-        ? ov.lineItems.map((li) => ({
-            id: li.id,
-            name: li.name,
-            value: (li.valueMinor / 100).toFixed(2),
-            currency: li.currency,
-            iconKey: li.iconKey,
-            logoUrl: li.logoUrl,
-            color: li.color,
-          }))
-        : base.lineItems,
-    currency: ov.currency ?? base.currency,
-    methodId: 'methodId' in ov ? (ov.methodId ?? null) : base.methodId,
-    accountId: 'accountId' in ov ? (ov.accountId ?? null) : base.accountId,
-    bankId: 'bankId' in ov ? (ov.bankId ?? null) : base.bankId,
-    recipientMethodId:
-      'recipientMethodId' in ov
-        ? (ov.recipientMethodId ?? null)
-        : base.recipientMethodId,
-    notes: 'notes' in ov ? (ov.notes ?? null) : base.notes,
-  };
-}
 
 function toBudgetFormInitial(b: BudgetSummary): BudgetFormInitial {
   return {
@@ -176,6 +142,16 @@ export function PaymentsView({
     useState<ListFilterValue>(EMPTY_LIST_FILTER);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const filterBadge = listFilterBadgeCount(listFilter, unpaidOnly);
+  const filterChips = activeFilterChips(listFilter, unpaidOnly, {
+    accounts,
+    banks,
+    tags,
+    methods,
+  });
+  const clearAllFilters = () => {
+    setListFilter(EMPTY_LIST_FILTER);
+    setUnpaidOnly(false);
+  };
 
   // Per-day "needs review" transactions, with optimistic removal on triage.
   const [reviewSheet, setReviewSheet] = useState<TriageSheet>({
@@ -211,6 +187,10 @@ export function PaymentsView({
     tags,
   };
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Desktop: the filter panel expands inline under the header so the list keeps
+  // updating live as you filter. Mobile: a bottom sheet (an inline panel would
+  // pin to the top and its lower half couldn't be scrolled to).
+  const filtersInline = useMediaQuery('(min-width: 1024px)');
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -469,6 +449,29 @@ export function PaymentsView({
     </ResponsiveModal>
   );
 
+  const filterControls = (
+    <ListFilters
+      value={listFilter}
+      onChange={setListFilter}
+      accounts={accounts}
+      banks={banks}
+      tags={tags}
+      methods={methods}
+      unpaidOnly={unpaidOnly}
+      onUnpaidOnlyChange={setUnpaidOnly}
+    />
+  );
+
+  const filtersModal = filtersInline ? null : (
+    <ResponsiveModal
+      open={filtersOpen}
+      onOpenChange={setFiltersOpen}
+      title="Filters"
+    >
+      {filterControls}
+    </ResponsiveModal>
+  );
+
   const expenseModal = (
     <ResponsiveModal
       open={expenseSheet.mode !== 'closed'}
@@ -642,18 +645,36 @@ export function PaymentsView({
           </div>
         </header>
 
-        {view === 'list' && filtersOpen ? (
-          <ListFilters
-            value={listFilter}
-            onChange={setListFilter}
-            accounts={accounts}
-            banks={banks}
-            tags={tags}
-            methods={methods}
-            unpaidOnly={unpaidOnly}
-            onUnpaidOnlyChange={setUnpaidOnly}
-            onClose={() => setFiltersOpen(false)}
-          />
+        {view === 'list' && filtersInline && filtersOpen ? (
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-line bg-surface p-3">
+            {filterControls}
+          </div>
+        ) : null}
+
+        {view === 'list' && filterChips.length > 0 ? (
+          <div className="-mb-1 flex items-center gap-1.5 overflow-x-auto pb-1">
+            {filterChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => {
+                  setListFilter(chip.next);
+                  if (chip.clearsUnpaidOnly) setUnpaidOnly(false);
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-accent"
+              >
+                <span className="max-w-[10rem] truncate">{chip.label}</span>
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="shrink-0 whitespace-nowrap px-1.5 text-xs font-medium text-muted hover:text-ink"
+            >
+              Clear all
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -693,6 +714,7 @@ export function PaymentsView({
       {formModal}
       {budgetModal}
       {expenseModal}
+      {filtersModal}
       <FlagModal target={flagTarget} onDone={() => setFlagTarget(null)} />
 
       <TransactionTriageModal

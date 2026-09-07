@@ -37,7 +37,7 @@ export function ResponsiveModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           className={cn(
-            'max-h-[85dvh] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto',
+            'max-h-[min(85dvh,calc(100dvh-2rem))] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto overflow-x-hidden',
             className,
           )}
         >
@@ -57,7 +57,10 @@ export function ResponsiveModal({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className={cn('max-h-[92dvh] overflow-y-auto p-5', className)}
+        className={cn(
+          'max-h-[90dvh] overflow-y-auto px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]',
+          className,
+        )}
       >
         <SheetTitle className="mb-1">{title}</SheetTitle>
         {description ? (

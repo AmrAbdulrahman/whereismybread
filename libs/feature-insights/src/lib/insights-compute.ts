@@ -30,8 +30,12 @@ export interface InsightsItem {
   /** "today" / "tomorrow" / "in 6 days" / "12 Oct" — null when not date-bound. */
   dateLabel: string | null;
   amountLabel: string;
-  /** Where clicking the row goes. */
+  /** Where clicking the row goes (fallback / non-payment rows). */
   href: string;
+  /** Set for payment-occurrence rows — the Insights page opens the edit modal
+   * in place instead of navigating to `href`. */
+  paymentId?: string;
+  occurrenceDate?: string;
 }
 
 // --- date helpers -------------------------------------------------------
@@ -80,6 +84,8 @@ function toItem(
     dateLabel: relativeDay(occ.dueDate, today),
     amountLabel: formatConverted(occ.amount, displayCurrency, rates),
     href: planHref(occ),
+    paymentId: occ.paymentId,
+    occurrenceDate: occ.dueDate,
   };
 }
 
@@ -162,6 +168,8 @@ function flagRow(o: BoardOccurrence, today: string): InsightsItem {
     dateLabel: relativeDay(o.dueDate, today),
     amountLabel: note.length > 60 ? `${note.slice(0, 57)}…` : note,
     href: planHref(o),
+    paymentId: o.paymentId,
+    occurrenceDate: o.dueDate,
   };
 }
 
@@ -211,9 +219,7 @@ export function flaggedOccurrences(
 /** Budgets at or above 90% used — over, or about to bust. */
 export function overBudget(budgets: BudgetSummary[]): InsightsItem[] {
   return budgets
-    .filter(
-      (b) => !b.closedAt && b.limit.minorUnits > 0 && b.progress >= 0.9,
-    )
+    .filter((b) => !b.closedAt && b.limit.minorUnits > 0 && b.progress >= 0.9)
     .sort((a, b) => b.progress - a.progress)
     .map((b) => {
       const over = b.remainingMinor < 0;

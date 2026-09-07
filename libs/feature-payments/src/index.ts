@@ -2,6 +2,7 @@
 
 export { PaymentsView } from './components/payments-view';
 export { PaymentForm, type PaymentFormProps } from './components/payment-form';
+export { applyOverride } from './lib/apply-override';
 export { BankManager } from './components/bank-manager';
 export { ChecklistView } from './components/checklist-view';
 export { BudgetsView } from './components/budgets-view';
@@ -82,7 +83,10 @@ export {
 } from './lib/budget-actions';
 
 export { budgetFormSchema, type BudgetFormValues } from './lib/budget-schema';
-export { expenseFormSchema, type ExpenseFormValues } from './lib/expense-schema';
+export {
+  expenseFormSchema,
+  type ExpenseFormValues,
+} from './lib/expense-schema';
 
 export { StatementUpload } from './components/statement-upload';
 export { importStatementAction } from './lib/statement-import-actions';

@@ -29,6 +29,8 @@ export const DialogContent = forwardRef<
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2',
+        // Always stay within the viewport — scroll inside, never off-screen.
+        'max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden overscroll-contain',
         'rounded-xl border border-line bg-surface p-6 shadow-xl focus:outline-none',
         className,
       )}

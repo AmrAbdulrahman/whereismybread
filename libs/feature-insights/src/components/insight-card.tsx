@@ -19,6 +19,7 @@ export function InsightCard({
   summary,
   items,
   viewAllHref,
+  onOpenPayment,
   children,
 }: {
   icon: LucideIcon;
@@ -28,10 +29,27 @@ export function InsightCard({
   summary: string;
   items?: InsightsItem[];
   viewAllHref?: string;
+  /** When set, a payment-occurrence row opens the edit modal in place instead
+   * of linking to `/plan`. */
+  onOpenPayment?: (paymentId: string, occurrenceDate?: string) => void;
   children?: React.ReactNode;
 }) {
   const t = TONE[tone];
   const list = items ?? [];
+
+  const rowClass =
+    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-2/60';
+  const rowInner = (it: InsightsItem) => (
+    <>
+      <span className="min-w-0 flex-1 truncate text-ink">{it.name}</span>
+      {it.dateLabel ? (
+        <span className="shrink-0 text-[11px] text-muted">{it.dateLabel}</span>
+      ) : null}
+      <span className="shrink-0 font-mono text-xs tabular-nums text-ink-soft">
+        {it.amountLabel}
+      </span>
+    </>
+  );
 
   return (
     <div
@@ -58,23 +76,21 @@ export function InsightCard({
         <ul className="flex flex-col divide-y divide-line/60 overflow-hidden rounded-lg border border-line/60">
           {list.slice(0, 5).map((it) => (
             <li key={it.key}>
-              <Link
-                href={it.href}
-                draggable={false}
-                className="flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-surface-2/60"
-              >
-                <span className="min-w-0 flex-1 truncate text-ink">
-                  {it.name}
-                </span>
-                {it.dateLabel ? (
-                  <span className="shrink-0 text-[11px] text-muted">
-                    {it.dateLabel}
-                  </span>
-                ) : null}
-                <span className="shrink-0 font-mono text-xs tabular-nums text-ink-soft">
-                  {it.amountLabel}
-                </span>
-              </Link>
+              {onOpenPayment && it.paymentId ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenPayment(it.paymentId as string, it.occurrenceDate)
+                  }
+                  className={rowClass}
+                >
+                  {rowInner(it)}
+                </button>
+              ) : (
+                <Link href={it.href} draggable={false} className={rowClass}>
+                  {rowInner(it)}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
