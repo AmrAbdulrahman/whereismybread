@@ -16,6 +16,7 @@ import {
   deleteAttachment,
   deleteBank,
   deletePaymentFrom,
+  fetchBranding,
   getAccountByName,
   getBankByName,
   getOrCreateTags,
@@ -43,6 +44,7 @@ import {
   type PaymentMethod,
   type PaymentOverrides,
   type RecipientMethod,
+  type Branding,
 } from '@wib/db';
 import {
   anchorForAnnualDate,
@@ -54,6 +56,7 @@ import {
   todayIn,
 } from '@wib/domain';
 import { revalidatePath } from 'next/cache';
+import { runRecordAutomations } from '@wib/feature-automations/server';
 import { revalidateUserData } from './revalidate';
 import { getBoardData } from './queries';
 import type { AttachmentDraft, PaymentBoard } from './types';
@@ -71,7 +74,6 @@ import {
 } from './recipient-method-schema';
 import { accountFormSchema, type AccountFormValues } from './account-schema';
 import { bankFormSchema, type BankFormValues } from './bank-schema';
-import { fetchBranding, type Branding } from './branding';
 
 /**
  * Which occurrences an edit/delete of a recurring payment applies to:
@@ -207,10 +209,12 @@ export async function savePaymentAction(
     anchorDate: oneTime ? v.anchorDate : anchorForRecurrence(),
     dayOfMonth: oneTime ? null : domDay,
     endsOn: oneTime ? null : v.endsOn,
-    // The provider link + its branding belong to the subscription toggle.
+    // The clickable provider link belongs to the subscription toggle, but the
+    // logo + brand colour are just display and can ride on any payment (e.g.
+    // inherited from an enriched review transaction).
     url: isSub ? v.url : null,
-    logoUrl: isSub ? v.logoUrl : null,
-    brandColor: isSub ? v.brandColor : null,
+    logoUrl: v.logoUrl,
+    brandColor: v.brandColor,
     isSubscription: isSub,
     notes: v.notes,
     tagIds: tags.map((t) => t.id),
@@ -225,6 +229,22 @@ export async function savePaymentAction(
       await reconcileAttachments(userId, created.id, drafts).catch(
         () => undefined,
       );
+    }
+    // "Payment or expense added" automations. Isolated — a rule failure must
+    // not fail the save.
+    try {
+      await runRecordAutomations(userId, {
+        kind: 'payment',
+        recordId: created.id,
+        name: input.name,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        recurrence: input.recurrence,
+        accountId: input.accountId,
+        methodId: input.methodId,
+      });
+    } catch (err) {
+      console.error('[payments] record automations failed', err);
     }
     revalidatePath('/plan');
     revalidateUserData(userId);

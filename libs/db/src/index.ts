@@ -1,5 +1,6 @@
 export { getDb, getSql, type Db } from './lib/client';
 export { checkDatabase, type DbHealth } from './lib/health';
+export { fetchBranding, type Branding } from './lib/branding';
 export * as schema from './lib/schema/index';
 export type { User, NewUser, MonthIncome } from './lib/schema/users';
 export type {
@@ -116,6 +117,9 @@ export {
   updatePayment,
   deletePayment,
   setPaymentFlag,
+  addPaymentTags,
+  setPaymentAccount,
+  setPaymentMethod,
   deletePaymentFrom,
   splitPaymentForward,
   type PaymentWithMeta,
@@ -171,6 +175,8 @@ export {
   getExpense,
   deleteExpense,
   listExpenses,
+  addExpenseTags,
+  setExpenseAccount,
   type ExpenseInput,
   type ExpenseWithMeta,
   type ExpenseLine,
@@ -193,6 +199,8 @@ export {
   insertImportedTransactions,
   insertSyncedTransactions,
   listPendingBankTransactions,
+  getBankTransactionsByIds,
+  updateBankTransactionEnrichment,
   markBankTransactionCategorized,
   markBankTransactionIgnored,
   markBankTransactionsIgnored,
@@ -214,9 +222,40 @@ export {
   listBankAccounts,
   markBankAccountSynced,
   type ImportedTransactionInput,
+  type InsertedTransactions,
+  type BankTransactionEnrichment,
   type PendingConnectionInput,
   type BankAccountInput,
 } from './lib/repositories/bank-sync';
+
+export {
+  listAutomations,
+  listEnabledAutomations,
+  getAutomation,
+  createAutomation,
+  updateAutomation,
+  setAutomationEnabled,
+  deleteAutomation,
+  reorderAutomations,
+  touchAutomationRun,
+  type AutomationInput,
+} from './lib/repositories/automations';
+
+export {
+  createNotification,
+  createNotifications,
+  listNotifications,
+  countUnreadNotifications,
+  markNotificationsRead,
+  type NotificationInput,
+} from './lib/repositories/notifications';
+
+export type {
+  Automation,
+  NewAutomation,
+  Notification,
+  NewNotification,
+} from './lib/schema/automations';
 
 export {
   getInsightsLayout,

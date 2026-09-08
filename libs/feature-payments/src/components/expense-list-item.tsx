@@ -47,9 +47,19 @@ export function ExpenseListItem({
         'border-line-strong bg-surface/60 hover:border-accent/60',
       )}
     >
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
-        <Receipt size={13} strokeWidth={2} />
-      </span>
+      {expense.logoUrl ? (
+        <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full border border-line bg-surface">
+          <img
+            src={expense.logoUrl}
+            alt=""
+            className="h-full w-full object-contain"
+          />
+        </span>
+      ) : (
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface-2 text-muted">
+          <Receipt size={13} strokeWidth={2} />
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-sm text-ink">{expense.name}</span>

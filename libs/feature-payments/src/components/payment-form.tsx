@@ -27,6 +27,7 @@ import {
   MethodIcon,
   ResponsiveModal,
   Spinner,
+  TagInput,
   cn,
 } from '@wib/ui';
 import { ImagePlus, Plus } from '@wib/ui/icons';
@@ -49,7 +50,6 @@ import { PaymentGroupEditor } from './payment-group-editor';
 import type { OccurrenceAttachment } from '../lib/types';
 import { RecipientMethodForm } from './recipient-method-form';
 import { MethodForm } from './method-form';
-import { TagInput } from './tag-input';
 
 const RECURRENCE_LABELS: Record<(typeof RECURRENCES)[number], string> = {
   one_time: 'One-time',
@@ -79,6 +79,12 @@ export interface PaymentFormPrefill {
   currency?: string;
   notes?: string;
   bankId?: string | null;
+  accountId?: string | null;
+  methodId?: string | null;
+  tags?: string[];
+  url?: string | null;
+  logoUrl?: string | null;
+  brandColor?: string | null;
   /**
    * The date the money actually moved (YYYY-MM-DD), e.g. a synced bank
    * transaction's booking date. Seeds the one-time date / recurring
@@ -206,8 +212,8 @@ export function PaymentForm({
         prefill?.currency ??
         readLastCurrency() ??
         defaultCurrency,
-      methodId: initial?.methodId ?? null,
-      accountId: initial?.accountId ?? null,
+      methodId: initial?.methodId ?? prefill?.methodId ?? null,
+      accountId: initial?.accountId ?? prefill?.accountId ?? null,
       bankId: initial?.bankId ?? prefill?.bankId ?? null,
       recipientMethodId: initial?.recipientMethodId ?? null,
       recurrence: initial?.recurrence ?? 'one_time',
@@ -225,11 +231,11 @@ export function PaymentForm({
               .replace(/^0/, '')
           : ''),
       endsOn: initial?.endsOn ?? '',
-      url: initial?.url ?? '',
-      logoUrl: initial?.logoUrl ?? '',
-      brandColor: initial?.brandColor ?? '',
+      url: initial?.url ?? prefill?.url ?? '',
+      logoUrl: initial?.logoUrl ?? prefill?.logoUrl ?? '',
+      brandColor: initial?.brandColor ?? prefill?.brandColor ?? '',
       notes: initial?.notes ?? prefill?.notes ?? '',
-      tags: initial?.tags ?? [],
+      tags: initial?.tags ?? prefill?.tags ?? [],
     },
   });
 

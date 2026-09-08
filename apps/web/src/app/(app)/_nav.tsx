@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { AppShell, icons, type NavEntry } from '@wib/ui';
 import { UserMenu } from './_user-menu';
 
-const NAV_ITEMS: NavEntry[] = [
+const navItems = (unreadNotifications: number): NavEntry[] => [
   { href: '/plan', label: 'Payments', icon: icons.calendar },
   { href: '/insights', label: 'Insights', icon: icons.insights },
   {
@@ -20,6 +20,19 @@ const NAV_ITEMS: NavEntry[] = [
     label: 'Integrations',
     shortLabel: 'Integr.',
     icon: icons.transactions,
+  },
+  {
+    href: '/automations',
+    label: 'Automations',
+    shortLabel: 'Auto',
+    icon: icons.automations,
+  },
+  {
+    href: '/notifications',
+    label: 'Notifications',
+    shortLabel: 'Alerts',
+    icon: icons.notifications,
+    badge: unreadNotifications,
   },
 
   { separator: true },
@@ -58,15 +71,17 @@ export function AppNav({
   children,
   userName,
   userEmail,
+  unreadNotifications = 0,
 }: {
   children: ReactNode;
   userName: string | null;
   userEmail: string;
+  unreadNotifications?: number;
 }) {
   const pathname = usePathname();
   return (
     <AppShell
-      navItems={NAV_ITEMS}
+      navItems={navItems(unreadNotifications)}
       currentPath={pathname}
       linkComponent={Link}
       footerSlot={<UserMenu name={userName} email={userEmail} />}

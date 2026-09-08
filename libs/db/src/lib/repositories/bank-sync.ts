@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '../client';
 import { expenses } from '../schema/budgets';
+import { accounts, paymentMethods } from '../schema/payments';
 import {
   bankAccounts,
   bankConnections,
@@ -95,22 +96,30 @@ export interface ImportedTransactionInput {
   status?: 'pending' | 'ignored';
 }
 
+/** What a bulk insert of transactions actually created. */
+export interface InsertedTransactions {
+  /** How many rows were genuinely new (not deduped away). */
+  inserted: number;
+  /** The ids of those new rows — for downstream processing (automations). */
+  ids: string[];
+}
+
 /**
  * Bulk-insert parsed statement rows, skipping any already seen for this user
  * (`onConflictDoNothing` on the `(userId, dedupKey)` unique index). Returns
- * how many were genuinely new. Chunked so a huge statement stays one query
- * per chunk rather than one per row.
+ * the genuinely-new rows. Chunked so a huge statement stays one query per
+ * chunk rather than one per row.
  */
 export async function insertImportedTransactions(
   userId: string,
   importId: string,
   rows: ImportedTransactionInput[],
   bankId?: string | null,
-): Promise<number> {
-  if (rows.length === 0) return 0;
+): Promise<InsertedTransactions> {
+  if (rows.length === 0) return { inserted: 0, ids: [] };
   const db = getDb();
   const CHUNK = 500;
-  let inserted = 0;
+  const ids: string[] = [];
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK);
     const result = await db
@@ -137,9 +146,9 @@ export async function insertImportedTransactions(
         target: [bankTransactions.userId, bankTransactions.dedupKey],
       })
       .returning({ id: bankTransactions.id });
-    inserted += result.length;
+    for (const row of result) ids.push(row.id);
   }
-  return inserted;
+  return { inserted: ids.length, ids };
 }
 
 /**
@@ -153,11 +162,11 @@ export async function insertSyncedTransactions(
   accountId: string,
   rows: ImportedTransactionInput[],
   bankId?: string | null,
-): Promise<number> {
-  if (rows.length === 0) return 0;
+): Promise<InsertedTransactions> {
+  if (rows.length === 0) return { inserted: 0, ids: [] };
   const db = getDb();
   const CHUNK = 500;
-  let inserted = 0;
+  const ids: string[] = [];
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK);
     const result = await db
@@ -185,9 +194,9 @@ export async function insertSyncedTransactions(
         target: [bankTransactions.userId, bankTransactions.dedupKey],
       })
       .returning({ id: bankTransactions.id });
-    inserted += result.length;
+    for (const row of result) ids.push(row.id);
   }
-  return inserted;
+  return { inserted: ids.length, ids };
 }
 
 // --- Live connections (Enable Banking) -----------------------------------
@@ -503,6 +512,93 @@ export async function listPendingBankTransactions(
       ),
     )
     .orderBy(desc(bankTransactions.occurredAt));
+}
+
+/** Full transaction rows by id, scoped to the user. Order is not guaranteed. */
+export async function getBankTransactionsByIds(
+  userId: string,
+  ids: string[],
+): Promise<BankTransaction[]> {
+  if (ids.length === 0) return [];
+  return getDb()
+    .select()
+    .from(bankTransactions)
+    .where(
+      and(
+        eq(bankTransactions.userId, userId),
+        inArray(bankTransactions.id, ids),
+      ),
+    );
+}
+
+export interface BankTransactionEnrichment {
+  accountId?: string | null;
+  methodId?: string | null;
+  url?: string | null;
+  logoUrl?: string | null;
+  brandColor?: string | null;
+  nameOverride?: string | null;
+  notesOverride?: string | null;
+  /** Tag names (replaces the stored list). */
+  tags?: string[];
+}
+
+/**
+ * Stamp a pending transaction with triage hints — set by an automation or the
+ * "edit details" modal, inherited into the payment/expense form on triage.
+ * Only the keys present in `patch` are written. `accountId` is ownership-guarded.
+ */
+export async function updateBankTransactionEnrichment(
+  userId: string,
+  id: string,
+  patch: BankTransactionEnrichment,
+): Promise<void> {
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  if ('accountId' in patch) {
+    if (patch.accountId) {
+      const owned = await getDb()
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(
+          and(eq(accounts.id, patch.accountId), eq(accounts.userId, userId)),
+        )
+        .limit(1);
+      set['triageAccountId'] = owned[0] ? patch.accountId : null;
+    } else {
+      set['triageAccountId'] = null;
+    }
+  }
+  if ('methodId' in patch) {
+    if (patch.methodId) {
+      const owned = await getDb()
+        .select({ id: paymentMethods.id })
+        .from(paymentMethods)
+        .where(
+          and(
+            eq(paymentMethods.id, patch.methodId),
+            eq(paymentMethods.userId, userId),
+          ),
+        )
+        .limit(1);
+      set['triageMethodId'] = owned[0] ? patch.methodId : null;
+    } else {
+      set['triageMethodId'] = null;
+    }
+  }
+  if ('url' in patch) set['url'] = patch.url ?? null;
+  if ('logoUrl' in patch) set['logoUrl'] = patch.logoUrl ?? null;
+  if ('brandColor' in patch) set['brandColor'] = patch.brandColor ?? null;
+  if ('nameOverride' in patch) set['nameOverride'] = patch.nameOverride ?? null;
+  if ('notesOverride' in patch)
+    set['notesOverride'] = patch.notesOverride ?? null;
+  if ('tags' in patch) set['tags'] = patch.tags ?? [];
+
+  await getDb()
+    .update(bankTransactions)
+    .set(set)
+    .where(
+      and(eq(bankTransactions.id, id), eq(bankTransactions.userId, userId)),
+    );
 }
 
 export async function markBankTransactionCategorized(

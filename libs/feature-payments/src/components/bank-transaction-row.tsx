@@ -2,7 +2,7 @@
 
 import { formatMoney, money } from '@wib/domain';
 import { cn } from '@wib/ui';
-import { CalendarDays, Receipt, X } from '@wib/ui/icons';
+import { CalendarDays, Pencil, Receipt, X } from '@wib/ui/icons';
 import type { BankTransactionRow as BankTransactionRowData } from '../lib/bank-sync-queries';
 
 function dateLabel(iso: string): string {
@@ -37,6 +37,7 @@ export function BankTransactionRow({
   onLogExpense,
   onCreatePayment,
   onIgnore,
+  onEdit,
 }: {
   txn: BankTransactionRowData;
   variant?: 'inbox' | 'day';
@@ -47,6 +48,8 @@ export function BankTransactionRow({
   onLogExpense: () => void;
   onCreatePayment: () => void;
   onIgnore: () => void;
+  /** "Edit details" — stamp triage hints onto the row (inbox only). */
+  onEdit?: () => void;
 }) {
   const negative = txn.amountMinor < 0;
   const meta = [
@@ -78,6 +81,15 @@ export function BankTransactionRow({
             className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
           />
         ) : null}
+        {txn.logoUrl ? (
+          <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-md border border-line bg-surface">
+            <img
+              src={txn.logoUrl}
+              alt=""
+              className="h-full w-full object-contain"
+            />
+          </span>
+        ) : null}
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-sm text-ink">
             {variant === 'day' ? (
@@ -86,15 +98,28 @@ export function BankTransactionRow({
               </span>
             ) : null}
             <span className="truncate" title={txn.description}>
-              {txn.merchant || txn.description}
+              {txn.displayName || txn.description}
             </span>
           </p>
-          {txn.merchant && txn.merchant !== txn.description ? (
+          {(txn.displayName || txn.merchant) &&
+          (txn.displayName || txn.merchant) !== txn.description ? (
             <p className="truncate text-[11px] text-muted" title={txn.description}>
               {txn.description}
             </p>
           ) : null}
           {meta ? <p className="text-[11px] text-muted">{meta}</p> : null}
+          {txn.tags.length > 0 ? (
+            <p className="mt-0.5 flex flex-wrap items-center gap-1">
+              {txn.tags.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-soft"
+                >
+                  {t}
+                </span>
+              ))}
+            </p>
+          ) : null}
         </div>
         <span
           className={cn(
@@ -123,10 +148,23 @@ export function BankTransactionRow({
           <CalendarDays size={12} strokeWidth={2} />
           Create a planned payment
         </button>
+        {onEdit && variant === 'inbox' ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink"
+          >
+            <Pencil size={12} strokeWidth={2} />
+            Edit details
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onIgnore}
-          className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink"
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink',
+            !(onEdit && variant === 'inbox') && 'ml-auto',
+          )}
         >
           <X size={12} strokeWidth={2} />
           Ignore

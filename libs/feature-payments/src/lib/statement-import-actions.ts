@@ -6,6 +6,7 @@ import {
   finalizeStatementImport,
   insertImportedTransactions,
 } from '@wib/db';
+import { runReviewExpenseAutomations } from '@wib/feature-automations/server';
 import { revalidatePath } from 'next/cache';
 import { revalidateUserData } from './revalidate';
 import {
@@ -96,12 +97,18 @@ export async function importStatementAction(
     rawPayload: r.raw as Record<string, unknown>,
   }));
 
-  const imported = await insertImportedTransactions(
-    userId,
-    importRow.id,
-    rows,
-    bankId,
-  );
+  const { inserted: imported, ids: newTransactionIds } =
+    await insertImportedTransactions(userId, importRow.id, rows, bankId);
+
+  // Run "expense for review created" automations over the new rows. Isolated so
+  // a rule failure never fails the import.
+  if (newTransactionIds.length > 0) {
+    try {
+      await runReviewExpenseAutomations(userId, newTransactionIds);
+    } catch (err) {
+      console.error('[statement-import] automations failed', err);
+    }
+  }
 
   const latest = statement.rows.reduce((a, b) =>
     b.occurredAt > a.occurredAt ? b : a,

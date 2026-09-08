@@ -151,19 +151,39 @@ Import rules are enforced by `@nx/enforce-module-boundaries` in
 
 ### Scheduled bank sync
 
-`POST /api/bank-sync/enable-banking` runs the periodic bank sync. It is driven
-by the **Bank sync** GitHub Actions workflow (`.github/workflows/bank-sync.yml`)
-every 15 minutes — not Vercel Cron. The endpoint is protected by a shared
-secret and rejects any request without `Authorization: Bearer <CRON_SECRET>`.
+`/api/bank-sync/enable-banking` runs the periodic bank sync.
 
-On the repo's `production` environment set:
+- **`POST`** — the recurring trigger, driven by a **QStash cron schedule** every
+  5 minutes. QStash signs each request; the route verifies the
+  `Upstash-Signature` JWT against `QSTASH_CURRENT_SIGNING_KEY` /
+  `QSTASH_NEXT_SIGNING_KEY`. Retries use the QStash account default policy.
+- **`GET`** — manual / break-glass trigger, protected by the shared
+  `CRON_SECRET` (`Authorization: Bearer <CRON_SECRET>`). Also used by the
+  **Bank sync** GitHub Actions workflow (`workflow_dispatch` only).
+
+**Vercel env** (preview + production): `QSTASH_CURRENT_SIGNING_KEY`,
+`QSTASH_NEXT_SIGNING_KEY`, `CRON_SECRET`. `QSTASH_TOKEN` / `QSTASH_URL` are only
+needed locally to manage the schedule.
+
+**Create / update the schedule** (idempotent — fixed `scheduleId`):
+
+```bash
+APP_URL=https://<app-url> \
+  node --env-file=.env.local scripts/qstash-schedule.mjs create
+node --env-file=.env.local scripts/qstash-schedule.mjs list
+```
+
+Free QStash tier is 500 messages/day; every 5 min is 288/day, leaving headroom
+for retries. Free schedules and daily quota are visible in the QStash console.
+
+**GitHub Actions `production` environment** (manual fallback only):
 
 - secret `CRON_SECRET` — identical to the Vercel env var of the same name
 - variable `APP_URL` — the production base URL (no trailing slash)
 
-Trigger a run by hand from the Actions tab ("Run workflow"), or:
+Trigger the fallback by hand from the Actions tab ("Run workflow"), or:
 
 ```bash
-curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+curl -H "Authorization: Bearer $CRON_SECRET" \
   https://<app-url>/api/bank-sync/enable-banking
 ```

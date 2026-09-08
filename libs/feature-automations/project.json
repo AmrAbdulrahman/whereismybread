@@ -1,0 +1,9 @@
+{
+  "name": "feature-automations",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/feature-automations/src",
+  "projectType": "library",
+  "tags": ["type:feature", "scope:automations"],
+  "// targets": "to see all targets run: nx show project feature-automations --web",
+  "targets": {}
+}

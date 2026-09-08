@@ -13,6 +13,7 @@ import {
 import type { BankTransactionRow as BankTransactionRowData } from '../lib/bank-sync-queries';
 import type { BudgetSummary, PaymentsContext } from '../lib/types';
 import { BankTransactionRow } from './bank-transaction-row';
+import { EnrichTransactionModal } from './enrich-transaction-modal';
 import {
   TransactionTriageModal,
   type TriageSheet,
@@ -58,6 +59,7 @@ export function BankTransactionTriage({
 
   const [sheet, setSheet] = useState<TriageSheet>({ mode: 'closed' });
   const close = () => setSheet({ mode: 'closed' });
+  const [enrichId, setEnrichId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   const unhandled = useMemo(
@@ -204,6 +206,7 @@ export function BankTransactionTriage({
               onSelectedChange={(on) => toggle(txn.id, on)}
               onLogExpense={() => setSheet({ mode: 'expense', txn })}
               onCreatePayment={() => setSheet({ mode: 'payment', txn })}
+              onEdit={() => setEnrichId(txn.id)}
               onIgnore={() =>
                 settle([txn.id], () => ignoreBankTransactionAction(txn.id))
               }
@@ -239,6 +242,19 @@ export function BankTransactionTriage({
               }),
             );
           }
+        }}
+      />
+
+      <EnrichTransactionModal
+        open={enrichId != null}
+        onOpenChange={(o) => !o && setEnrichId(null)}
+        txn={unhandled.find((t) => t.id === enrichId) ?? null}
+        accounts={context.accounts}
+        methods={context.methods}
+        tags={context.tags}
+        onDone={() => {
+          setEnrichId(null);
+          startTransition(() => router.refresh());
         }}
       />
     </div>

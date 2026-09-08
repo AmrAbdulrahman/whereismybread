@@ -4,3 +4,5 @@ export * from './lib/result';
 export * from './lib/recurrence';
 export * from './lib/occurrences';
 export * from './lib/currency';
+export * from './lib/merchant';
+export * from './lib/automations';

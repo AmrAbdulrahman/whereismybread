@@ -56,6 +56,9 @@
     },
     {
       "path": "../auth/tsconfig.lib.json"
+    },
+    {
+      "path": "../feature-automations/tsconfig.lib.json"
     }
   ]
 }

@@ -52,9 +52,22 @@ const serverSchema = z.object({
   // rest — currently the Enable Banking session id.
   SECRETS_ENCRYPTION_KEY: z.string().optional(),
 
-  // Shared secret for authenticating the bank-sync GitHub Actions workflow
-  // (.github/workflows/bank-sync.yml) calling /api/bank-sync.
+  // Shared secret for manually triggering the bank-sync endpoint
+  // (GET /api/bank-sync/enable-banking with `Authorization: Bearer <secret>`),
+  // and the fallback GitHub Actions workflow (.github/workflows/bank-sync.yml).
   CRON_SECRET: z.string().optional(),
+
+  // QStash (Upstash) — drives the periodic bank sync via a cron schedule that
+  // POSTs the bank-sync endpoint. Requests are authenticated by verifying the
+  // `Upstash-Signature` JWT against these signing keys (rotated pair). All
+  // optional so deploys without QStash configured still validate.
+  //  - QSTASH_TOKEN                publishing token, only needed to create/
+  //                               manage schedules (see scripts/qstash-schedule.mjs)
+  //  - QSTASH_URL                  QStash API base, defaults to the public host
+  QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
+  QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
+  QSTASH_TOKEN: z.string().optional(),
+  QSTASH_URL: z.url().default('https://qstash.upstash.io'),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

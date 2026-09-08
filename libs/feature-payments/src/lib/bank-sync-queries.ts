@@ -11,13 +11,13 @@ import {
   listStatementImports,
   type BankConnection,
 } from '@wib/db';
+import { cleanMerchant } from '@wib/domain';
 
 import {
   isEnableBankingConfigured,
   listAspspNames,
 } from './enablebanking-client';
 import { CONNECTABLE_BANKS } from './connectable-banks';
-import { cleanMerchant } from './merchant';
 
 /** Per-request memo — `getBankTransactionsData` and `getSyncTargets` both need
  * the connection list on a single `/plan` render. */
@@ -34,12 +34,27 @@ export interface BankTransactionRow {
   description: string;
   /** Best-effort shop/service name pulled out of `description`. */
   merchant: string;
+  /** What to show / prefill — `nameOverride` if set, else `merchant`. */
+  displayName: string;
   amountMinor: number;
   currency: string;
   rawType: string | null;
   balanceName: string | null;
   /** The bank this transaction belongs to. */
   bankId: string | null;
+  // --- Triage enrichment (automation- or modal-set) ---
+  /** Notes override — prefilled instead of the raw description. */
+  notesOverride: string | null;
+  /** Spending account to prefill / assign. */
+  accountId: string | null;
+  /** Payment method to prefill (when triaged into a payment). */
+  methodId: string | null;
+  /** Tag names to prefill. */
+  tags: string[];
+  /** Provider website + branding. */
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
 }
 
 export interface StatementImportSummary {
@@ -192,20 +207,31 @@ async function loadBankTransactionsData(
   const connBankByAccountConn = connections[0]?.bankId ?? null;
 
   return {
-    pending: transactions.map((t) => ({
-      id: t.id,
-      occurredAt: t.occurredAt.toISOString(),
-      hasTime: t.occurredHasTime,
-      description: t.description,
-      merchant: cleanMerchant(t.description, t.rawType),
-      amountMinor: t.amountMinor,
-      currency: t.currency,
-      rawType: t.rawType,
-      balanceName: t.source,
-      // Prefer the row's own bank; fall back to the (single) connection's
-      // for older synced rows that predate the column.
-      bankId: t.bankId ?? (t.accountId ? connBankByAccountConn : null),
-    })),
+    pending: transactions.map((t) => {
+      const merchant = cleanMerchant(t.description, t.rawType);
+      return {
+        id: t.id,
+        occurredAt: t.occurredAt.toISOString(),
+        hasTime: t.occurredHasTime,
+        description: t.description,
+        merchant,
+        displayName: t.nameOverride ?? merchant,
+        amountMinor: t.amountMinor,
+        currency: t.currency,
+        rawType: t.rawType,
+        balanceName: t.source,
+        // Prefer the row's own bank; fall back to the (single) connection's
+        // for older synced rows that predate the column.
+        bankId: t.bankId ?? (t.accountId ? connBankByAccountConn : null),
+        notesOverride: t.notesOverride,
+        accountId: t.triageAccountId,
+        methodId: t.triageMethodId,
+        tags: t.tags,
+        url: t.url,
+        logoUrl: t.logoUrl,
+        brandColor: t.brandColor,
+      };
+    }),
     imports: imports.map((i) => ({
       id: i.id,
       filename: i.filename,

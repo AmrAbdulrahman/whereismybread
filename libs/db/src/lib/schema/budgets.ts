@@ -96,6 +96,11 @@ export const expenses = pgTable(
     amountMinor: integer('amount_minor').notNull(),
     currency: text('currency').notNull().default('EUR'),
     notes: text('notes'),
+    /** The service / provider's website. */
+    url: text('url'),
+    /** Logo (data: URI) and brand colour fetched from `url`. */
+    logoUrl: text('logo_url'),
+    brandColor: text('brand_color'),
     ...audit,
   },
   (t) => [

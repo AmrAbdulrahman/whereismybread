@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { cn } from '@wib/ui';
+import { cn } from '../lib/cn';
 
 export interface TagOption {
   name: string;

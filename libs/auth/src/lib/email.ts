@@ -67,3 +67,24 @@ export async function sendVerificationEmail(
     ),
   );
 }
+
+/**
+ * Sent by the Automations engine when a rule's "Send notification" action
+ * fires. `path` is an in-app route (e.g. `/integrations`); it's turned into an
+ * absolute link. Fire-and-forget — `send` swallows delivery errors.
+ */
+export async function sendAutomationNotificationEmail(
+  to: string,
+  notice: { title: string; body: string; path?: string | null },
+): Promise<void> {
+  const base = serverEnv().APP_URL;
+  const href = `${base}${notice.path ?? '/notifications'}`;
+  await send(
+    to,
+    notice.title,
+    layout(notice.title, notice.body || 'An automation matched an item.', {
+      href,
+      label: 'Open Where Is My Bread',
+    }),
+  );
+}

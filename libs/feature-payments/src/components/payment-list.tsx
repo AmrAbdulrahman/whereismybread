@@ -516,14 +516,22 @@ export function PaymentList({
     };
   }, []);
 
+  // The forward horizon a filter/search must reach before it can settle: at
+  // least the next 12 months from today, so a query matches everything coming
+  // up — not just the ~4 months the server pre-loaded. Cascades in `loadFuture`
+  // batches (each bump of `loadTick` re-runs this) and still stops early on
+  // `futureExhausted` when the schedule genuinely ends before then.
+  const filterHorizon = endOfMonth(addMonths(`${board.today.slice(0, 7)}-01`, 12));
+
   // Keep the list filled. Future: top it up whenever it's shorter than the
   // viewport. Past: prime one batch on mount so the top isn't a dead end (you
   // can't scroll up from the very top), then — once the reader heads for the
   // top — cascade batch after batch until the start. Past prepends are
   // scroll-anchored so this stays invisible: the viewport holds still and
   // earlier months stack up just above it. Both ends stop on their own.
-  // Paused while a filter is on — a narrow match could otherwise loop forever
-  // trying to fill the screen; scrolling still loads more on demand.
+  // While a filter is on, the viewport-fill heuristic is skipped (a narrow
+  // match could loop forever trying to fill the screen). Widening the window to
+  // `filterHorizon` is handled by its own effect below.
   useEffect(() => {
     if (filterActive) return;
     const vh = window.innerHeight;
@@ -548,6 +556,40 @@ export function PaymentList({
     loadTick,
     filterActive,
   ]);
+
+  // Turning on a filter/search widens the future window in one shot to
+  // `filterHorizon` (≥12 months out), so the query is matched against the whole
+  // year ahead, not only the months the server pre-loaded or the reader has
+  // scrolled to. `loadFuture`'s incremental cascade can stop early at a gap in
+  // the schedule, so this bypasses it with a single dated request. Gated on
+  // `pastFrom == null` isn't needed — this only touches the future slice.
+  const filterFetchPending = useRef(false);
+  const [filterLoading, setFilterLoading] = useState(false);
+  useEffect(() => {
+    if (!filterActive || filterFetchPending.current) return;
+    const loadedTo = futureTo ?? baseBoard.window.to;
+    if (loadedTo >= filterHorizon) return;
+    filterFetchPending.current = true;
+    setFilterLoading(true);
+    let cancelled = false;
+    void loadListWindowAction({
+      from: addDays(baseBoard.window.to, 1),
+      to: filterHorizon,
+    })
+      .then((r) => {
+        if (cancelled || !r.ok) return;
+        setFutureBoard(r.board);
+        setFutureTo(filterHorizon);
+      })
+      .finally(() => {
+        filterFetchPending.current = false;
+        if (!cancelled) setFilterLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-runs when the filter toggles or the server board changes
+  }, [filterActive, filterHorizon, baseBoard]);
 
   // Search / account / bank / tag filter — matched against the occurrence and
   // its payment's notes.
@@ -905,10 +947,19 @@ export function PaymentList({
             , or jump to their month.
           </p>
         ) : null}
-        <p className="rounded-xl border border-dashed border-line-strong p-8 text-center text-sm text-muted">
-          {filterActive
-            ? 'No payments match your filters in the months loaded so far. Scroll to load more, or clear the filters.'
-            : 'Nothing scheduled in this window. Add a payment to get started.'}
+        <p className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong p-8 text-center text-sm text-muted">
+          {filterActive ? (
+            filterLoading ? (
+              <>
+                <Spinner />
+                Searching the next 12 months…
+              </>
+            ) : (
+              'No payments match your filters in the next 12 months. Scroll to load more, or clear the filters.'
+            )
+          ) : (
+            'Nothing scheduled in this window. Add a payment to get started.'
+          )}
         </p>
       </div>
     );

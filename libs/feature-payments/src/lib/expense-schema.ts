@@ -4,6 +4,19 @@ import { attachmentDraftSchema } from './attachments';
 const blankToNull = (v: unknown): unknown =>
   typeof v === 'string' && v.trim() === '' ? null : v;
 
+/** Accept a bare domain — "netflix.com" — and fill in the scheme. */
+const normalizeUrl = (v: unknown): unknown => {
+  if (typeof v !== 'string') return v;
+  const t = v.trim();
+  if (t === '') return null;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t}`;
+};
+
+const optionalUrl = z.preprocess(
+  normalizeUrl,
+  z.string().trim().url('Enter a valid URL').max(2048).nullable().default(null),
+);
+
 /** Shared by the expense form (zodResolver) and its server action. */
 export const expenseFormSchema = z.object({
   /** `null` (or blank) — this expense isn't tracked against any budget. */
@@ -40,6 +53,16 @@ export const expenseFormSchema = z.object({
   notes: z.preprocess(
     blankToNull,
     z.string().trim().max(1000).nullable().default(null),
+  ),
+  /** Service / provider website — pulls a logo + brand colour. */
+  url: optionalUrl,
+  logoUrl: z.preprocess(
+    blankToNull,
+    z.string().nullable().default(null),
+  ),
+  brandColor: z.preprocess(
+    blankToNull,
+    z.string().nullable().default(null),
   ),
   attachments: z.array(attachmentDraftSchema).max(20).default([]),
 });

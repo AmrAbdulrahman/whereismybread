@@ -84,6 +84,7 @@ export async function getBudgetsBundle(
                 'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
                 'amountMinor', e.amount_minor,
                 'currency', e.currency, 'notes', e.notes,
+                'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
                 'createdAt', e.created_at, 'updatedAt', e.updated_at,
                 'tags', coalesce((
                   select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)

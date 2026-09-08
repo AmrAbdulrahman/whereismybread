@@ -3,7 +3,7 @@
 import { useEffect, useState, type ElementType, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Menu, X } from '../icons';
-import { isSeparator, type NavEntry, type NavItem } from './app-shell';
+import { NavBadge, isSeparator, type NavEntry, type NavItem } from './app-shell';
 import { Sheet, SheetContent, SheetTitle } from './sheet';
 
 function isActive(currentPath: string, href: string): boolean {
@@ -74,7 +74,14 @@ export function MobileNav({
               )}
               aria-current={active ? 'page' : undefined}
             >
-              <Icon size={20} strokeWidth={2} />
+              <span className="relative">
+                <Icon size={20} strokeWidth={2} />
+                {item.badge && item.badge > 0 ? (
+                  <span className="absolute -right-2 -top-1 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[9px] font-semibold leading-none text-ground">
+                    {item.badge > 9 ? '9+' : item.badge}
+                  </span>
+                ) : null}
+              </span>
               <span className="max-w-full truncate px-0.5">
                 {item.shortLabel ?? item.label}
               </span>
@@ -155,7 +162,10 @@ export function MobileNav({
                   aria-current={active ? 'page' : undefined}
                 >
                   <Icon size={20} strokeWidth={2} />
-                  {entry.label}
+                  <span className="flex items-center gap-1">
+                    {entry.label}
+                    <NavBadge count={entry.badge ?? 0} />
+                  </span>
                 </Link>
               );
             })}

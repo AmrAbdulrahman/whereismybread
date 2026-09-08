@@ -23,6 +23,7 @@ import {
   type BankAccountInput,
   type BankConnection,
 } from '@wib/db';
+import { runReviewExpenseAutomations } from '@wib/feature-automations/server';
 import {
   createSession,
   fetchAllTransactions,
@@ -212,6 +213,7 @@ export async function syncConnection(
   const ignoreMatchers = parseIgnorePatterns(ignorePatterns);
 
   let imported = 0;
+  const newTransactionIds: string[] = [];
   try {
     for (const account of accounts) {
       const since = account.lastSyncedAt
@@ -237,12 +239,14 @@ export async function syncConnection(
         );
 
       if (rows.length > 0) {
-        imported += await insertSyncedTransactions(
+        const res = await insertSyncedTransactions(
           connection.userId,
           account.id,
           rows,
           bankId,
         );
+        imported += res.inserted;
+        newTransactionIds.push(...res.ids);
       }
       await markBankAccountSynced(account.id);
     }
@@ -278,6 +282,17 @@ export async function syncConnection(
       .map((t) => t.id);
     if (stale.length > 0)
       await markBankTransactionsIgnored(connection.userId, stale);
+  }
+
+  // Run the user's "expense for review created" automations over the rows this
+  // sync brought in (rows the ignore rules already consumed are skipped by the
+  // engine). Never let an automation failure fail the sync itself.
+  if (newTransactionIds.length > 0) {
+    try {
+      await runReviewExpenseAutomations(connection.userId, newTransactionIds);
+    } catch (err) {
+      console.error('[bank-sync] automations failed', err);
+    }
   }
 
   await markConnectionSynced(connection.id);

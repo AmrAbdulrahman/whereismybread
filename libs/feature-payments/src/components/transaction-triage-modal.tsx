@@ -109,11 +109,16 @@ export function TransactionTriageModal({
               tags={context.tags}
               date={txn.occurredAt.slice(0, 10)}
               prefill={{
-                name: txn.merchant || txn.description,
+                name: txn.displayName || txn.description,
                 amount: toAmountString(txn.amountMinor),
                 currency: txn.currency,
-                notes: txn.description,
+                notes: txn.notesOverride ?? txn.description,
                 bankId: txn.bankId,
+                accountId: txn.accountId,
+                tags: txn.tags,
+                url: txn.url,
+                logoUrl: txn.logoUrl,
+                brandColor: txn.brandColor,
               }}
               onDone={(expense) => onExpenseDone(txn.id, expense)}
               onCancel={onClose}
@@ -129,11 +134,17 @@ export function TransactionTriageModal({
               today={today}
               rates={rates}
               prefill={{
-                name: txn.merchant || txn.description,
+                name: txn.displayName || txn.description,
                 amount: toAmountString(txn.amountMinor),
                 currency: txn.currency,
-                notes: txn.description,
+                notes: txn.notesOverride ?? txn.description,
                 bankId: txn.bankId,
+                accountId: txn.accountId,
+                methodId: txn.methodId,
+                tags: txn.tags,
+                url: txn.url,
+                logoUrl: txn.logoUrl,
+                brandColor: txn.brandColor,
                 date: txn.occurredAt.slice(0, 10),
               }}
               onDone={(payment) => onPaymentDone(txn.id, payment)}

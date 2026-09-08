@@ -12,6 +12,18 @@ export interface NavItem {
   icon: LucideIcon;
   /** Rendered muted with a "Soon" pill and no navigation. */
   comingSoon?: boolean;
+  /** A count pill (e.g. unread notifications). Omitted / 0 → nothing. */
+  badge?: number;
+}
+
+/** The count pill shown next to a nav label. */
+export function NavBadge({ count }: { count: number }) {
+  if (!count || count < 1) return null;
+  return (
+    <span className="ml-auto grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-ground">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
 }
 
 /** A nav entry: a destination, or a group separator. */
@@ -95,6 +107,7 @@ export function AppShell({
               >
                 <Icon size={16} strokeWidth={2} />
                 {item.label}
+                <NavBadge count={item.badge ?? 0} />
               </Link>
             );
           })}

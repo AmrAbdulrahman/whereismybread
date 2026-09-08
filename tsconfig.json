@@ -53,6 +53,9 @@
     },
     {
       "path": "./libs/feature-insights"
+    },
+    {
+      "path": "./libs/feature-automations"
     }
   ],
   "compilerOptions": {}

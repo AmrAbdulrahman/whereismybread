@@ -292,6 +292,9 @@ export interface BudgetExpenseView {
   /** In its own currency — converted into the budget's for totals. */
   amount: Money;
   notes: string | null;
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
   accountId: string | null;
   accountName: string | null;
   accountColor: string | null;
@@ -347,6 +350,9 @@ export interface ExpenseLine {
   occurredAt: string | null;
   amount: Money;
   notes: string | null;
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
   budgetId: string | null;
   budgetName: string | null;
   budgetColor: string | null;

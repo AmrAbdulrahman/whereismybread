@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { banks } from './payments';
+import { accounts, banks, paymentMethods } from './payments';
 import { users } from './users';
 
 export const bankTransactionStatusEnum = pgEnum('bank_transaction_status', [
@@ -182,6 +182,28 @@ export const bankTransactions = pgTable(
     status: bankTransactionStatusEnum('status').notNull().default('pending'),
     resultType: bankTransactionResultTypeEnum('result_type'),
     resultId: uuid('result_id'),
+    // --- Triage enrichment: set by an automation or the "edit details" modal,
+    // inherited into the payment/expense form when the row is triaged. ---
+    /** Overrides the cleaned merchant name shown + prefilled. */
+    nameOverride: text('name_override'),
+    /** Overrides the raw description prefilled into notes. */
+    notesOverride: text('notes_override'),
+    /** Spending account to prefill / assign on triage (distinct from
+     * `account_id`, which is the Enable Banking bank-account link). */
+    triageAccountId: uuid('triage_account_id').references(() => accounts.id, {
+      onDelete: 'set null',
+    }),
+    /** Payment method to prefill when triaged into a planned payment. */
+    triageMethodId: uuid('triage_method_id').references(
+      () => paymentMethods.id,
+      { onDelete: 'set null' },
+    ),
+    /** Tag names to prefill (these rows are transient — names, not ids). */
+    tags: text('tags').array().notNull().default([]),
+    /** Provider website + branding pulled from it. */
+    url: text('url'),
+    logoUrl: text('logo_url'),
+    brandColor: text('brand_color'),
     ...audit,
   },
   (t) => [

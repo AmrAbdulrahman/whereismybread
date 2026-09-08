@@ -47,6 +47,7 @@ export {
 export { CurrencyField } from './components/currency-field';
 export { AmountField, type AmountFieldProps } from './components/amount-field';
 export { ColorPicker, type ColorPickerProps } from './components/color-picker';
+export { TagInput, type TagOption } from './components/tag-input';
 export {
   LabelManager,
   type LabelManagerProps,
@@ -61,6 +62,7 @@ export {
 export { MethodIcon, METHOD_ICON_KEYS } from './components/method-icon';
 export {
   AppShell,
+  NavBadge,
   isSeparator,
   type AppShellProps,
   type NavItem,

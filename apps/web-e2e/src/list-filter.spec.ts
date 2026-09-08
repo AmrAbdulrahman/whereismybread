@@ -97,3 +97,41 @@ test('the list view search + day total span currencies', async ({ page }) => {
     page.getByRole('button', { name: 'Edit Gym membership' }).first(),
   ).toBeVisible();
 });
+
+test('search reaches payments up to a year out, not just the loaded window', async ({
+  page,
+}) => {
+  const email = `e2e+filter-horizon-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+  await page.goto('/signup');
+  await page.getByLabel('Name').fill('Horizon Tester');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('a-strong-enough-password');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(/\/plan/, { timeout: 20_000 });
+
+  // A one-time payment ~8 months out — well beyond the ~4-month window the
+  // server pre-loads for the list.
+  const far = new Date();
+  far.setMonth(far.getMonth() + 8);
+  const farIso = far.toISOString().slice(0, 10);
+
+  await openNewPayment(page);
+  await page.getByLabel('Description').fill('Passport renewal');
+  await page.getByLabel('Amount').fill('120');
+  await page.getByLabel('Date', { exact: true }).fill(farIso);
+  await page.getByRole('button', { name: 'Add payment' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
+
+  // Not on screen yet — it's outside the loaded window.
+  await expect(
+    page.getByRole('button', { name: 'Edit Passport renewal' }),
+  ).toHaveCount(0);
+
+  // Searching for it should widen the window and surface it without scrolling.
+  await page.getByRole('button', { name: /^Filters/ }).click();
+  await page.getByLabel('Search payments').fill('passport');
+  await expect(
+    page.getByRole('button', { name: 'Edit Passport renewal' }).first(),
+  ).toBeVisible({ timeout: 15_000 });
+});

@@ -20,6 +20,7 @@ import {
   type ExpenseAttachment,
 } from '@wib/db';
 import { parseMoneyInput } from '@wib/domain';
+import { runRecordAutomations } from '@wib/feature-automations/server';
 import { revalidatePath } from 'next/cache';
 import { revalidateUserData } from './revalidate';
 import { budgetFormSchema, type BudgetFormValues } from './budget-schema';
@@ -164,6 +165,9 @@ export async function saveExpenseAction(
     amountMinor,
     currency: parsed.data.currency,
     notes: parsed.data.notes,
+    url: parsed.data.url,
+    logoUrl: parsed.data.logoUrl,
+    brandColor: parsed.data.brandColor,
     tagIds: tagRows.map((t) => t.id),
   };
   const budgetGoneError = 'That budget or account no longer exists.';
@@ -177,6 +181,18 @@ export async function saveExpenseAction(
       await reconcileExpenseAttachments(userId, expense.id, drafts).catch(
         () => undefined,
       );
+    }
+    try {
+      await runRecordAutomations(userId, {
+        kind: 'expense',
+        recordId: expense.id,
+        name: input.name,
+        amountMinor,
+        currency: input.currency,
+        accountId: input.accountId,
+      });
+    } catch (err) {
+      console.error('[expenses] record automations failed', err);
     }
     revalidateBudgets(userId);
     return { ok: true, item: expense };

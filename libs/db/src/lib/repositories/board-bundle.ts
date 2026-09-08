@@ -168,6 +168,7 @@ export async function getBoardBundle(
                   'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
                   'amountMinor', e.amount_minor,
                   'currency', e.currency, 'notes', e.notes,
+                  'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
                   'createdAt', e.created_at, 'updatedAt', e.updated_at,
                   'tags', coalesce((
                     select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
@@ -205,6 +206,7 @@ export async function getBoardBundle(
             'occurredAt', e.occurred_at,
             'amountMinor', e.amount_minor, 'currency', e.currency,
             'notes', e.notes,
+            'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
             'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
             'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
             'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,

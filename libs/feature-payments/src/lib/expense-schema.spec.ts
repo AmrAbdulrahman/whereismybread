@@ -61,4 +61,16 @@ describe('expenseFormSchema', () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.notes).toBeNull();
   });
+
+  it('fills in the scheme for a bare provider domain', () => {
+    const parsed = expenseFormSchema.safeParse({ ...base, url: 'netflix.com' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.url).toBe('https://netflix.com');
+  });
+
+  it('treats a blank provider url as unset', () => {
+    const parsed = expenseFormSchema.safeParse({ ...base, url: '' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.url).toBeNull();
+  });
 });

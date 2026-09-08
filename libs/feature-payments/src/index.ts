@@ -94,6 +94,7 @@ export {
   categorizeBankTransactionAction,
   ignoreBankTransactionAction,
   bulkIgnoreBankTransactionsAction,
+  enrichBankTransactionAction,
 } from './lib/bank-transaction-actions';
 
 export { BankConnectionPanel } from './components/bank-connection-panel';

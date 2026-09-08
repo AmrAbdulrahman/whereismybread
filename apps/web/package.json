@@ -4,10 +4,12 @@
   "private": true,
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@upstash/qstash": "^2.11.3",
     "@wib/auth": "workspace:*",
     "@wib/config": "workspace:*",
     "@wib/db": "workspace:*",
     "@wib/domain": "workspace:*",
+    "@wib/feature-automations": "workspace:*",
     "@wib/feature-insights": "workspace:*",
     "@wib/feature-payments": "workspace:*",
     "@wib/feature-tags": "workspace:*",

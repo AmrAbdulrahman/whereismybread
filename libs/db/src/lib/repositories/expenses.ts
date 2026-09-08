@@ -21,6 +21,10 @@ export interface ExpenseInput {
   amountMinor: number;
   currency: string;
   notes: string | null;
+  /** Provider website + branding fetched from it. */
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
   /** Tag ids to link — the caller resolves names first (`getOrCreateTags`). */
   tagIds: string[];
 }
@@ -89,6 +93,9 @@ export async function createExpense(
         amountMinor: input.amountMinor,
         currency: input.currency,
         notes: input.notes,
+        url: input.url,
+        logoUrl: input.logoUrl,
+        brandColor: input.brandColor,
       })
       .returning();
     const expense = rows[0];
@@ -128,6 +135,9 @@ export async function updateExpense(
         amountMinor: input.amountMinor,
         currency: input.currency,
         notes: input.notes,
+        url: input.url,
+        logoUrl: input.logoUrl,
+        brandColor: input.brandColor,
         updatedAt: new Date(),
       })
       .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
@@ -144,6 +154,38 @@ export async function updateExpense(
     }
     return expense;
   });
+}
+
+/** Link tags onto an expense (additive) — used by the automations engine. */
+export async function addExpenseTags(
+  userId: string,
+  id: string,
+  tagIds: string[],
+): Promise<void> {
+  if (tagIds.length === 0) return;
+  const owned = await getDb()
+    .select({ id: expenses.id })
+    .from(expenses)
+    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+    .limit(1);
+  if (!owned[0]) return;
+  await getDb()
+    .insert(expenseTags)
+    .values(tagIds.map((tagId) => ({ expenseId: id, tagId })))
+    .onConflictDoNothing();
+}
+
+/** Set (or clear) an expense's account — used by the automations engine. */
+export async function setExpenseAccount(
+  userId: string,
+  id: string,
+  accountId: string | null,
+): Promise<void> {
+  if (accountId && !(await ownsAccountOrNone(userId, accountId))) return;
+  await getDb()
+    .update(expenses)
+    .set({ accountId, updatedAt: new Date() })
+    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
 }
 
 export interface ExpenseWithMeta extends Expense {
@@ -200,6 +242,9 @@ export interface ExpenseLine {
   amountMinor: number;
   currency: string;
   notes: string | null;
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
   budgetId: string | null;
   budgetName: string | null;
   budgetColor: string | null;
@@ -232,6 +277,7 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
           'occurredAt', e.occurred_at,
           'amountMinor', e.amount_minor, 'currency', e.currency,
           'notes', e.notes,
+          'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
           'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
           'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
           'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,

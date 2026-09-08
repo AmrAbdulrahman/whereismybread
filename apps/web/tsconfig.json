@@ -65,6 +65,9 @@
       "path": "../../libs/feature-insights"
     },
     {
+      "path": "../../libs/feature-automations"
+    },
+    {
       "path": "../../libs/domain"
     },
     {

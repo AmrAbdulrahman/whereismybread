@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   Banknote,
+  Bell,
   Bitcoin,
   Briefcase,
   CalendarDays,
@@ -54,6 +55,7 @@ import {
   Users,
   Wallet,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -81,6 +83,8 @@ export const icons = {
   card: CreditCard,
   cash: Banknote,
   transactions: ArrowLeftRight,
+  automations: Zap,
+  notifications: Bell,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;
@@ -93,6 +97,7 @@ export type { LucideIcon };
 export {
   ArrowLeftRight,
   Banknote,
+  Bell,
   Bitcoin,
   Briefcase,
   CalendarDays,
@@ -146,4 +151,5 @@ export {
   Users,
   Wallet,
   X,
+  Zap,
 };

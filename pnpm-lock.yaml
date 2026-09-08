@@ -141,6 +141,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.2.5(@types/react@19.2.18)
+      '@upstash/qstash':
+        specifier: ^2.11.3
+        version: 2.11.3
       '@vitejs/plugin-react-swc':
         specifier: ^4.3.0
         version: 4.3.3(@swc/helpers@0.5.18)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.4.2)(less@4.5.1)(sass-embedded@1.103.1)(sass@1.103.1)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
@@ -219,6 +222,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.9.1
         version: 5.9.1(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.87.0(react@19.2.8))(zod@4.5.4)
+      '@upstash/qstash':
+        specifier: ^2.11.3
+        version: 2.11.3
       '@wib/auth':
         specifier: workspace:*
         version: link:../../libs/auth
@@ -231,6 +237,9 @@ importers:
       '@wib/domain':
         specifier: workspace:*
         version: link:../../libs/domain
+      '@wib/feature-automations':
+        specifier: workspace:*
+        version: link:../../libs/feature-automations
       '@wib/feature-insights':
         specifier: workspace:*
         version: link:../../libs/feature-insights
@@ -305,6 +314,24 @@ importers:
 
   libs/domain: {}
 
+  libs/feature-automations:
+    dependencies:
+      '@wib/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@wib/db':
+        specifier: workspace:*
+        version: link:../db
+      '@wib/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@wib/ui':
+        specifier: workspace:*
+        version: link:../ui
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+
   libs/feature-checklist: {}
 
   libs/feature-debts: {}
@@ -351,6 +378,9 @@ importers:
       '@wib/domain':
         specifier: workspace:*
         version: link:../domain
+      '@wib/feature-automations':
+        specifier: workspace:*
+        version: link:../feature-automations
       '@wib/ui':
         specifier: workspace:*
         version: link:../ui
@@ -3938,6 +3968,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@upstash/qstash@2.11.3':
+    resolution: {integrity: sha512-d5saGTDlkbKDFSANENtyf+zqkJen9ho17S24x9lXo+DwWjZ9IDM5WKUzUsshUv8ufZsSpxJWyrZ8jZ6r8dBuhg==}
+
   '@vercel/blob@2.8.0':
     resolution: {integrity: sha512-Nu+HWKpkgovCh/ezlG7wCVwF7RErTzLzZMbGKFBdGBCbTKyK+s5VXPLl+0+TpNEQPH8AVaGzOpIsXUOtkqylCQ==}
     engines: {node: '>=20.0.0'}
@@ -4626,6 +4659,10 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
+
+  crypto-js@4.2.0:
+    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-declaration-sorter@7.4.0:
     resolution: {integrity: sha512-LTuzjPoyA2vMGKKcaOqKSp7Ub2eGrNfKiZH4LpezxpNrsICGCSFvsQOI29psISxNZtaXibkC2CXzrQ5enMeGGw==}
@@ -6546,6 +6583,10 @@ packages:
 
   neo-async@2.6.2:
     resolution: {integrity: sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==}
+
+  neverthrow@7.2.0:
+    resolution: {integrity: sha512-iGBUfFB7yPczHHtA8dksKTJ9E8TESNTAx1UQWW6TzMF280vo9jdPYpLUXrMN1BCkPdHFdNG3fxOt2CUad8KhAw==}
+    engines: {node: '>=18'}
 
   next-auth@5.0.0-beta.32:
     resolution: {integrity: sha512-CGlChIEWZ6LltNVxrE5yiySMID+Idpmry47JYA5lLwgD8Sx02a8M65VL0TWVz9nbnOioS/tCW/rP/0+mE7Qp4Q==}
@@ -11775,6 +11816,12 @@ snapshots:
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
 
+  '@upstash/qstash@2.11.3':
+    dependencies:
+      crypto-js: 4.2.0
+      jose: 5.10.0
+      neverthrow: 7.2.0
+
   '@vercel/blob@2.8.0':
     dependencies:
       '@vercel/oidc': 3.8.5
@@ -12603,6 +12650,8 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
+
+  crypto-js@4.2.0: {}
 
   css-declaration-sorter@7.4.0(postcss@8.5.26):
     dependencies:
@@ -14629,6 +14678,8 @@ snapshots:
   negotiator@0.6.3: {}
 
   neo-async@2.6.2: {}
+
+  neverthrow@7.2.0: {}
 
   next-auth@5.0.0-beta.32(next@16.1.7(@babel/core@7.29.7)(@playwright/test@1.62.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(sass@1.103.1))(react@19.2.8):
     dependencies:

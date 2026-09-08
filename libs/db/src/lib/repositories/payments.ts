@@ -386,3 +386,67 @@ export async function splitPaymentForward(
   await deletePaymentFrom(userId, id, startOfMonth(occurrenceDate));
   await createPayment(userId, { ...newInput, anchorDate: occurrenceDate });
 }
+
+/** Link tags onto a payment (additive) — used by the automations engine. */
+export async function addPaymentTags(
+  userId: string,
+  id: string,
+  tagIds: string[],
+): Promise<void> {
+  if (tagIds.length === 0) return;
+  const owned = await getDb()
+    .select({ id: payments.id })
+    .from(payments)
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)))
+    .limit(1);
+  if (!owned[0]) return;
+  await getDb()
+    .insert(paymentTags)
+    .values(tagIds.map((tagId) => ({ paymentId: id, tagId })))
+    .onConflictDoNothing();
+}
+
+/** Set (or clear) a payment's account — used by the automations engine. */
+export async function setPaymentAccount(
+  userId: string,
+  id: string,
+  accountId: string | null,
+): Promise<void> {
+  if (accountId) {
+    const ok = await getDb()
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)))
+      .limit(1);
+    if (!ok[0]) return;
+  }
+  await getDb()
+    .update(payments)
+    .set({ accountId, updatedAt: new Date() })
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+}
+
+/** Set (or clear) a payment's method — used by the automations engine. */
+export async function setPaymentMethod(
+  userId: string,
+  id: string,
+  methodId: string | null,
+): Promise<void> {
+  if (methodId) {
+    const ok = await getDb()
+      .select({ id: paymentMethods.id })
+      .from(paymentMethods)
+      .where(
+        and(
+          eq(paymentMethods.id, methodId),
+          eq(paymentMethods.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!ok[0]) return;
+  }
+  await getDb()
+    .update(payments)
+    .set({ methodId, updatedAt: new Date() })
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+}

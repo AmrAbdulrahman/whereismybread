@@ -1,8 +1,9 @@
 name: Bank sync
 
-# Replaces the former Vercel Cron entry in vercel.json. Calls the production
-# bank-sync endpoint every 15 minutes. The endpoint is protected by a shared
-# secret and rejects any request without `Authorization: Bearer <CRON_SECRET>`
+# Manual fallback for the periodic bank sync. The recurring schedule is owned by
+# a QStash cron (every 5 min) that POSTs the endpoint with a signed request —
+# see scripts/qstash-schedule.mjs. This workflow stays as a break-glass manual
+# trigger and hits the GET path, which is protected by the shared CRON_SECRET
 # (see apps/web/src/app/api/bank-sync/enable-banking/route.ts).
 #
 # Required on the `production` environment:
@@ -11,8 +12,6 @@ name: Bank sync
 #                            slash (e.g. https://www.whereismybread.com)
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -43,7 +42,7 @@ jobs:
           code=$(curl --silent --show-error --location-trusted \
             --output /tmp/body.txt --write-out '%{http_code}' \
             --max-time 330 --retry 2 --retry-delay 10 --retry-all-errors \
-            --request POST \
+            --request GET \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             "${APP_URL%/}/api/bank-sync/enable-banking")
 
