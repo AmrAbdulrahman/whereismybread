@@ -423,6 +423,13 @@ export async function replaceBankAccounts(
     .from(bankAccounts)
     .where(eq(bankAccounts.connectionId, connectionId));
 
+  // An empty payload means "we didn't get the account list this time", never
+  // "the user closed every account". Enable Banking sometimes omits `accounts`
+  // from a fresh session response; reconciling against that would delete the
+  // connection's working accounts and silently stop every future sync. Keep
+  // what we have and let the next attempt refresh it.
+  if (accounts.length === 0) return current;
+
   const keepUids = new Set(accounts.map((a) => a.uid));
   const stale = current.filter((c) => !keepUids.has(c.uid));
   if (stale.length > 0) {

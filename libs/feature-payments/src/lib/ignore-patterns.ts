@@ -7,11 +7,21 @@
  * or its raw type.
  */
 
-/** The rules a fresh connection starts with — also serves as the example. */
+/**
+ * The rules a fresh connection starts with — also serves as the example.
+ *
+ * Kept deliberately narrow: this is a bill tracker, so direct debits,
+ * standing orders and card payments are exactly what the user wants to
+ * triage. The only default is Wise's per-purchase fee line, which is pure
+ * noise. Users can add their own rules per connection.
+ */
 export const DEFAULT_IGNORE_PATTERNS = `# One rule per line — case-insensitive regex, matched against the
 # transaction description and type. Lines starting with # are comments.
 # Matching transactions are imported already marked "ignored".
-DIRECT[_ ]?DEBIT
+#
+# Example — ignore every direct debit:
+# DIRECT[_ ]?DEBIT
+#
 # Wise adds a tiny fee line per card purchase — usually just noise:
 Wise Charges for
 `;

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { encryptSecret } from '@wib/auth/server';
+import { decryptSecret, encryptSecret } from '@wib/auth/server';
 import {
   activateConnection,
   backfillTransactionsBank,
@@ -19,14 +19,17 @@ import {
   setConnectionIgnorePatterns,
   setConnectionStatus,
   insertSyncedTransactions,
+  type BankAccount,
   type BankAccountInput,
   type BankConnection,
 } from '@wib/db';
 import {
   createSession,
   fetchAllTransactions,
+  getSession,
   isConsentError,
   type EbAccount,
+  type EbSession,
 } from './enablebanking-client';
 import { mapEbTransaction } from './enablebanking-map';
 import {
@@ -37,8 +40,16 @@ import {
 
 /** How far back to look on the first sync of an account. */
 const FIRST_SYNC_DAYS = 30;
-/** Overlap window so a transaction that books late isn't missed. */
-const OVERLAP_MS = 2 * 60 * 60 * 1000;
+/**
+ * How far back every *subsequent* sync re-scans, measured from the account's
+ * last successful sync. Deliberately generous: banks expose transactions late
+ * (a card auth can stay pending for days before it books, weekend/holiday
+ * batches post in arrears, SEPA value dates sit in the past) and Enable
+ * Banking's `date_from` is date-granular, so a tight window permanently skips
+ * anything that lands with a past date after the watermark moved on. Re-fetched
+ * rows are absorbed by the `(userId, dedupKey)` unique index.
+ */
+const RESCAN_DAYS = 14;
 
 export interface SyncResult {
   ok: boolean;
@@ -57,6 +68,70 @@ function accountLabel(
   currency: string,
 ): string {
   return name ? `${name} · ${currency}` : `${aspsp} · ${currency}`;
+}
+
+/**
+ * Enable Banking's `POST /sessions` response sometimes comes back without
+ * `accounts` (they can populate a beat later). Trusting that empty list is
+ * dangerous — `replaceBankAccounts` would reconcile against it and delete the
+ * connection's working accounts. So fall back to `GET /sessions/{id}` with a
+ * couple of short retries before accepting "no accounts".
+ */
+async function resolveSessionAccounts(
+  session: EbSession,
+): Promise<EbAccount[]> {
+  if (session.accounts && session.accounts.length > 0) return session.accounts;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const fresh = await getSession(session.session_id);
+      if (fresh.accounts && fresh.accounts.length > 0) return fresh.accounts;
+    } catch {
+      // transient — try again, then give up
+    }
+  }
+  return session.accounts ?? [];
+}
+
+/**
+ * The accounts stored for a connection. If there are none — a prior re-auth
+ * landed an empty payload and wiped them — try once to repopulate from Enable
+ * Banking so a transient empty response doesn't permanently wedge the
+ * connection. Returns whatever we end up with (possibly still empty).
+ */
+async function ensureAccounts(
+  connection: BankConnection,
+): Promise<BankAccount[]> {
+  const stored = await listBankAccounts(connection.id);
+  if (stored.length > 0 || !connection.sessionIdEnc) return stored;
+
+  let sessionId: string;
+  try {
+    sessionId = decryptSecret(connection.sessionIdEnc);
+  } catch {
+    return stored;
+  }
+
+  try {
+    const session = await getSession(sessionId);
+    const ebAccounts = await resolveSessionAccounts(session);
+    if (ebAccounts.length === 0) return stored;
+    await replaceBankAccounts(
+      connection.id,
+      connection.userId,
+      ebAccounts.map(ebAccountToInput),
+    );
+    return listBankAccounts(connection.id);
+  } catch (err) {
+    if (isConsentError(err)) {
+      await setConnectionStatus(
+        connection.id,
+        'expired',
+        'Bank access expired — reconnect to keep syncing.',
+      );
+    }
+    return stored;
+  }
 }
 
 /**
@@ -107,10 +182,22 @@ export async function syncConnection(
   // Enable Banking binds each account uid to its session server-side, so
   // data calls only need the app JWT — the stored session id is for
   // `GET/DELETE /sessions/{id}` (status checks, disconnect).
-  const accounts = await listBankAccounts(connection.id);
+  const accounts = await ensureAccounts(connection);
   if (accounts.length === 0) {
-    await markConnectionSynced(connection.id);
-    return { ok: true, imported: 0 };
+    // A connection with no accounts can't sync anything. This is almost always
+    // a re-auth that landed an empty `accounts` payload and wiped the stored
+    // ones (see `resolveSessionAccounts`) — surface it as an error prompting a
+    // reconnect rather than reporting a hollow success on every run.
+    await setConnectionStatus(
+      connection.id,
+      'error',
+      'No accounts available from your bank — reconnect to resume syncing.',
+    );
+    return {
+      ok: false,
+      imported: 0,
+      error: 'No accounts available for this connection.',
+    };
   }
 
   // One-time backfill: tag any pre-existing rows for these accounts.
@@ -128,7 +215,10 @@ export async function syncConnection(
   try {
     for (const account of accounts) {
       const since = account.lastSyncedAt
-        ? new Date(account.lastSyncedAt.getTime() - OVERLAP_MS)
+        ? new Date(
+            account.lastSyncedAt.getTime() -
+              RESCAN_DAYS * 24 * 60 * 60 * 1000,
+          )
         : new Date(Date.now() - FIRST_SYNC_DAYS * 24 * 60 * 60 * 1000);
 
       const raw = await fetchAllTransactions(account.uid, ymd(since));
@@ -252,7 +342,7 @@ export async function completeConnection(
   await replaceBankAccounts(
     connection.id,
     userId,
-    (session.accounts ?? []).map(ebAccountToInput),
+    (await resolveSessionAccounts(session)).map(ebAccountToInput),
   );
 
   // `syncConnection` (below) associates the bank and seeds ignore rules.

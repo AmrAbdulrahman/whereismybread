@@ -134,6 +134,7 @@ export function TransactionTriageModal({
                 currency: txn.currency,
                 notes: txn.description,
                 bankId: txn.bankId,
+                date: txn.occurredAt.slice(0, 10),
               }}
               onDone={(payment) => onPaymentDone(txn.id, payment)}
             />

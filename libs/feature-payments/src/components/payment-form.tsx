@@ -79,6 +79,12 @@ export interface PaymentFormPrefill {
   currency?: string;
   notes?: string;
   bankId?: string | null;
+  /**
+   * The date the money actually moved (YYYY-MM-DD), e.g. a synced bank
+   * transaction's booking date. Seeds the one-time date / recurring
+   * day-of-month so a payment logged days later isn't stamped "today".
+   */
+  date?: string;
 }
 
 export interface PaymentFormProps {
@@ -205,14 +211,18 @@ export function PaymentForm({
       bankId: initial?.bankId ?? prefill?.bankId ?? null,
       recipientMethodId: initial?.recipientMethodId ?? null,
       recurrence: initial?.recurrence ?? 'one_time',
-      anchorDate: initial?.anchorDate ?? today,
+      anchorDate: initial?.anchorDate ?? prefill?.date ?? today,
       dayOfMonth:
         initial?.dayOfMonth ||
-        (initial?.anchorDate ?? today).slice(8, 10).replace(/^0/, ''),
+        (initial?.anchorDate ?? prefill?.date ?? today)
+          .slice(8, 10)
+          .replace(/^0/, ''),
       monthOfYear:
         initial?.monthOfYear ||
         (initial?.recurrence === 'annual'
-          ? (initial?.anchorDate ?? today).slice(5, 7).replace(/^0/, '')
+          ? (initial?.anchorDate ?? prefill?.date ?? today)
+              .slice(5, 7)
+              .replace(/^0/, '')
           : ''),
       endsOn: initial?.endsOn ?? '',
       url: initial?.url ?? '',

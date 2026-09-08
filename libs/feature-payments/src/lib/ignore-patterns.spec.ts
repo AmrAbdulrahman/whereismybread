@@ -25,9 +25,15 @@ describe('parseIgnorePatterns', () => {
 describe('shouldIgnore', () => {
   const m = parseIgnorePatterns(DEFAULT_IGNORE_PATTERNS);
 
-  it('matches the default DIRECT_DEBIT rule on the raw type', () => {
-    expect(shouldIgnore(m, 'Netflix', 'DIRECT_DEBIT')).toBe(true);
-    expect(shouldIgnore(m, 'direct debit to gym', null)).toBe(true);
+  it('matches the default Wise fee rule', () => {
+    expect(
+      shouldIgnore(m, 'Wise Charges for: CARD-123', 'CARD'),
+    ).toBe(true);
+  });
+
+  it('leaves direct debits alone by default (this is a bill tracker)', () => {
+    expect(shouldIgnore(m, 'Netflix', 'DIRECT_DEBIT')).toBe(false);
+    expect(shouldIgnore(m, 'direct debit to gym', null)).toBe(false);
   });
 
   it("doesn't match unrelated transactions", () => {
