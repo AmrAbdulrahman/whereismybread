@@ -40,6 +40,7 @@ export {
   type Theme,
 } from './lib/theme';
 export { useMediaQuery } from './lib/use-media-query';
+export { usePushRefresh } from './lib/use-push-refresh';
 export {
   ResponsiveModal,
   type ResponsiveModalProps,

@@ -207,6 +207,7 @@ export function BankTransactionTriage({
               onLogExpense={() => setSheet({ mode: 'expense', txn })}
               onCreatePayment={() => setSheet({ mode: 'payment', txn })}
               onEdit={() => setEnrichId(txn.id)}
+              onOpenDetails={() => setEnrichId(txn.id)}
               onIgnore={() =>
                 settle([txn.id], () => ignoreBankTransactionAction(txn.id))
               }

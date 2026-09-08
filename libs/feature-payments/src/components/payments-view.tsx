@@ -16,11 +16,22 @@ import {
   startOfMonth,
   type IsoDate,
 } from '@wib/domain';
-import { Button, ResponsiveModal, cn, useMediaQuery } from '@wib/ui';
+import {
+  Button,
+  ResponsiveModal,
+  cn,
+  useMediaQuery,
+  usePushRefresh,
+} from '@wib/ui';
 import { CalendarDays, List, Plus, SlidersHorizontal, X } from '@wib/ui/icons';
 import { applyOverride } from '../lib/apply-override';
 import { AddFab } from './add-fab';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
+import {
+  DeleteConfirmModal,
+  type DeleteTarget,
+} from './delete-confirm-modal';
+import { EnrichTransactionModal } from './enrich-transaction-modal';
 import { ExpenseForm, type ExpenseFormInitial } from './expense-form';
 import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
@@ -303,6 +314,31 @@ export function PaymentsView({
     const qs = next.toString();
     window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
   }, [params, pathname, board.editable, board.overrides]);
+
+  // A push (bank sync finished, an automation fired) refreshes the board in
+  // the background so the new payment / triaged transaction just appears.
+  usePushRefresh(() => router.refresh());
+
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const openDelete = (paymentId: string, occurrenceDate: string) => {
+    const occ = board.occurrences.find(
+      (o) => o.paymentId === paymentId && o.dueDate === occurrenceDate,
+    );
+    if (!occ) return;
+    setDeleteTarget({
+      kind: 'payment',
+      paymentId,
+      name: occ.name,
+      recurring: !occ.isOneTime,
+      occurrenceDate,
+    });
+  };
+
+  // Clicking a per-day "needs review" row opens its details (same modal as the
+  // inbox's "Edit details").
+  const [reviewDetailsId, setReviewDetailsId] = useState<string | null>(null);
+  const reviewDetailsTxn =
+    reviewTransactions.find((t) => t.id === reviewDetailsId) ?? null;
 
   const [flagTarget, setFlagTarget] = useState<FlagTarget | null>(null);
   const openFlag = (paymentId: string, occurrenceDate: string) => {
@@ -697,8 +733,12 @@ export function PaymentsView({
           goTodayRef={goTodayRef}
           onEdit={openEdit}
           onFlag={openFlag}
+          onDelete={openDelete}
           onEditBudget={(b) => setBudgetSheet({ mode: 'edit', budget: b })}
           onEditExpense={(e) => setExpenseSheet({ mode: 'edit', expense: e })}
+          onDeleteExpense={(e) =>
+            setDeleteTarget({ kind: 'expense', id: e.id, name: e.name })
+          }
           onAddExpense={(date) =>
             setExpenseSheet({ mode: 'new', date, budgetId: null })
           }
@@ -707,6 +747,7 @@ export function PaymentsView({
           onReviewIgnore={(txn) =>
             settleReview(txn.id, () => ignoreBankTransactionAction(txn.id))
           }
+          onReviewDetails={(txn) => setReviewDetailsId(txn.id)}
         />
       ) : (
         <PaymentCalendar
@@ -715,6 +756,7 @@ export function PaymentsView({
           onMonthChange={changeMonth}
           onEdit={openEdit}
           onFlag={openFlag}
+          onDelete={openDelete}
         />
       )}
 
@@ -723,6 +765,24 @@ export function PaymentsView({
       {expenseModal}
       {filtersModal}
       <FlagModal target={flagTarget} onDone={() => setFlagTarget(null)} />
+
+      <DeleteConfirmModal
+        target={deleteTarget}
+        onDone={() => setDeleteTarget(null)}
+      />
+
+      <EnrichTransactionModal
+        open={reviewDetailsTxn != null}
+        onOpenChange={(o) => !o && setReviewDetailsId(null)}
+        txn={reviewDetailsTxn}
+        accounts={accounts}
+        methods={methods}
+        tags={tags}
+        onDone={() => {
+          setReviewDetailsId(null);
+          router.refresh();
+        }}
+      />
 
       <TransactionTriageModal
         sheet={reviewSheet}

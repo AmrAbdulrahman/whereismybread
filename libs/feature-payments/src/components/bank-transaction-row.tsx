@@ -38,6 +38,7 @@ export function BankTransactionRow({
   onCreatePayment,
   onIgnore,
   onEdit,
+  onOpenDetails,
 }: {
   txn: BankTransactionRowData;
   variant?: 'inbox' | 'day';
@@ -50,6 +51,8 @@ export function BankTransactionRow({
   onIgnore: () => void;
   /** "Edit details" — stamp triage hints onto the row (inbox only). */
   onEdit?: () => void;
+  /** Click anywhere on the row (outside a button) to open its details. */
+  onOpenDetails?: () => void;
 }) {
   const negative = txn.amountMinor < 0;
   const meta = [
@@ -60,10 +63,22 @@ export function BankTransactionRow({
     .filter(Boolean)
     .join(' · ');
 
+  const onCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onOpenDetails) return;
+    if (
+      (e.target as HTMLElement).closest('button, a, input, label')
+    ) {
+      return;
+    }
+    onOpenDetails();
+  };
+
   return (
     <div
+      onClick={onCardClick}
       className={cn(
         'flex flex-col gap-2 rounded-lg border px-3 py-2.5',
+        onOpenDetails && 'cursor-pointer',
         variant === 'day'
           ? 'border-warn/40 bg-warn/[0.06]'
           : selected

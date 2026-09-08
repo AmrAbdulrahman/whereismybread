@@ -26,13 +26,24 @@ self.addEventListener('push', (event) => {
   const url = data.url || '/notifications';
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: data.body || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: data.tag || undefined,
-      data: { url },
-    }),
+    (async () => {
+      await self.registration.showNotification(title, {
+        body: data.body || '',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: data.tag || undefined,
+        data: { url },
+      });
+      // Nudge any open tab to pull fresh data in the background — a synced
+      // payment / triaged transaction should appear without a manual reload.
+      const clients = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+      for (const client of clients) {
+        client.postMessage({ type: 'wib:push', url });
+      }
+    })(),
   );
 });
 

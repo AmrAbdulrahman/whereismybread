@@ -17,8 +17,10 @@ import {
   Pencil,
   PiggyBank,
   RotateCcw,
+  Trash2,
   TriangleAlert,
 } from '@wib/ui/icons';
+import { ActionMenu, type ActionMenuItem } from './action-menu';
 import {
   assignPaymentAction,
   clearOccurrenceAction,
@@ -70,6 +72,7 @@ export function OccurrenceItem({
   occ,
   onEdit,
   onFlag,
+  onDelete,
   onToggle,
   displayCurrency,
   rates,
@@ -81,6 +84,8 @@ export function OccurrenceItem({
   onEdit?: (paymentId: string, dueDate: string) => void;
   /** Open the flag modal for this occurrence. */
   onFlag?: (paymentId: string, dueDate: string) => void;
+  /** Open the delete-confirm for this occurrence (overflow menu). */
+  onDelete?: (paymentId: string, dueDate: string) => void;
   /**
    * Enables the inline "+ account" / "+ budget" / "+ tag" chips — picking one
    * assigns it to the whole series without the edit modal, applied immediately
@@ -175,14 +180,63 @@ export function OccurrenceItem({
 
   const edgeColor = account?.color ?? occ.brandColor ?? null;
 
+  const clickToEdit = onEdit != null && !skipped;
+  const openEdit = () => onEdit?.(occ.paymentId, occ.dueDate);
+
+  const menuItems: ActionMenuItem[] = [];
+  if (onEdit && !skipped) {
+    menuItems.push({
+      label: 'Edit',
+      icon: <Pencil size={13} strokeWidth={2} />,
+      onSelect: openEdit,
+    });
+  }
+  if (onFlag && !skipped) {
+    menuItems.push({
+      label: flagNote ? 'Edit flag' : 'Flag',
+      icon: (
+        <Flag
+          size={13}
+          strokeWidth={2}
+          fill={flagNote ? 'currentColor' : 'none'}
+        />
+      ),
+      onSelect: () => onFlag(occ.paymentId, occ.dueDate),
+    });
+  }
+  if (onDelete && !skipped) {
+    menuItems.push({
+      label: 'Delete',
+      icon: <Trash2 size={13} strokeWidth={2} />,
+      onSelect: () => onDelete(occ.paymentId, occ.dueDate),
+      danger: true,
+    });
+  }
+
+  // A click anywhere on the card opens the edit modal — except on a nested
+  // control (checkbox, chips, links, the overflow menu).
+  const onCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!clickToEdit) return;
+    if (
+      (e.target as HTMLElement).closest(
+        'button, a, input, label, [role="menu"], [role="listbox"], [role="dialog"]',
+      )
+    ) {
+      return;
+    }
+    openEdit();
+  };
+
   return (
     <div
+      onClick={onCardClick}
       className={cn(
         'rounded-xl border border-line bg-surface transition-opacity duration-300',
         dueStyle?.card,
         edgeColor && 'border-l-[3px]',
         skipped && 'opacity-60',
         paid && 'opacity-45',
+        clickToEdit && 'cursor-pointer',
       )}
       style={edgeColor ? { borderLeftColor: edgeColor } : undefined}
     >
@@ -508,38 +562,12 @@ export function OccurrenceItem({
         );
       })()}
 
-      {!skipped && onFlag ? (
-        <button
-          type="button"
-          onClick={() => onFlag(occ.paymentId, occ.dueDate)}
-          aria-label={flagNote ? `Edit flag on ${occ.name}` : `Flag ${occ.name}`}
-          aria-pressed={flagNote != null}
-          className={cn(
-            'grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors sm:h-7 sm:w-7',
-            flagNote
-              ? 'text-danger hover:bg-danger/10'
-              : 'text-muted hover:bg-surface-2 hover:text-ink',
-          )}
-        >
-          <Flag
-            size={13}
-            strokeWidth={2}
-            fill={flagNote ? 'currentColor' : 'none'}
-          />
-        </button>
-      ) : null}
-
-      {onEdit && skipped ? (
-        <span className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" aria-hidden />
-      ) : onEdit ? (
-        <button
-          type="button"
-          onClick={() => onEdit(occ.paymentId, occ.dueDate)}
-          aria-label={`Edit ${occ.name}`}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink sm:h-7 sm:w-7"
-        >
-          <Pencil size={13} strokeWidth={2} />
-        </button>
+      {skipped ? (
+        onEdit ? (
+          <span className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" aria-hidden />
+        ) : null
+      ) : menuItems.length > 0 ? (
+        <ActionMenu items={menuItems} label={`Actions for ${occ.name}`} />
       ) : null}
       </div>
 

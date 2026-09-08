@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMoney } from '@wib/domain';
 import { cn } from '@wib/ui';
-import { FileText, PiggyBank, Receipt } from '@wib/ui/icons';
+import { FileText, Pencil, PiggyBank, Receipt, Trash2 } from '@wib/ui/icons';
 import { assignExpenseAction } from '../lib/budget-actions';
 import type { ExpenseLine, OccurrenceTag } from '../lib/types';
+import { ActionMenu, type ActionMenuItem } from './action-menu';
 import {
   InlineAssignChip,
   InlineTagChip,
@@ -35,10 +36,13 @@ export function expenseTimeLabel(occurredAt: string | null): string {
 export function ExpenseListItem({
   expense,
   onEdit,
+  onDelete,
   assign,
 }: {
   expense: ExpenseLine;
   onEdit: () => void;
+  /** Open the delete-confirm for this expense (overflow menu). */
+  onDelete?: () => void;
   /**
    * Enables the inline "+ account" / "+ budget" / "+ tag" chips — picking one
    * assigns it immediately in the UI and saves in the background. `tags` is
@@ -92,11 +96,36 @@ export function ExpenseListItem({
     tags.length > 0 ||
     showAssign;
 
+  const menuItems: ActionMenuItem[] = [
+    { label: 'Edit', icon: <Pencil size={13} strokeWidth={2} />, onSelect: onEdit },
+  ];
+  if (onDelete) {
+    menuItems.push({
+      label: 'Delete',
+      icon: <Trash2 size={13} strokeWidth={2} />,
+      onSelect: onDelete,
+      danger: true,
+    });
+  }
+
+  // A click anywhere on the row opens the edit modal — except on a nested
+  // control (the inline chips, the overflow menu).
+  const onCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      (e.target as HTMLElement).closest(
+        'button, a, input, label, [role="menu"], [role="listbox"], [role="dialog"]',
+      )
+    ) {
+      return;
+    }
+    onEdit();
+  };
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onEdit}
+      onClick={onCardClick}
       onKeyDown={(e) => {
         if (
           e.target === e.currentTarget &&
@@ -249,6 +278,7 @@ export function ExpenseListItem({
       <span className="shrink-0 text-sm font-medium text-ink-soft">
         {formatMoney(expense.amount)}
       </span>
+      <ActionMenu items={menuItems} label={`Actions for ${expense.name}`} />
     </div>
   );
 }

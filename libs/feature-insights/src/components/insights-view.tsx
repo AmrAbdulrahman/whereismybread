@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type {
   Account,
   Bank,
@@ -17,7 +18,7 @@ import type {
   Tag,
 } from '@wib/db';
 import type { RateMap } from '@wib/domain';
-import { ResponsiveModal, cn, useMediaQuery } from '@wib/ui';
+import { ResponsiveModal, cn, useMediaQuery, usePushRefresh } from '@wib/ui';
 import {
   ArrowLeftRight,
   CalendarDays,
@@ -196,6 +197,11 @@ export function InsightsView({
   overrides: PaymentBoard['overrides'];
   paymentCtx: InsightsPaymentContext;
 }) {
+  const router = useRouter();
+  // A push (bank sync finished, an automation fired) refreshes insights in the
+  // background so new activity shows without a manual reload.
+  usePushRefresh(() => router.refresh());
+
   const { comingUp, attention } = data;
 
   const [editSheet, setEditSheet] = useState<{

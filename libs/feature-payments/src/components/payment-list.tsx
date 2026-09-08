@@ -173,12 +173,15 @@ export function PaymentList({
   goTodayRef,
   onEdit,
   onFlag,
+  onDelete,
   onEditBudget,
   onEditExpense,
+  onDeleteExpense,
   onAddExpense,
   onReviewExpense,
   onReviewPayment,
   onReviewIgnore,
+  onReviewDetails,
 }: {
   board: PaymentBoard;
   budgets?: BudgetSummary[];
@@ -201,12 +204,15 @@ export function PaymentList({
   goTodayRef?: { current: (() => void) | null };
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
+  onDelete?: (paymentId: string, dueDate: string) => void;
   onEditBudget: (budget: BudgetSummary) => void;
   onEditExpense: (expense: ExpenseLine) => void;
+  onDeleteExpense?: (expense: ExpenseLine) => void;
   onAddExpense: (date: string) => void;
   onReviewExpense?: (txn: BankTransactionRow) => void;
   onReviewPayment?: (txn: BankTransactionRow) => void;
   onReviewIgnore?: (txn: BankTransactionRow) => void;
+  onReviewDetails?: (txn: BankTransactionRow) => void;
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
@@ -1444,6 +1450,7 @@ export function PaymentList({
                                 occ={occ}
                                 onEdit={onEdit}
                                 onFlag={onFlag}
+                                onDelete={onDelete}
                                 onToggle={(paid) => setLocalPaid(occ.key, paid)}
                                 displayCurrency={displayCurrency}
                                 rates={rates}
@@ -1457,6 +1464,11 @@ export function PaymentList({
                             key={e.id}
                             expense={e}
                             onEdit={() => onEditExpense(e)}
+                            onDelete={
+                              onDeleteExpense
+                                ? () => onDeleteExpense(e)
+                                : undefined
+                            }
                             assign={assignChips}
                           />
                         ))}
@@ -1468,6 +1480,11 @@ export function PaymentList({
                             onLogExpense={() => onReviewExpense?.(txn)}
                             onCreatePayment={() => onReviewPayment?.(txn)}
                             onIgnore={() => onReviewIgnore?.(txn)}
+                            onOpenDetails={
+                              onReviewDetails
+                                ? () => onReviewDetails(txn)
+                                : undefined
+                            }
                           />
                         ))}
                       </div>

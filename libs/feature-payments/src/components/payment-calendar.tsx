@@ -38,12 +38,14 @@ export function PaymentCalendar({
   onMonthChange,
   onEdit,
   onFlag,
+  onDelete,
 }: {
   board: PaymentBoard;
   month: IsoDate; // first of month
   onMonthChange: (month: IsoDate) => void;
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
+  onDelete?: (paymentId: string, dueDate: string) => void;
 }) {
   const [selected, setSelected] = useState<IsoDate | null>(board.today);
 
@@ -208,6 +210,7 @@ export function PaymentCalendar({
                     occ={occ}
                     onEdit={onEdit}
                     onFlag={onFlag}
+                    onDelete={onDelete}
                     displayCurrency={board.displayCurrency}
                     rates={board.rates}
                     today={board.today}
