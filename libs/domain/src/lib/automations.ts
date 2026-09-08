@@ -69,8 +69,17 @@ export type AutomationAction =
       budgetId?: string | null;
       /** Provider website — its logo + colour are pulled onto the expense. */
       url?: string | null;
+      /** Title / notes (templated). Absent → the merchant name / raw description. */
+      name?: string | null;
+      notes?: string | null;
     }
-  | { type: 'create_payment'; tags?: string[]; accountId?: string | null }
+  | {
+      type: 'create_payment';
+      tags?: string[];
+      accountId?: string | null;
+      name?: string | null;
+      notes?: string | null;
+    }
   | { type: 'add_tags'; tags: string[] }
   | { type: 'set_account'; accountId: string }
   | { type: 'set_method'; methodId: string }
@@ -348,4 +357,41 @@ export function evaluateConditions(
 ): boolean {
   if (!conditions || conditions.length === 0) return false;
   return conditions.every((c) => conditionMatches(c, subject));
+}
+
+// --- Bank-sync summary ----------------------------------------------------
+
+/** What one bank sync did, once its review automations have run. */
+export interface SyncSummary {
+  /** New transactions this sync brought in (before any were auto-handled). */
+  pulled: number;
+  /** Turned into planned payments by a `create_payment` automation. */
+  paymentsCreated: number;
+  /** Logged as expenses by a `log_expense` automation. */
+  expensesCreated: number;
+  /** Dropped by an ignore rule or an `ignore` automation. */
+  autoIgnored: number;
+  /** Still sitting in the review inbox. */
+  needsReview: number;
+}
+
+/**
+ * One-line recap for the "sync finished" notification, e.g.
+ * "10 transactions pulled, 2 payments automatically created,
+ *  4 expenses automatically created, 4 need your review".
+ * Zero-count clauses are dropped; the review clause is always kept.
+ */
+export function formatSyncSummary(s: SyncSummary): string {
+  const n = (count: number, noun: string) =>
+    `${count} ${noun}${count === 1 ? '' : 's'}`;
+  const parts = [`${n(s.pulled, 'transaction')} pulled`];
+  if (s.paymentsCreated > 0)
+    parts.push(`${n(s.paymentsCreated, 'payment')} automatically created`);
+  if (s.expensesCreated > 0)
+    parts.push(`${n(s.expensesCreated, 'expense')} automatically created`);
+  if (s.autoIgnored > 0) parts.push(`${s.autoIgnored} auto-ignored`);
+  parts.push(
+    `${s.needsReview} ${s.needsReview === 1 ? 'needs' : 'need'} your review`,
+  );
+  return parts.join(', ');
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useOptimistic, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   formatConverted,
   formatConvertedParts,
@@ -14,12 +15,18 @@ import {
   Link as LinkIcon,
   OctagonAlert,
   Pencil,
+  PiggyBank,
   RotateCcw,
   TriangleAlert,
 } from '@wib/ui/icons';
-import { clearOccurrenceAction, markOccurrenceAction } from '../lib/actions';
+import {
+  assignPaymentAction,
+  clearOccurrenceAction,
+  markOccurrenceAction,
+} from '../lib/actions';
 import { dueAlertFor, type DueLevel } from '../lib/due-alert';
 import type { BoardOccurrence } from '../lib/types';
+import { InlineAssignChip, type AssignOption } from './inline-assign-chip';
 import { OccurrenceAttachments } from './occurrence-attachments';
 
 const RECURRENCE_LABEL: Record<BoardOccurrence['recurrence'], string> = {
@@ -59,11 +66,18 @@ export function OccurrenceItem({
   rates,
   today,
   compact = false,
+  assign,
 }: {
   occ: BoardOccurrence;
   onEdit?: (paymentId: string, dueDate: string) => void;
   /** Open the flag modal for this occurrence. */
   onFlag?: (paymentId: string, dueDate: string) => void;
+  /**
+   * Enables the inline "+ account" / "+ budget" chips when the payment has
+   * none — picking one assigns it to the whole series without the edit modal.
+   * Omit to hide the chips (compact / read-only contexts).
+   */
+  assign?: { accounts: AssignOption[]; budgets: AssignOption[] };
   /** Fired the instant the paid checkbox is clicked, before the server responds
    * — lets the list re-sort (paid → bottom) with an animation. */
   onToggle?: (paid: boolean) => void;
@@ -74,6 +88,7 @@ export function OccurrenceItem({
   /** Drop the method / link / recurrence extras — for narrow containers. */
   compact?: boolean;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showItems, setShowItems] = useState(false);
   const items = occ.lineItems && occ.lineItems.length > 0 ? occ.lineItems : null;
@@ -85,6 +100,13 @@ export function OccurrenceItem({
   );
   const paid = status === 'paid';
   const skipped = status === 'skipped';
+  const showAssign = assign != null && !skipped && !compact;
+
+  const assignPayment = (patch: {
+    accountId?: string | null;
+    budgetId?: string | null;
+  }) =>
+    assignPaymentAction(occ.paymentId, patch).then(() => router.refresh());
 
   const dueAlert = today ? dueAlertFor(occ, today) : null;
   const dueStyle = dueAlert ? DUE_STYLE[dueAlert.level] : null;
@@ -194,33 +216,35 @@ export function OccurrenceItem({
         </span>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => onEdit?.(occ.paymentId, occ.dueDate)}
-        disabled={skipped}
-        className="min-w-0 flex-1 text-left disabled:cursor-default"
-      >
-        <div
-          className={cn(
-            'flex items-center gap-1.5 truncate text-sm font-semibold text-ink',
-            (paid || skipped) && 'line-through decoration-2',
-          )}
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onEdit?.(occ.paymentId, occ.dueDate)}
+          disabled={skipped}
+          className="block w-full text-left disabled:cursor-default"
         >
-          {dueAlert && dueStyle ? (
-            <dueStyle.Icon
-              size={compact ? 15 : 17}
-              strokeWidth={2.25}
-              aria-label={dueAlert.label}
-              className={cn('shrink-0', dueStyle.text)}
-            />
-          ) : null}
-          {occ.name}
-          {occ.isException && !skipped ? (
-            <span className="shrink-0 rounded bg-line-strong px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted">
-              Edited
-            </span>
-          ) : null}
-        </div>
+          <div
+            className={cn(
+              'flex items-center gap-1.5 truncate text-sm font-semibold text-ink',
+              (paid || skipped) && 'line-through decoration-2',
+            )}
+          >
+            {dueAlert && dueStyle ? (
+              <dueStyle.Icon
+                size={compact ? 15 : 17}
+                strokeWidth={2.25}
+                aria-label={dueAlert.label}
+                className={cn('shrink-0', dueStyle.text)}
+              />
+            ) : null}
+            {occ.name}
+            {occ.isException && !skipped ? (
+              <span className="shrink-0 rounded bg-line-strong px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted">
+                Edited
+              </span>
+            ) : null}
+          </div>
+        </button>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
           {occ.amountKind === 'per_unit' && occ.rate ? (
             <span
@@ -264,6 +288,30 @@ export function OccurrenceItem({
               />
               {occ.account.name}
             </span>
+          ) : showAssign && assign ? (
+            <InlineAssignChip
+              label="account"
+              options={assign.accounts}
+              onPick={(id) => assignPayment({ accountId: id })}
+            />
+          ) : null}
+          {occ.budget ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+              style={{
+                background: `${occ.budget.color}22`,
+                color: occ.budget.color,
+              }}
+            >
+              <PiggyBank size={11} strokeWidth={2} className="shrink-0" />
+              {occ.budget.name}
+            </span>
+          ) : showAssign && assign ? (
+            <InlineAssignChip
+              label="budget"
+              options={assign.budgets}
+              onPick={(id) => assignPayment({ budgetId: id })}
+            />
           ) : null}
           {occ.tags.map((t) => (
             <span
@@ -275,7 +323,7 @@ export function OccurrenceItem({
             </span>
           ))}
         </div>
-      </button>
+      </div>
 
       {items && !skipped ? (
         <button

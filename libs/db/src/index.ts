@@ -40,9 +40,21 @@ export {
   createUser,
   updateUserProfile,
   updateUserPreferences,
+  updateUserNotificationPrefs,
   updateUserPassword,
   markEmailVerified,
 } from './lib/repositories/users';
+
+export {
+  listPushSubscriptions,
+  savePushSubscription,
+  deletePushSubscription,
+  type PushSubscriptionInput,
+} from './lib/repositories/push';
+export type {
+  PushSubscriptionRow,
+  NewPushSubscriptionRow,
+} from './lib/schema/push';
 
 export {
   listMonthIncomes,
@@ -119,6 +131,7 @@ export {
   setPaymentFlag,
   addPaymentTags,
   setPaymentAccount,
+  setPaymentBudget,
   setPaymentMethod,
   deletePaymentFrom,
   splitPaymentForward,
@@ -177,6 +190,7 @@ export {
   listExpenses,
   addExpenseTags,
   setExpenseAccount,
+  setExpenseBudget,
   type ExpenseInput,
   type ExpenseWithMeta,
   type ExpenseLine,

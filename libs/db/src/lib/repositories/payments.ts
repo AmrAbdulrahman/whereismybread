@@ -21,6 +21,7 @@ import {
   type PaymentMethod,
   type Tag,
 } from '../schema/payments';
+import { budgets } from '../schema/budgets';
 
 export interface PaymentWithMeta extends Payment {
   method: PaymentMethod | null;
@@ -44,6 +45,8 @@ export interface PaymentInput {
   currency: string;
   methodId: string | null;
   accountId: string | null;
+  /** A budget this payment is categorised under — a label only, no plan maths. */
+  budgetId: string | null;
   bankId: string | null;
   recipientMethodId: string | null;
   recurrence: Recurrence;
@@ -177,6 +180,7 @@ const paymentColumns = (input: PaymentInput) => ({
   currency: input.currency,
   methodId: input.methodId,
   accountId: input.accountId,
+  budgetId: input.budgetId,
   bankId: input.bankId,
   recipientMethodId: input.recipientMethodId,
   recurrence: input.recurrence,
@@ -423,6 +427,29 @@ export async function setPaymentAccount(
   await getDb()
     .update(payments)
     .set({ accountId, updatedAt: new Date() })
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+}
+
+/**
+ * Set (or clear) a payment's budget label. Whole-series — the inline "+ budget"
+ * chip on a plan card writes here. A no-op if the budget isn't the user's.
+ */
+export async function setPaymentBudget(
+  userId: string,
+  id: string,
+  budgetId: string | null,
+): Promise<void> {
+  if (budgetId) {
+    const ok = await getDb()
+      .select({ id: budgets.id })
+      .from(budgets)
+      .where(and(eq(budgets.id, budgetId), eq(budgets.userId, userId)))
+      .limit(1);
+    if (!ok[0]) return;
+  }
+  await getDb()
+    .update(payments)
+    .set({ budgetId, updatedAt: new Date() })
     .where(and(eq(payments.id, id), eq(payments.userId, userId)));
 }
 

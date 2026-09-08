@@ -26,6 +26,7 @@ import { FlagModal, type FlagTarget } from './flag-modal';
 import { PaymentCalendar } from './payment-calendar';
 import { PaymentForm } from './payment-form';
 import { PaymentList } from './payment-list';
+import { budgetAssignOptions } from './inline-assign-chip';
 import { SyncButton } from './sync-button';
 import {
   activeFilterChips,
@@ -412,6 +413,7 @@ export function PaymentsView({
           banks={banks}
           recipientMethods={recipientMethods}
           tags={tags}
+          budgets={budgetAssignOptions(budgets)}
           defaultCurrency={defaultCurrency}
           today={board.today}
           usedCurrencies={usedCurrencies}
@@ -685,6 +687,7 @@ export function PaymentsView({
         <PaymentList
           board={board}
           budgets={budgets}
+          accounts={accounts}
           expenses={expenses}
           reviewTransactions={visibleReview}
           filter={listFilter}

@@ -13,6 +13,8 @@ import {
   getOrCreateTags,
   reconcileExpenseAttachments,
   setBudgetClosed,
+  setExpenseAccount,
+  setExpenseBudget,
   updateBudget,
   updateExpense,
   type Budget,
@@ -210,6 +212,37 @@ export async function saveExpenseAction(
   }
   revalidateBudgets(userId);
   return { ok: true, item: expense };
+}
+
+const EXPENSE_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Assign (or clear) a recorded expense's account / budget inline — the
+ * lightweight "+ account" / "+ budget" chips on the plan card, no edit modal.
+ * Pass only the key(s) to change; `null` clears one.
+ */
+export async function assignExpenseAction(
+  expenseId: string,
+  patch: { accountId?: string | null; budgetId?: string | null },
+): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof expenseId !== 'string' || !EXPENSE_UUID.test(expenseId)) {
+    return { ok: false, error: 'Bad expense.' };
+  }
+  const bad = (v: unknown) =>
+    v != null && (typeof v !== 'string' || !EXPENSE_UUID.test(v));
+  if (bad(patch?.accountId) || bad(patch?.budgetId)) {
+    return { ok: false, error: 'Bad selection.' };
+  }
+  if ('accountId' in patch) {
+    await setExpenseAccount(userId, expenseId, patch.accountId ?? null);
+  }
+  if ('budgetId' in patch) {
+    await setExpenseBudget(userId, expenseId, patch.budgetId ?? null);
+  }
+  revalidateBudgets(userId);
+  return { ok: true };
 }
 
 export async function deleteExpenseAction(id: string): Promise<FormState> {

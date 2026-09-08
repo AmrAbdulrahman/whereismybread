@@ -22,4 +22,8 @@ export interface SessionUser {
   /** Usual hours worked per month (hourly mode). */
   monthlyHours: number;
   emailVerified: boolean;
+  /** Also email me when an automation's notify action fires. */
+  notifyEmail: boolean;
+  /** Leave a notice when a bank sync finishes importing new rows. */
+  notifySyncSummary: boolean;
 }

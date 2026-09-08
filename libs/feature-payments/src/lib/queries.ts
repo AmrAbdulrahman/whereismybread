@@ -185,6 +185,7 @@ function buildBoard({
 
   const methodById = new Map(methods.map((m) => [m.id, m]));
   const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const budgetById = new Map(bundle.budgets.map((b) => [b.id, b]));
   const bankById = new Map(banks.map((b) => [b.id, b]));
   const recipientMethodById = new Map(recipientMethods.map((r) => [r.id, r]));
   const eventByKey = new Map(
@@ -225,6 +226,10 @@ function buildBoard({
       );
       const method = methodId ? (methodById.get(methodId) ?? null) : null;
       const account = accountId ? (accountById.get(accountId) ?? null) : null;
+      // Budget is a series-level label only (no per-occurrence override).
+      const budget = p.budgetId
+        ? (budgetById.get(p.budgetId) ?? null)
+        : null;
       const bank = bankId ? (bankById.get(bankId) ?? null) : null;
       const recipientMethod = recipientMethodId
         ? (recipientMethodById.get(recipientMethodId) ?? null)
@@ -303,6 +308,9 @@ function buildBoard({
         account: account
           ? { id: account.id, name: account.name, color: account.color }
           : null,
+        budget: budget
+          ? { id: budget.id, name: budget.name, color: budget.color }
+          : null,
         bank: bank
           ? {
               id: bank.id,
@@ -374,6 +382,7 @@ function buildBoard({
       currency: p.currency,
       methodId: p.methodId,
       accountId: p.accountId,
+      budgetId: p.budgetId,
       bankId: p.bankId,
       recipientMethodId: p.recipientMethodId,
       recurrence: p.recurrence,

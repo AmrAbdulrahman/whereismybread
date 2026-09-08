@@ -14,8 +14,13 @@ export {
   reorderAutomationsAction,
   runAutomationNowAction,
   markNotificationsReadAction,
+  savePushSubscriptionAction,
+  deletePushSubscriptionAction,
+  updateNotificationPrefsAction,
   type SaveAutomationResult,
 } from './lib/actions';
+
+export { NotificationsSettings } from './components/notifications-settings';
 
 export {
   automationFormSchema,

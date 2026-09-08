@@ -188,6 +188,19 @@ export async function setExpenseAccount(
     .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
 }
 
+/** Set (or clear) an expense's budget — the inline "+ budget" chip on a plan card. */
+export async function setExpenseBudget(
+  userId: string,
+  id: string,
+  budgetId: string | null,
+): Promise<void> {
+  if (budgetId && !(await ownsBudgetOrNone(userId, budgetId))) return;
+  await getDb()
+    .update(expenses)
+    .set({ budgetId, updatedAt: new Date() })
+    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
+}
+
 export interface ExpenseWithMeta extends Expense {
   tagIds: string[];
 }

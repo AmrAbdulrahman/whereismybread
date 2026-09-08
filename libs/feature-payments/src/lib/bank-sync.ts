@@ -23,7 +23,10 @@ import {
   type BankAccountInput,
   type BankConnection,
 } from '@wib/db';
-import { runReviewExpenseAutomations } from '@wib/feature-automations/server';
+import {
+  notifySyncComplete,
+  runReviewExpenseAutomations,
+} from '@wib/feature-automations/server';
 import {
   createSession,
   fetchAllTransactions,
@@ -286,10 +289,20 @@ export async function syncConnection(
 
   // Run the user's "expense for review created" automations over the rows this
   // sync brought in (rows the ignore rules already consumed are skipped by the
-  // engine). Never let an automation failure fail the sync itself.
+  // engine), then leave a "sync finished" notification with the tally. Only
+  // when this sync actually pulled new rows. Never let a failure here fail the
+  // sync itself.
   if (newTransactionIds.length > 0) {
     try {
-      await runReviewExpenseAutomations(connection.userId, newTransactionIds);
+      const outcome = await runReviewExpenseAutomations(
+        connection.userId,
+        newTransactionIds,
+      );
+      await notifySyncComplete(connection.userId, {
+        bankName: connection.aspspName || null,
+        pulled: newTransactionIds.length,
+        outcome,
+      });
     } catch (err) {
       console.error('[bank-sync] automations failed', err);
     }

@@ -5,15 +5,19 @@ import { fieldErrors, type FormState } from '@wib/auth';
 import {
   createAutomation,
   deleteAutomation,
+  deletePushSubscription,
   getAutomation,
   markNotificationsRead,
   reorderAutomations,
+  savePushSubscription,
   setAutomationEnabled,
   updateAutomation,
+  updateUserNotificationPrefs,
   type Automation,
   type AutomationInput,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import {
   automationFormSchema,
   toStoredAction,
@@ -122,4 +126,55 @@ export async function markNotificationsReadAction(
   revalidatePath('/notifications');
   revalidatePath('/automations');
   return { ok: true };
+}
+
+// --- Notification preferences + Web Push ----------------------------------
+
+const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url().max(1000),
+  p256dh: z.string().min(1).max(500),
+  auth: z.string().min(1).max(500),
+  userAgent: z.string().max(500).optional(),
+});
+
+/** Register this browser for Web Push (called after the user grants permission). */
+export async function savePushSubscriptionAction(
+  input: unknown,
+): Promise<FormState> {
+  const userId = await requireUserId();
+  const parsed = pushSubscriptionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Invalid push subscription.' };
+  await savePushSubscription(userId, parsed.data);
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+/** Forget this browser's subscription (user turned push off, or it expired). */
+export async function deletePushSubscriptionAction(
+  endpoint: unknown,
+): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof endpoint === 'string' && endpoint.length > 0) {
+    await deletePushSubscription(endpoint, userId);
+  }
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+const notificationPrefsSchema = z.object({
+  notifyEmail: z.boolean(),
+  notifySyncSummary: z.boolean(),
+});
+
+export async function updateNotificationPrefsAction(
+  input: unknown,
+): Promise<FormState> {
+  const userId = await requireUserId();
+  const parsed = notificationPrefsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+  await updateUserNotificationPrefs(userId, parsed.data);
+  revalidatePath('/settings');
+  return { ok: true, message: 'Notification settings saved.' };
 }

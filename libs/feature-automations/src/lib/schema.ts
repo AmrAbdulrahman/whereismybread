@@ -52,8 +52,10 @@ export const actionSchema = z.object({
     )
     .optional()
     .default('both'),
-  /** notify: optional custom title (templated). */
-  notifyTitle: z.string().trim().max(200).optional().default(''),
+  /** Custom title, templated (notify / log_expense / create_payment). */
+  title: z.string().trim().max(200).optional().default(''),
+  /** Custom description, templated (log_expense / create_payment). */
+  notes: z.string().trim().max(1000).optional().default(''),
   /** notify: optional custom body (templated). */
   message: z.string().trim().max(1000).optional().default(''),
 });
@@ -172,7 +174,7 @@ export function toStoredAction(a: AutomationFormParsed['actions'][number]): Auto
       return {
         type: 'notify',
         channel: a.channel,
-        ...(a.notifyTitle.trim() ? { title: a.notifyTitle.trim() } : {}),
+        ...(a.title.trim() ? { title: a.title.trim() } : {}),
         ...(a.message.trim() ? { message: a.message.trim() } : {}),
       };
     case 'add_tags':
@@ -197,12 +199,16 @@ export function toStoredAction(a: AutomationFormParsed['actions'][number]): Auto
         bankId: a.bankId || null,
         budgetId: a.budgetId || null,
         url: a.url.trim() || null,
+        name: a.title.trim() || null,
+        notes: a.notes.trim() || null,
       };
     case 'create_payment':
       return {
         type: 'create_payment',
         tags: cleanTags(a.tags),
         accountId: a.accountId || null,
+        name: a.title.trim() || null,
+        notes: a.notes.trim() || null,
       };
     default: {
       const _exhaustive: never = a.type;
@@ -237,14 +243,15 @@ export function toFormAction(
     url: '',
     value: '',
     channel: 'both' as NotifyChannel,
-    notifyTitle: '',
+    title: '',
+    notes: '',
     message: '',
   };
   if (a.type === 'notify')
     return {
       ...base,
       channel: a.channel ?? 'both',
-      notifyTitle: a.title ?? '',
+      title: a.title ?? '',
       message: a.message ?? '',
     };
   if (a.type === 'add_tags' || a.type === 'set_tags')
@@ -261,12 +268,16 @@ export function toFormAction(
       bankId: a.bankId ?? '',
       budgetId: a.budgetId ?? '',
       url: a.url ?? '',
+      title: a.name ?? '',
+      notes: a.notes ?? '',
     };
   if (a.type === 'create_payment')
     return {
       ...base,
       tags: a.tags ?? [],
       accountId: a.accountId ?? '',
+      title: a.name ?? '',
+      notes: a.notes ?? '',
     };
   return base;
 }

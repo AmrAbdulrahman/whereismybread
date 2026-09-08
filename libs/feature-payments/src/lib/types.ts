@@ -38,6 +38,12 @@ export interface OccurrenceAccount {
   color: string;
 }
 
+export interface OccurrenceBudget {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface OccurrenceBank {
   id: string;
   name: string;
@@ -117,6 +123,8 @@ export interface BoardOccurrence {
   brandColor: string | null;
   method: OccurrenceMethod | null;
   account: OccurrenceAccount | null;
+  /** The budget this payment is categorised under — a label, no plan maths. */
+  budget: OccurrenceBudget | null;
   bank: OccurrenceBank | null;
   /** How a manual payment is sent — set only when the method is manual. */
   recipientMethod: OccurrenceRecipientMethod | null;
@@ -204,6 +212,7 @@ export interface EditablePayment {
   currency: string;
   methodId: string | null;
   accountId: string | null;
+  budgetId: string | null;
   bankId: string | null;
   recipientMethodId: string | null;
   recurrence: 'one_time' | 'monthly' | 'quarterly' | 'annual';

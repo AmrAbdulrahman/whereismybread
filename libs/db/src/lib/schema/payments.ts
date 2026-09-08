@@ -14,8 +14,13 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { users } from './users';
+// `budgets` is only ever dereferenced inside the lazy `.references()` callback
+// on `payments.budgetId` (never at module-eval time), so the payments ⇄ budgets
+// import cycle is safe — every cross-file reference on both sides is deferred.
+import { budgets } from './budgets';
 
 export const recurrenceEnum = pgEnum('recurrence', RECURRENCES);
 export const paymentMethodKindEnum = pgEnum(
@@ -189,6 +194,14 @@ export const payments = pgTable('payments', {
   accountId: uuid('account_id').references(() => accounts.id, {
     onDelete: 'set null',
   }),
+  /**
+   * A budget this payment is categorised under — a label only (rendered as a
+   * chip, filterable), with no effect on the plan's reserved / left / due
+   * maths. Cleared (not cascaded) when the budget row is removed.
+   */
+  budgetId: uuid('budget_id').references((): AnyPgColumn => budgets.id, {
+    onDelete: 'set null',
+  }),
   bankId: uuid('bank_id').references(() => banks.id, {
     onDelete: 'set null',
   }),
@@ -217,6 +230,7 @@ export const payments = pgTable('payments', {
   index('payments_user_active_idx')
     .on(t.userId)
     .where(sql`${t.archivedAt} is null`),
+  index('payments_budget_idx').on(t.budgetId),
 ]);
 
 export const paymentTags = pgTable(

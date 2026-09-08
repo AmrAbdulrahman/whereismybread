@@ -49,7 +49,8 @@ interface ActionRow {
   url: string;
   value: string;
   channel: NotifyChannel;
-  notifyTitle: string;
+  title: string;
+  notes: string;
   message: string;
 }
 
@@ -102,7 +103,8 @@ function blankAction(trigger: AutomationTrigger): ActionRow {
     url: '',
     value: '',
     channel: 'both',
-    notifyTitle: '',
+    title: '',
+    notes: '',
     message: '',
   };
 }
@@ -154,7 +156,8 @@ export function AutomationForm({
             url: r.url ?? '',
             value: r.value ?? '',
             channel: r.channel ?? 'both',
-            notifyTitle: r.notifyTitle ?? '',
+            title: r.title ?? '',
+            notes: r.notes ?? '',
             message: r.message ?? '',
           };
         })
@@ -219,7 +222,8 @@ export function AutomationForm({
         url: a.url,
         value: a.value,
         channel: a.channel,
-        notifyTitle: a.notifyTitle,
+        title: a.title,
+        notes: a.notes,
         message: a.message,
       })),
     });
@@ -517,6 +521,13 @@ export function AutomationForm({
                 {needsValue ? (
                   <>
                     <Input
+                      aria-label={
+                        a.type === 'set_url'
+                          ? 'Provider website'
+                          : a.type === 'set_name'
+                            ? 'New title'
+                            : 'New description'
+                      }
                       placeholder={
                         a.type === 'set_url'
                           ? 'netflix.com'
@@ -562,10 +573,8 @@ export function AutomationForm({
                     <Input
                       aria-label="Notification title"
                       placeholder="Title (optional — defaults to the rule name)"
-                      value={a.notifyTitle}
-                      onChange={(e) =>
-                        setAct(i, { notifyTitle: e.target.value })
-                      }
+                      value={a.title}
+                      onChange={(e) => setAct(i, { title: e.target.value })}
                     />
                     <Input
                       aria-label="Notification message"
@@ -578,6 +587,30 @@ export function AutomationForm({
                       onInsert={(tok) =>
                         setAct(i, { message: a.message + tok })
                       }
+                    />
+                  </>
+                ) : null}
+                {a.type === 'log_expense' || a.type === 'create_payment' ? (
+                  <>
+                    <Input
+                      aria-label="Title"
+                      placeholder={`Title (optional, e.g. "<title>")`}
+                      value={a.title}
+                      onChange={(e) => setAct(i, { title: e.target.value })}
+                    />
+                    <TemplateChips
+                      trigger={trigger}
+                      onInsert={(tok) => setAct(i, { title: a.title + tok })}
+                    />
+                    <Input
+                      aria-label="Description"
+                      placeholder="Description (optional, supports <tokens>)"
+                      value={a.notes}
+                      onChange={(e) => setAct(i, { notes: e.target.value })}
+                    />
+                    <TemplateChips
+                      trigger={trigger}
+                      onInsert={(tok) => setAct(i, { notes: a.notes + tok })}
                     />
                   </>
                 ) : null}

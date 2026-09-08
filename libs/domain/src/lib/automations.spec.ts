@@ -5,6 +5,7 @@ import {
   conditionMatches,
   evaluateConditions,
   fieldsForTrigger,
+  formatSyncSummary,
   isTerminalAction,
   operatorsForKind,
   templateVars,
@@ -161,6 +162,48 @@ describe('applyTemplate', () => {
     );
     expect(templateVars('record_created').map((v) => v.token)).toContain(
       'method',
+    );
+  });
+});
+
+describe('formatSyncSummary', () => {
+  it('lists every non-zero clause and always the review clause', () => {
+    expect(
+      formatSyncSummary({
+        pulled: 10,
+        paymentsCreated: 2,
+        expensesCreated: 4,
+        autoIgnored: 0,
+        needsReview: 4,
+      }),
+    ).toBe(
+      '10 transactions pulled, 2 payments automatically created, 4 expenses automatically created, 4 need your review',
+    );
+  });
+
+  it('drops zero-count clauses and singularises', () => {
+    expect(
+      formatSyncSummary({
+        pulled: 1,
+        paymentsCreated: 0,
+        expensesCreated: 0,
+        autoIgnored: 0,
+        needsReview: 1,
+      }),
+    ).toBe('1 transaction pulled, 1 needs your review');
+  });
+
+  it('mentions auto-ignored when present', () => {
+    expect(
+      formatSyncSummary({
+        pulled: 5,
+        paymentsCreated: 0,
+        expensesCreated: 1,
+        autoIgnored: 3,
+        needsReview: 1,
+      }),
+    ).toBe(
+      '5 transactions pulled, 1 expense automatically created, 3 auto-ignored, 1 needs your review',
     );
   });
 });

@@ -15,5 +15,9 @@ export {
   runRecordAutomations,
   runAutomationNow,
   countMatchingPending,
+  notifySyncComplete,
   type RecordSubjectInput,
+  type ReviewAutomationOutcome,
 } from './lib/engine';
+
+export { sendPushToUser } from './lib/push';

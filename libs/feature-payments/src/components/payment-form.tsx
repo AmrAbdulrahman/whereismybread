@@ -99,6 +99,11 @@ export interface PaymentFormProps {
   banks: Bank[];
   recipientMethods: RecipientMethod[];
   tags: Tag[];
+  /**
+   * Budgets to offer as a category label (chip on the plan card). Optional —
+   * omit and the picker is hidden, but any existing assignment round-trips.
+   */
+  budgets?: { id: string; name: string; color: string }[];
   defaultCurrency: string;
   today: string;
   /** Currencies already in use — surfaced first in the picker. */
@@ -131,6 +136,7 @@ export function PaymentForm({
   banks: initialBanks,
   recipientMethods: initialRecipientMethods,
   tags,
+  budgets = [],
   defaultCurrency,
   today,
   usedCurrencies = [],
@@ -214,6 +220,7 @@ export function PaymentForm({
         defaultCurrency,
       methodId: initial?.methodId ?? prefill?.methodId ?? null,
       accountId: initial?.accountId ?? prefill?.accountId ?? null,
+      budgetId: initial?.budgetId ?? null,
       bankId: initial?.bankId ?? prefill?.bankId ?? null,
       recipientMethodId: initial?.recipientMethodId ?? null,
       recurrence: initial?.recurrence ?? 'one_time',
@@ -1046,6 +1053,50 @@ export function PaymentForm({
           }}
         />
       </ResponsiveModal>
+
+      {budgets.length > 0 ? (
+        <Field>
+          <Label>Budget</Label>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setValue('budgetId', null, { shouldDirty: true })}
+              className={cn(
+                'rounded-full border px-3 py-1.5 text-xs font-medium',
+                watch('budgetId') == null
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-line-strong text-muted hover:text-ink',
+              )}
+            >
+              None
+            </button>
+            {budgets.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() =>
+                  setValue('budgetId', b.id, { shouldDirty: true })
+                }
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
+                  watch('budgetId') === b.id
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-line-strong text-muted hover:text-ink',
+                )}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: b.color }}
+                />
+                {b.name}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted">
+            A category label — it doesn’t change what the plan reserves.
+          </p>
+        </Field>
+      ) : null}
 
       <Field>
         <Label>Tags</Label>

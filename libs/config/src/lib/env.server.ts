@@ -68,6 +68,15 @@ const serverSchema = z.object({
   QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
   QSTASH_TOKEN: z.string().optional(),
   QSTASH_URL: z.url().default('https://qstash.upstash.io'),
+
+  // Web Push (VAPID). Generate a pair with `npx web-push generate-vapid-keys`.
+  // The public key is also exposed to the browser as
+  // `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (see env.client). All optional so deploys
+  // without push configured still validate — push is simply skipped.
+  //  - VAPID_SUBJECT  a `mailto:` or https URL identifying the sender
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:support@whereismybread.app'),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

@@ -32,12 +32,15 @@ import {
   cleanMerchant,
   evaluateConditions,
   formatMoney,
+  formatSyncSummary,
   isTerminalAction,
   money,
   type AutomationAction,
   type AutomationSubject,
   type NotifyChannel,
+  type SyncSummary,
 } from '@wib/domain';
+import { sendPushToUser } from './push';
 import { buildRecordSubject, buildReviewSubject } from './subject';
 
 type TemplateVars = Record<string, string>;
@@ -122,26 +125,40 @@ async function recordSubject(
 
 // --- Notification / email fan-out ----------------------------------------
 
-/** Cache the user's email for the run so each `deliver` doesn't re-query. */
-async function userEmail(userId: string): Promise<string | null> {
-  const user = await findUserById(userId).catch(() => null);
-  return user?.email ?? null;
+/** The user's delivery preferences, resolved once per engine run. */
+interface NotifyContext {
+  email: string | null;
+  /** `notify_email` — false mutes automation notification emails. */
+  emailEnabled: boolean;
 }
 
-/** Deliver a batch of notices over one channel. */
+async function loadNotifyContext(userId: string): Promise<NotifyContext> {
+  const user = await findUserById(userId).catch(() => null);
+  return {
+    email: user?.email ?? null,
+    emailEnabled: user?.notifyEmail ?? true,
+  };
+}
+
+/**
+ * Deliver a batch of notices over one channel. In-app notices are also pushed
+ * to the browser (best-effort, no-op without a subscription); email is gated
+ * on the user's `notify_email` preference.
+ */
 async function deliver(
   userId: string,
-  email: string | null,
+  ctx: NotifyContext,
   channel: NotifyChannel,
   notices: NotificationInput[],
 ): Promise<void> {
   if (notices.length === 0) return;
   if (channel === 'in_app' || channel === 'both') {
     await createNotifications(userId, notices);
+    await sendPushToUser(userId, notices);
   }
-  if ((channel === 'email' || channel === 'both') && email) {
+  if ((channel === 'email' || channel === 'both') && ctx.email && ctx.emailEnabled) {
     for (const n of notices) {
-      await sendAutomationNotificationEmail(email, {
+      await sendAutomationNotificationEmail(ctx.email, {
         title: n.title,
         body: n.body ?? '',
         path: n.href ?? null,
@@ -272,6 +289,7 @@ async function applyReviewTerminal(
     { type: 'ignore' | 'log_expense' | 'create_payment' }
   >,
   stamp: Stamp,
+  vars: TemplateVars,
 ): Promise<void> {
   if (action.type === 'ignore') {
     await markBankTransactionIgnored(userId, txn.id);
@@ -280,9 +298,16 @@ async function applyReviewTerminal(
 
   const date = txn.occurredAt.toISOString().slice(0, 10);
   const amountMinor = Math.abs(txn.amountMinor);
+  // The action's own title / description (templated) win, then any enrich
+  // stamp, then the merchant name / raw description.
+  const actionName = action.name ? applyTemplate(action.name, vars) : '';
+  const actionNotes = action.notes ? applyTemplate(action.notes, vars) : '';
   const name =
-    stamp.name || cleanMerchant(txn.description, txn.rawType) || txn.description;
-  const notes = stamp.notes ?? txn.description;
+    actionName ||
+    stamp.name ||
+    cleanMerchant(txn.description, txn.rawType) ||
+    txn.description;
+  const notes = actionNotes || stamp.notes || txn.description;
   const accountId = action.accountId ?? stamp.accountId ?? null;
   const tagNames = uniq([...(action.tags ?? []), ...stamp.tags]);
   const tagIds =
@@ -353,6 +378,7 @@ async function applyReviewTerminal(
     logoUrl,
     brandColor,
     isSubscription: false,
+    budgetId: null,
     notes,
     tagIds,
   });
@@ -374,16 +400,19 @@ const ENRICH_TYPES = new Set([
  * Records a hit (for run-count + notify) per automation that matched.
  * Returns `true` once a terminal action fired.
  */
+type TerminalKind = 'ignore' | 'log_expense' | 'create_payment';
+
 async function processReviewTxn(
   userId: string,
   txn: BankTransaction,
   automations: Automation[],
   bankNames: Map<string, string>,
   record: (automationId: string, vars: TemplateVars) => void,
-): Promise<void> {
+): Promise<TerminalKind | null> {
   const subject = reviewSubject(txn, bankNames);
   const vars = reviewTemplateVars(txn, bankNames);
   const stamp = initStamp(txn);
+  let terminal: TerminalKind | null = null;
 
   for (const auto of automations) {
     if (!evaluateConditions(auto.conditions, subject)) continue;
@@ -414,44 +443,67 @@ async function processReviewTxn(
         await applyReviewTerminal(
           userId,
           txn,
-          action as Extract<
-            AutomationAction,
-            { type: 'ignore' | 'log_expense' | 'create_payment' }
-          >,
+          action as Extract<AutomationAction, { type: TerminalKind }>,
           stamp,
+          vars,
         );
         consumed = true;
+        terminal = action.type as TerminalKind;
       }
     }
     // The title token reflects any `set_name` that just ran.
     record(auto.id, stamp.name ? { ...vars, title: stamp.name } : vars);
-    if (consumed) return; // this row is spoken for
+    if (consumed) return terminal; // this row is spoken for
   }
+  return terminal;
 }
 
 // --- Entry points ------------------------------------------------------
+
+/** What running the review automations over a batch of new rows did. */
+export interface ReviewAutomationOutcome {
+  /** New rows still `pending` when the engine started (i.e. post ignore-rules). */
+  candidates: number;
+  paymentsCreated: number;
+  expensesCreated: number;
+  /** Rows an `ignore` automation dropped. */
+  autoIgnored: number;
+}
+
+const EMPTY_OUTCOME: ReviewAutomationOutcome = {
+  candidates: 0,
+  paymentsCreated: 0,
+  expensesCreated: 0,
+  autoIgnored: 0,
+};
 
 /**
  * Run the user's "expense for review created" automations over a set of
  * freshly-imported `bank_transactions` (by id). Rows already consumed (not
  * `pending`) are skipped. One terminal action per row; `notify` hits are
- * coalesced into a single notification/email per automation.
+ * coalesced into a single notification/email per automation. Returns a tally
+ * the caller turns into the "sync finished" summary.
  */
 export async function runReviewExpenseAutomations(
   userId: string,
   transactionIds: string[],
-): Promise<void> {
-  if (transactionIds.length === 0) return;
-  const automations = await listEnabledAutomations(
-    userId,
-    'review_expense_created',
-  );
-  if (automations.length === 0) return;
+): Promise<ReviewAutomationOutcome> {
+  if (transactionIds.length === 0) return { ...EMPTY_OUTCOME };
 
   const txns = (await getBankTransactionsByIds(userId, transactionIds)).filter(
     (t) => t.status === 'pending',
   );
-  if (txns.length === 0) return;
+  const outcome: ReviewAutomationOutcome = {
+    ...EMPTY_OUTCOME,
+    candidates: txns.length,
+  };
+  if (txns.length === 0) return outcome;
+
+  const automations = await listEnabledAutomations(
+    userId,
+    'review_expense_created',
+  );
+  if (automations.length === 0) return outcome;
 
   const bankNames = new Map(
     (await listBanks(userId)).map((b) => [b.id, b.name] as const),
@@ -466,10 +518,19 @@ export async function runReviewExpenseAutomations(
   };
 
   for (const txn of txns) {
-    await processReviewTxn(userId, txn, automations, bankNames, record);
+    const terminal = await processReviewTxn(
+      userId,
+      txn,
+      automations,
+      bankNames,
+      record,
+    );
+    if (terminal === 'create_payment') outcome.paymentsCreated += 1;
+    else if (terminal === 'log_expense') outcome.expensesCreated += 1;
+    else if (terminal === 'ignore') outcome.autoIgnored += 1;
   }
 
-  const email = await userEmail(userId);
+  const ctx = await loadNotifyContext(userId);
   for (const auto of automations) {
     const hits = matched.get(auto.id);
     if (!hits || hits.length === 0) continue;
@@ -478,10 +539,62 @@ export async function runReviewExpenseAutomations(
     if (!notify) continue;
     await deliver(
       userId,
-      email,
+      ctx,
       notify.channel ?? 'both',
       reviewNotices(auto, notify, hits),
     );
+  }
+  return outcome;
+}
+
+/**
+ * Leave the "bank sync finished" notification once a connection's sync has
+ * imported new rows and the review automations above have run. In-app + push;
+ * gated on the user's `notify_sync_summary` preference. Never throws.
+ */
+export async function notifySyncComplete(
+  userId: string,
+  input: { bankName: string | null; pulled: number; outcome: ReviewAutomationOutcome },
+): Promise<void> {
+  const { pulled, outcome } = input;
+  if (pulled <= 0) return;
+
+  const autoIgnoredAtImport = Math.max(0, pulled - outcome.candidates);
+  const needsReview = Math.max(
+    0,
+    outcome.candidates - outcome.paymentsCreated - outcome.expensesCreated -
+      outcome.autoIgnored,
+  );
+  // Nothing landed in the inbox and nothing was auto-created — just spam
+  // filtered out. Not worth interrupting for.
+  if (
+    needsReview === 0 &&
+    outcome.paymentsCreated === 0 &&
+    outcome.expensesCreated === 0
+  ) {
+    return;
+  }
+
+  const summary: SyncSummary = {
+    pulled,
+    paymentsCreated: outcome.paymentsCreated,
+    expensesCreated: outcome.expensesCreated,
+    autoIgnored: autoIgnoredAtImport + outcome.autoIgnored,
+    needsReview,
+  };
+
+  try {
+    const user = await findUserById(userId).catch(() => null);
+    if (user && user.notifySyncSummary === false) return;
+    const notice: NotificationInput = {
+      title: input.bankName ? `${input.bankName} sync complete` : 'Bank sync complete',
+      body: formatSyncSummary(summary),
+      href: REVIEW_HREF,
+    };
+    await createNotifications(userId, [notice]);
+    await sendPushToUser(userId, [notice]);
+  } catch (err) {
+    console.error('[automations] sync-summary notification failed', err);
   }
 }
 
@@ -555,7 +668,7 @@ export async function runRecordAutomations(
     recurrence: input.recurrence ?? '',
     date: new Date().toISOString().slice(0, 10),
   };
-  const email = await userEmail(userId);
+  const ctx = await loadNotifyContext(userId);
 
   for (const auto of automations) {
     if (!evaluateConditions(auto.conditions, subject)) continue;
@@ -582,7 +695,7 @@ export async function runRecordAutomations(
           await setPaymentMethod(userId, input.recordId, action.methodId);
         }
       } else if (action.type === 'notify') {
-        await deliver(userId, email, action.channel ?? 'both', [
+        await deliver(userId, ctx, action.channel ?? 'both', [
           {
             title: action.title
               ? applyTemplate(action.title, vars)
@@ -637,7 +750,7 @@ export async function runAutomationNow(
   if (notify) {
     await deliver(
       userId,
-      await userEmail(userId),
+      await loadNotifyContext(userId),
       notify.channel ?? 'both',
       reviewNotices(automation, notify, hits),
     );

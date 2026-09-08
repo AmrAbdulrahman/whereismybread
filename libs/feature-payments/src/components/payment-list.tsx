@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
   addDays,
@@ -12,6 +12,7 @@ import {
   startOfMonth,
   type RateMap,
 } from '@wib/domain';
+import type { Account } from '@wib/db';
 import { cn, Progress, Spinner } from '@wib/ui';
 import { Check, ChevronDown, Pencil } from '@wib/ui/icons';
 import { loadListWindowAction } from '../lib/actions';
@@ -27,6 +28,7 @@ import { BankTransactionRow as BankTransactionRowComponent } from './bank-transa
 import type { BankTransactionRow } from '../lib/bank-sync-queries';
 import { BudgetMonthGroup } from './budget-month-group';
 import { ExpenseListItem } from './expense-list-item';
+import { budgetAssignOptions } from './inline-assign-chip';
 import {
   EMPTY_LIST_FILTER,
   listFilterCount,
@@ -161,6 +163,7 @@ function mergeBoards(
 export function PaymentList({
   board: baseBoard,
   budgets = [],
+  accounts = [],
   expenses = [],
   reviewTransactions = [],
   filter = EMPTY_LIST_FILTER,
@@ -178,6 +181,8 @@ export function PaymentList({
 }: {
   board: PaymentBoard;
   budgets?: BudgetSummary[];
+  /** Accounts to offer in the inline "+ account" chip on plan cards. */
+  accounts?: Account[];
   expenses?: ExpenseLine[];
   /** Uncategorized imported transactions — shown per-day, never in any total. */
   reviewTransactions?: BankTransactionRow[];
@@ -285,6 +290,19 @@ export function PaymentList({
 
   const board = mergeBoards(baseBoard, pastBoard, futureBoard);
   const { displayCurrency, rates } = board;
+
+  // Option lists for the inline "+ account" / "+ budget" chips on plan cards.
+  const assignChips = useMemo(
+    () => ({
+      accounts: accounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        color: a.color,
+      })),
+      budgets: budgetAssignOptions(budgets),
+    }),
+    [accounts, budgets],
+  );
 
   // Occurrences the user just ticked/unticked: keeps them sorted (paid → bottom
   // of their day) with a slide animation, before the board round-trips back.
@@ -1426,6 +1444,7 @@ export function PaymentList({
                                 displayCurrency={displayCurrency}
                                 rates={rates}
                                 today={board.today}
+                                assign={assignChips}
                               />
                             </div>
                           ))}
@@ -1434,6 +1453,7 @@ export function PaymentList({
                             key={e.id}
                             expense={e}
                             onEdit={() => onEditExpense(e)}
+                            assign={assignChips}
                           />
                         ))}
                         {dayReview.map((txn) => (

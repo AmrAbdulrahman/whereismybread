@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
+import { clientEnv } from '@wib/config';
 import { money, toMajor } from '@wib/domain';
+import { NotificationsSettings } from '@wib/feature-automations';
 import { ThemeToggle } from '@wib/ui';
 import { CheckForUpdatesButton } from '../../_components/update-prompt';
 import { PasswordForm } from './_password-form';
@@ -52,6 +54,15 @@ export default async function SettingsPage() {
               : ''
           }
           monthlyHours={user.monthlyHours ? String(user.monthlyHours) : ''}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-line pt-6">
+        <h2 className="font-display text-base font-semibold">Notifications</h2>
+        <NotificationsSettings
+          vapidPublicKey={clientEnv.VAPID_PUBLIC_KEY}
+          notifyEmail={user.notifyEmail}
+          notifySyncSummary={user.notifySyncSummary}
         />
       </section>
 

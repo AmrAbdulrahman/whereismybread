@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Automation } from '@wib/db';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
-import { TRIGGER_LABELS, ACTION_LABELS } from '../lib/labels';
+import { TRIGGER_LABELS } from '../lib/labels';
+import { describeActions, describeConditions } from '../lib/describe';
 import {
   deleteAutomationAction,
   reorderAutomationsAction,
@@ -13,12 +14,6 @@ import {
 } from '../lib/actions';
 import { AutomationForm, type AutomationFormInitial } from './automation-form';
 import type { AutomationLookups } from '../lib/queries';
-
-function summary(a: Automation): string {
-  const cs = a.conditions.length;
-  const acts = a.actions.map((x) => ACTION_LABELS[x.type]).join(', ');
-  return `${cs} pattern${cs === 1 ? '' : 's'} → ${acts || 'nothing'}`;
-}
 
 function lastRunLabel(a: Automation): string {
   if (!a.lastRunAt) return 'Never run';
@@ -112,8 +107,27 @@ export function AutomationsView({
                   <p className="text-xs text-muted">
                     {TRIGGER_LABELS[a.trigger]}
                   </p>
-                  <p className="mt-1 text-xs text-ink-soft">{summary(a)}</p>
-                  <p className="mt-0.5 text-[11px] text-muted">
+                  <p className="mt-1.5 text-xs text-ink-soft">
+                    <span className="text-muted">If </span>
+                    {describeConditions(a.trigger, a.conditions)}
+                  </p>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {describeActions(a.actions, lookups).map((line, k) => (
+                      <li
+                        key={k}
+                        className="flex gap-1.5 text-xs text-ink-soft"
+                      >
+                        <span className="select-none text-muted">→</span>
+                        <span className="min-w-0">
+                          {line.label}
+                          {line.detail ? (
+                            <span className="text-muted"> · {line.detail}</span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5 text-[11px] text-muted">
                     {lastRunLabel(a)}
                   </p>
                 </div>

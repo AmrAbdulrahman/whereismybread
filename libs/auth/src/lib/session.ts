@@ -52,6 +52,8 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     hourlyRateMinor: user.hourlyRateMinor,
     monthlyHours: user.monthlyHours,
     emailVerified: user.emailVerifiedAt != null,
+    notifyEmail: user.notifyEmail,
+    notifySyncSummary: user.notifySyncSummary,
   };
 });
 

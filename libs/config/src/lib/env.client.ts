@@ -9,6 +9,13 @@ export const clientEnv = {
    * `apps/web/next.config.js`; `"dev"` when running locally.
    */
   BUILD_ID: process.env['NEXT_PUBLIC_BUILD_ID'] ?? 'dev',
+
+  /**
+   * VAPID public key for `pushManager.subscribe`. Empty string when push is
+   * not configured for the deployment — the settings UI treats that as
+   * "push unavailable".
+   */
+  VAPID_PUBLIC_KEY: process.env['NEXT_PUBLIC_VAPID_PUBLIC_KEY'] ?? '',
 } as const;
 
 export type ClientEnv = typeof clientEnv;

@@ -29,6 +29,8 @@ import {
   setMonthIncome,
   setOccurrenceFlag,
   setOccurrenceOverride,
+  setPaymentAccount,
+  setPaymentBudget,
   setPaymentFlag,
   splitPaymentForward,
   updateAccount,
@@ -201,6 +203,7 @@ export async function savePaymentAction(
     currency: v.currency,
     methodId: v.methodId,
     accountId: v.accountId,
+    budgetId: v.budgetId,
     bankId: v.bankId,
     recipientMethodId: v.recipientMethodId,
     recurrence: v.recurrence,
@@ -652,6 +655,38 @@ export async function markOccurrenceAction(input: {
   revalidatePath('/plan');
   revalidateUserData(userId);
   revalidatePath('/checklist');
+  return { ok: true };
+}
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Assign (or clear) a plan card's account / budget inline — the lightweight
+ * "+ account" / "+ budget" chips, whole-series, no edit modal. Pass only the
+ * key(s) you want to change; `null` clears one.
+ */
+export async function assignPaymentAction(
+  paymentId: string,
+  patch: { accountId?: string | null; budgetId?: string | null },
+): Promise<FormState> {
+  const userId = await requireUserId();
+  if (typeof paymentId !== 'string' || !UUID.test(paymentId)) {
+    return { ok: false, error: 'Bad payment.' };
+  }
+  const bad = (v: unknown) => v != null && (typeof v !== 'string' || !UUID.test(v));
+  if (bad(patch?.accountId) || bad(patch?.budgetId)) {
+    return { ok: false, error: 'Bad selection.' };
+  }
+  if ('accountId' in patch) {
+    await setPaymentAccount(userId, paymentId, patch.accountId ?? null);
+  }
+  if ('budgetId' in patch) {
+    await setPaymentBudget(userId, paymentId, patch.budgetId ?? null);
+  }
+  revalidatePath('/plan');
+  revalidatePath('/checklist');
+  revalidateUserData(userId);
   return { ok: true };
 }
 

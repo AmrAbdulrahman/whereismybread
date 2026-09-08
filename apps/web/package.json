@@ -18,6 +18,7 @@
     "next": "~16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.87.0"
+    "react-hook-form": "^7.87.0",
+    "web-push": "^3.6.7"
   }
 }

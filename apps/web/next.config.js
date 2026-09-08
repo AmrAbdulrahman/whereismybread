@@ -18,6 +18,7 @@ const nextConfig = {
     '@wib/feature-payments',
     '@wib/feature-tags',
     '@wib/feature-insights',
+    '@wib/feature-automations',
   ],
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
@@ -29,7 +30,12 @@ const nextConfig = {
     serverActions: { bodySizeLimit: '12mb' },
   },
   // Server-only / native packages — keep them out of the client & edge bundles.
-  serverExternalPackages: ['postgres', '@node-rs/argon2', '@vercel/blob'],
+  serverExternalPackages: [
+    'postgres',
+    '@node-rs/argon2',
+    '@vercel/blob',
+    'web-push',
+  ],
 };
 
 module.exports = nextConfig;

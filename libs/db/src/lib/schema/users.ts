@@ -1,4 +1,5 @@
 import {
+  boolean,
   doublePrecision,
   integer,
   pgTable,
@@ -35,6 +36,10 @@ export const users = pgTable('users', {
   hourlyRateMinor: integer('hourly_rate_minor').notNull().default(0),
   /** Usual hours worked per month (hourly mode) — the default each month starts from. */
   monthlyHours: doublePrecision('monthly_hours').notNull().default(0),
+  /** Also email me when an automation's notify action fires (in-app is always kept). */
+  notifyEmail: boolean('notify_email').notNull().default(true),
+  /** Leave an in-app + push notice when a bank sync finishes importing new rows. */
+  notifySyncSummary: boolean('notify_sync_summary').notNull().default(true),
   passwordChangedAt: timestamp('password_changed_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

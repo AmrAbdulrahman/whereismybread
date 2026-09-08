@@ -106,6 +106,8 @@ export const paymentFormSchema = z
       ),
     methodId: z.string().uuid().nullable().default(null),
     accountId: z.string().uuid().nullable().default(null),
+    /** A budget this payment is categorised under — a label, no plan maths. */
+    budgetId: z.string().uuid().nullable().default(null),
     bankId: z.string().uuid().nullable().default(null),
     /** How a manual payment reaches the recipient (Wise, PayPal, cash…). */
     recipientMethodId: z.string().uuid().nullable().default(null),

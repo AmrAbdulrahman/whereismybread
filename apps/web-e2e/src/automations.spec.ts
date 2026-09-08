@@ -118,7 +118,7 @@ test('an enrich rule stamps title + tags, inherited into the triage form', async
 
   // Action 1: set the title.
   await dialog.getByLabel('Action').first().selectOption({ label: 'Set the title' });
-  await dialog.getByPlaceholder('New title').fill('Corner Shop');
+  await dialog.getByLabel('New title', { exact: true }).fill('Corner Shop');
   // Action 2: set tags (autocomplete tag input).
   await dialog.getByRole('button', { name: '+ Action' }).click();
   await dialog.getByLabel('Action').nth(1).selectOption({ label: 'Set tags' });
@@ -172,4 +172,46 @@ test('the "edit details" modal stamps a review transaction by hand', async ({
   await modal.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByText('Renamed Shop')).toBeVisible();
+});
+
+test('"log it as expense" applies its own templated title', async ({ page }) => {
+  await signUp(page);
+
+  await page.goto('/automations');
+  await page.getByRole('button', { name: 'New automation' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New automation' });
+  await dialog.getByLabel('Name').fill('Auto-file the shop');
+
+  await dialog
+    .getByLabel('Pattern field')
+    .first()
+    .selectOption({ label: 'Merchant name' });
+  await dialog.getByLabel('Value').first().fill('Aujla');
+
+  await dialog
+    .getByLabel('Action')
+    .first()
+    .selectOption({ label: 'Log it as an expense' });
+  await dialog.getByLabel('Title', { exact: true }).fill('<title> (auto)');
+
+  await dialog.getByRole('button', { name: 'Create automation' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page.goto('/integrations');
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'wise.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(AUJLA_CSV),
+  });
+
+  // Aujla is auto-filed (only Boots left to review); the expense keeps the
+  // templated title and shows on the plan.
+  await expect(page.getByText('Needs review (1)')).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.goto('/plan');
+  await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Aujla Superstore \(auto\)/ }),
+  ).toBeVisible();
 });

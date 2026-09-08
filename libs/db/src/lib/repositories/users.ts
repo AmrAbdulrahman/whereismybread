@@ -77,6 +77,16 @@ export async function updateUserPreferences(
     .where(eq(users.id, id));
 }
 
+export async function updateUserNotificationPrefs(
+  id: string,
+  patch: Partial<{ notifyEmail: boolean; notifySyncSummary: boolean }>,
+): Promise<void> {
+  await getDb()
+    .update(users)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(users.id, id));
+}
+
 export async function updateUserPassword(
   id: string,
   passwordHash: string,
