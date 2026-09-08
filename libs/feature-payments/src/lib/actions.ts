@@ -32,6 +32,7 @@ import {
   setPaymentAccount,
   setPaymentBudget,
   setPaymentFlag,
+  setPaymentTags,
   splitPaymentForward,
   updateAccount,
   updateBank,
@@ -662,19 +663,25 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Assign (or clear) a plan card's account / budget inline — the lightweight
- * "+ account" / "+ budget" chips, whole-series, no edit modal. Pass only the
- * key(s) you want to change; `null` clears one.
+ * Assign a plan card's account / budget / tags inline — the lightweight
+ * "+ account" / "+ budget" / "+ tag" chips, whole-series, no edit modal. Pass
+ * only the key(s) you want to change; `null` clears account / budget, and
+ * `tags` (tag names) replaces the whole set.
  */
 export async function assignPaymentAction(
   paymentId: string,
-  patch: { accountId?: string | null; budgetId?: string | null },
+  patch: {
+    accountId?: string | null;
+    budgetId?: string | null;
+    tags?: string[];
+  },
 ): Promise<FormState> {
   const userId = await requireUserId();
   if (typeof paymentId !== 'string' || !UUID.test(paymentId)) {
     return { ok: false, error: 'Bad payment.' };
   }
-  const bad = (v: unknown) => v != null && (typeof v !== 'string' || !UUID.test(v));
+  const bad = (v: unknown) =>
+    v != null && (typeof v !== 'string' || !UUID.test(v));
   if (bad(patch?.accountId) || bad(patch?.budgetId)) {
     return { ok: false, error: 'Bad selection.' };
   }
@@ -683,6 +690,17 @@ export async function assignPaymentAction(
   }
   if ('budgetId' in patch) {
     await setPaymentBudget(userId, paymentId, patch.budgetId ?? null);
+  }
+  if (Array.isArray(patch.tags)) {
+    const names = patch.tags
+      .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+      .slice(0, 12);
+    const rows = await getOrCreateTags(userId, names);
+    await setPaymentTags(
+      userId,
+      paymentId,
+      rows.map((r) => r.id),
+    );
   }
   revalidatePath('/plan');
   revalidatePath('/checklist');

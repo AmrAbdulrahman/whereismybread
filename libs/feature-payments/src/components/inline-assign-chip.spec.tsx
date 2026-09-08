@@ -1,6 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { InlineAssignChip, budgetAssignOptions } from './inline-assign-chip';
+import {
+  InlineAssignChip,
+  InlineTagChip,
+  budgetAssignOptions,
+} from './inline-assign-chip';
 import type { BudgetSummary } from '../lib/types';
 
 const budget = (over: Partial<BudgetSummary>): BudgetSummary => ({
@@ -53,8 +57,25 @@ describe('InlineAssignChip', () => {
         onPick={onPick}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Assign account' }));
+    await user.click(screen.getByRole('button', { name: 'Add account' }));
     await user.click(screen.getByRole('option', { name: 'Personal' }));
     expect(onPick).toHaveBeenCalledWith('a2');
+  });
+});
+
+describe('InlineTagChip', () => {
+  it('opens a tag editor and reports the new tag list', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <InlineTagChip
+        value={['work']}
+        suggestions={[{ name: 'personal', color: '#111' }]}
+        onChange={onChange}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add tag' }));
+    await user.click(screen.getByRole('button', { name: 'personal' }));
+    expect(onChange).toHaveBeenCalledWith(['work', 'personal']);
   });
 });

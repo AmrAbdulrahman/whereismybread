@@ -410,6 +410,33 @@ export async function addPaymentTags(
     .onConflictDoNothing();
 }
 
+/** Replace a payment's whole tag set — the inline "+ tag" chip on a plan card. */
+export async function setPaymentTags(
+  userId: string,
+  id: string,
+  tagIds: string[],
+): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    const owned = await tx
+      .select({ id: payments.id })
+      .from(payments)
+      .where(and(eq(payments.id, id), eq(payments.userId, userId)))
+      .limit(1);
+    if (!owned[0]) return;
+    await tx.delete(paymentTags).where(eq(paymentTags.paymentId, id));
+    if (tagIds.length > 0) {
+      await tx
+        .insert(paymentTags)
+        .values(tagIds.map((tagId) => ({ paymentId: id, tagId })))
+        .onConflictDoNothing();
+    }
+    await tx
+      .update(payments)
+      .set({ updatedAt: new Date() })
+      .where(eq(payments.id, id));
+  });
+}
+
 /** Set (or clear) a payment's account — used by the automations engine. */
 export async function setPaymentAccount(
   userId: string,

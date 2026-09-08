@@ -175,6 +175,33 @@ export async function addExpenseTags(
     .onConflictDoNothing();
 }
 
+/** Replace an expense's whole tag set — the inline "+ tag" chip on a plan card. */
+export async function setExpenseTags(
+  userId: string,
+  id: string,
+  tagIds: string[],
+): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    const owned = await tx
+      .select({ id: expenses.id })
+      .from(expenses)
+      .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+      .limit(1);
+    if (!owned[0]) return;
+    await tx.delete(expenseTags).where(eq(expenseTags.expenseId, id));
+    if (tagIds.length > 0) {
+      await tx
+        .insert(expenseTags)
+        .values(tagIds.map((tagId) => ({ expenseId: id, tagId })))
+        .onConflictDoNothing();
+    }
+    await tx
+      .update(expenses)
+      .set({ updatedAt: new Date() })
+      .where(eq(expenses.id, id));
+  });
+}
+
 /** Set (or clear) an expense's account — used by the automations engine. */
 export async function setExpenseAccount(
   userId: string,

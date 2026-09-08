@@ -1,12 +1,17 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMoney } from '@wib/domain';
 import { cn } from '@wib/ui';
 import { FileText, PiggyBank, Receipt } from '@wib/ui/icons';
 import { assignExpenseAction } from '../lib/budget-actions';
-import type { ExpenseLine } from '../lib/types';
-import { InlineAssignChip, type AssignOption } from './inline-assign-chip';
+import type { ExpenseLine, OccurrenceTag } from '../lib/types';
+import {
+  InlineAssignChip,
+  InlineTagChip,
+  type AssignOption,
+} from './inline-assign-chip';
 
 /** "16:57" for a CSV-imported expense that carried a time; "" otherwise. */
 export function expenseTimeLabel(occurredAt: string | null): string {
@@ -35,27 +40,57 @@ export function ExpenseListItem({
   expense: ExpenseLine;
   onEdit: () => void;
   /**
-   * Enables the inline "+ account" / "+ budget" chips when the expense has
-   * none — picking one assigns it without the edit modal. Omit to hide them.
+   * Enables the inline "+ account" / "+ budget" / "+ tag" chips — picking one
+   * assigns it immediately in the UI and saves in the background. `tags` is
+   * the suggestion list. Omit to hide the chips.
    */
-  assign?: { accounts: AssignOption[]; budgets: AssignOption[] };
+  assign?: {
+    accounts: AssignOption[];
+    budgets: AssignOption[];
+    tags: { name: string; color: string }[];
+  };
 }) {
   const router = useRouter();
-  const budgeted = expense.budgetId != null;
   const time = expenseTimeLabel(expense.occurredAt);
   const showAssign = assign != null;
-  const hasMeta =
-    budgeted ||
-    expense.accountId != null ||
-    expense.bankId != null ||
-    expense.tags.length > 0 ||
-    showAssign;
 
-  const assignExpense = (patch: {
+  // Optimistic inline assign — reflect the pick now, save + refresh in the
+  // background, drop the override once the server list catches up.
+  const [optAccountId, setOptAccountId] = useState<string | null>(null);
+  const [optAccountColor, setOptAccountColor] = useState<string | null>(null);
+  const [optAccountName, setOptAccountName] = useState<string | null>(null);
+  const [optBudgetId, setOptBudgetId] = useState<string | null>(null);
+  const [optBudgetColor, setOptBudgetColor] = useState<string | null>(null);
+  const [optBudgetName, setOptBudgetName] = useState<string | null>(null);
+  const [optTags, setOptTags] = useState<OccurrenceTag[] | null>(null);
+
+  const accountId = optAccountId ?? expense.accountId;
+  const accountName = optAccountId ? optAccountName : expense.accountName;
+  const accountColor = optAccountId ? optAccountColor : expense.accountColor;
+  const budgetId = optBudgetId ?? expense.budgetId;
+  const budgetName = optBudgetId ? optBudgetName : expense.budgetName;
+  const budgetColor = optBudgetId ? optBudgetColor : expense.budgetColor;
+  const tags = optTags ?? expense.tags;
+  const tagSig = expense.tags.map((t) => t.id).join(',');
+
+  useEffect(() => setOptAccountId(null), [expense.accountId]);
+  useEffect(() => setOptBudgetId(null), [expense.budgetId]);
+  useEffect(() => setOptTags(null), [tagSig]);
+
+  const save = (patch: {
     accountId?: string | null;
     budgetId?: string | null;
-  }) =>
-    assignExpenseAction(expense.id, patch).then(() => router.refresh());
+    tags?: string[];
+  }) => {
+    void assignExpenseAction(expense.id, patch).then(() => router.refresh());
+  };
+
+  const hasMeta =
+    budgetId != null ||
+    accountId != null ||
+    expense.bankId != null ||
+    tags.length > 0 ||
+    showAssign;
 
   return (
     <div
@@ -63,7 +98,10 @@ export function ExpenseListItem({
       tabIndex={0}
       onClick={onEdit}
       onKeyDown={(e) => {
-        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+        if (
+          e.target === e.currentTarget &&
+          (e.key === 'Enter' || e.key === ' ')
+        ) {
           e.preventDefault();
           onEdit();
         }
@@ -104,36 +142,49 @@ export function ExpenseListItem({
         </span>
         {hasMeta ? (
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
-            {budgeted ? (
-              <span className="flex items-center gap-1">
-                <PiggyBank
-                  size={12}
-                  strokeWidth={2}
-                  className="shrink-0"
-                  style={{ color: expense.budgetColor ?? undefined }}
-                />
-                <span className="truncate">{expense.budgetName}</span>
-              </span>
-            ) : showAssign && assign ? (
-              <InlineAssignChip
-                label="budget"
-                options={assign.budgets}
-                onPick={(id) => assignExpense({ budgetId: id })}
-              />
-            ) : null}
-            {expense.accountId ? (
+            {accountId ? (
               <span className="flex items-center gap-1">
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: expense.accountColor ?? undefined }}
+                  style={{ background: accountColor ?? undefined }}
                 />
-                <span className="truncate">{expense.accountName}</span>
+                <span className="truncate">{accountName}</span>
               </span>
             ) : showAssign && assign ? (
               <InlineAssignChip
                 label="account"
                 options={assign.accounts}
-                onPick={(id) => assignExpense({ accountId: id })}
+                onPick={(id) => {
+                  const a = assign.accounts.find((x) => x.id === id);
+                  setOptAccountId(id);
+                  setOptAccountName(a?.name ?? null);
+                  setOptAccountColor(a?.color ?? null);
+                  save({ accountId: id });
+                }}
+              />
+            ) : null}
+            {budgetId ? (
+              <span className="flex items-center gap-1">
+                <PiggyBank
+                  size={12}
+                  strokeWidth={2}
+                  className="shrink-0"
+                  style={{ color: budgetColor ?? undefined }}
+                />
+                <span className="truncate">{budgetName}</span>
+              </span>
+            ) : showAssign && assign ? (
+              <InlineAssignChip
+                label="budget"
+                icon={<PiggyBank size={10} strokeWidth={2.5} />}
+                options={assign.budgets}
+                onPick={(id) => {
+                  const b = assign.budgets.find((x) => x.id === id);
+                  setOptBudgetId(id);
+                  setOptBudgetName(b?.name ?? null);
+                  setOptBudgetColor(b?.color ?? null);
+                  save({ budgetId: id });
+                }}
               />
             ) : null}
             {expense.bankId ? (
@@ -153,7 +204,7 @@ export function ExpenseListItem({
                 <span className="truncate">{expense.bankName}</span>
               </span>
             ) : null}
-            {expense.tags.map((t) => (
+            {tags.map((t) => (
               <span
                 key={t.id}
                 className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
@@ -162,6 +213,32 @@ export function ExpenseListItem({
                 {t.name}
               </span>
             ))}
+            {showAssign && assign ? (
+              <InlineTagChip
+                value={tags.map((t) => t.name)}
+                suggestions={assign.tags}
+                onChange={(names) => {
+                  setOptTags(
+                    names.map((n) => {
+                      const lc = n.toLowerCase();
+                      const existing = expense.tags.find(
+                        (t) => t.name.toLowerCase() === lc,
+                      );
+                      const suggested = assign.tags.find(
+                        (t) => t.name.toLowerCase() === lc,
+                      );
+                      return {
+                        id: existing?.id ?? n,
+                        name: n,
+                        color:
+                          existing?.color ?? suggested?.color ?? '#6321d6',
+                      };
+                    }),
+                  );
+                  save({ tags: names });
+                }}
+              />
+            ) : null}
           </span>
         ) : expense.notes ? (
           <span className="block truncate text-[11px] text-muted">

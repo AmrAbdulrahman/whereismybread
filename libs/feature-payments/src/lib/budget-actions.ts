@@ -15,6 +15,7 @@ import {
   setBudgetClosed,
   setExpenseAccount,
   setExpenseBudget,
+  setExpenseTags,
   updateBudget,
   updateExpense,
   type Budget,
@@ -218,13 +219,18 @@ const EXPENSE_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Assign (or clear) a recorded expense's account / budget inline — the
- * lightweight "+ account" / "+ budget" chips on the plan card, no edit modal.
- * Pass only the key(s) to change; `null` clears one.
+ * Assign a recorded expense's account / budget / tags inline — the lightweight
+ * "+ account" / "+ budget" / "+ tag" chips on the plan card, no edit modal.
+ * Pass only the key(s) to change; `null` clears account / budget, and `tags`
+ * (tag names) replaces the whole set.
  */
 export async function assignExpenseAction(
   expenseId: string,
-  patch: { accountId?: string | null; budgetId?: string | null },
+  patch: {
+    accountId?: string | null;
+    budgetId?: string | null;
+    tags?: string[];
+  },
 ): Promise<FormState> {
   const userId = await requireUserId();
   if (typeof expenseId !== 'string' || !EXPENSE_UUID.test(expenseId)) {
@@ -240,6 +246,17 @@ export async function assignExpenseAction(
   }
   if ('budgetId' in patch) {
     await setExpenseBudget(userId, expenseId, patch.budgetId ?? null);
+  }
+  if (Array.isArray(patch.tags)) {
+    const names = patch.tags
+      .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+      .slice(0, 12);
+    const rows = await getOrCreateTags(userId, names);
+    await setExpenseTags(
+      userId,
+      expenseId,
+      rows.map((r) => r.id),
+    );
   }
   revalidateBudgets(userId);
   return { ok: true };

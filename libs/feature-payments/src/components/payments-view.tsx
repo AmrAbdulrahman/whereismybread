@@ -688,6 +688,7 @@ export function PaymentsView({
           board={board}
           budgets={budgets}
           accounts={accounts}
+          tags={tags}
           expenses={expenses}
           reviewTransactions={visibleReview}
           filter={listFilter}

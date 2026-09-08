@@ -12,7 +12,7 @@ import {
   startOfMonth,
   type RateMap,
 } from '@wib/domain';
-import type { Account } from '@wib/db';
+import type { Account, Tag } from '@wib/db';
 import { cn, Progress, Spinner } from '@wib/ui';
 import { Check, ChevronDown, Pencil } from '@wib/ui/icons';
 import { loadListWindowAction } from '../lib/actions';
@@ -164,6 +164,7 @@ export function PaymentList({
   board: baseBoard,
   budgets = [],
   accounts = [],
+  tags = [],
   expenses = [],
   reviewTransactions = [],
   filter = EMPTY_LIST_FILTER,
@@ -183,6 +184,8 @@ export function PaymentList({
   budgets?: BudgetSummary[];
   /** Accounts to offer in the inline "+ account" chip on plan cards. */
   accounts?: Account[];
+  /** Tags to suggest in the inline "+ tag" chip on plan cards. */
+  tags?: Tag[];
   expenses?: ExpenseLine[];
   /** Uncategorized imported transactions — shown per-day, never in any total. */
   reviewTransactions?: BankTransactionRow[];
@@ -300,8 +303,9 @@ export function PaymentList({
         color: a.color,
       })),
       budgets: budgetAssignOptions(budgets),
+      tags: tags.map((t) => ({ name: t.name, color: t.color })),
     }),
-    [accounts, budgets],
+    [accounts, budgets, tags],
   );
 
   // Occurrences the user just ticked/unticked: keeps them sorted (paid → bottom

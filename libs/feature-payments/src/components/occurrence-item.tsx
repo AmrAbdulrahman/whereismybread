@@ -1,6 +1,6 @@
 'use client';
 
-import { useOptimistic, useState, useTransition } from 'react';
+import { useEffect, useOptimistic, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   formatConverted,
@@ -25,8 +25,17 @@ import {
   markOccurrenceAction,
 } from '../lib/actions';
 import { dueAlertFor, type DueLevel } from '../lib/due-alert';
-import type { BoardOccurrence } from '../lib/types';
-import { InlineAssignChip, type AssignOption } from './inline-assign-chip';
+import type {
+  BoardOccurrence,
+  OccurrenceAccount,
+  OccurrenceBudget,
+  OccurrenceTag,
+} from '../lib/types';
+import {
+  InlineAssignChip,
+  InlineTagChip,
+  type AssignOption,
+} from './inline-assign-chip';
 import { OccurrenceAttachments } from './occurrence-attachments';
 
 const RECURRENCE_LABEL: Record<BoardOccurrence['recurrence'], string> = {
@@ -73,11 +82,16 @@ export function OccurrenceItem({
   /** Open the flag modal for this occurrence. */
   onFlag?: (paymentId: string, dueDate: string) => void;
   /**
-   * Enables the inline "+ account" / "+ budget" chips when the payment has
-   * none — picking one assigns it to the whole series without the edit modal.
-   * Omit to hide the chips (compact / read-only contexts).
+   * Enables the inline "+ account" / "+ budget" / "+ tag" chips — picking one
+   * assigns it to the whole series without the edit modal, applied immediately
+   * in the UI and saved in the background. Omit to hide the chips (compact /
+   * read-only contexts). `tags` is the suggestion list.
    */
-  assign?: { accounts: AssignOption[]; budgets: AssignOption[] };
+  assign?: {
+    accounts: AssignOption[];
+    budgets: AssignOption[];
+    tags: { name: string; color: string }[];
+  };
   /** Fired the instant the paid checkbox is clicked, before the server responds
    * — lets the list re-sort (paid → bottom) with an animation. */
   onToggle?: (paid: boolean) => void;
@@ -102,11 +116,26 @@ export function OccurrenceItem({
   const skipped = status === 'skipped';
   const showAssign = assign != null && !skipped && !compact;
 
+  // Inline assign is optimistic: reflect the pick straight away, save + refresh
+  // in the background, then drop the override once the server board catches up.
+  const [optAccount, setOptAccount] = useState<OccurrenceAccount | null>(null);
+  const [optBudget, setOptBudget] = useState<OccurrenceBudget | null>(null);
+  const [optTags, setOptTags] = useState<OccurrenceTag[] | null>(null);
+  const account = optAccount ?? occ.account;
+  const budget = optBudget ?? occ.budget;
+  const tags = optTags ?? occ.tags;
+  const tagSig = occ.tags.map((t) => t.id).join(',');
+  useEffect(() => setOptAccount(null), [occ.account?.id]);
+  useEffect(() => setOptBudget(null), [occ.budget?.id]);
+  useEffect(() => setOptTags(null), [tagSig]);
+
   const assignPayment = (patch: {
     accountId?: string | null;
     budgetId?: string | null;
-  }) =>
-    assignPaymentAction(occ.paymentId, patch).then(() => router.refresh());
+    tags?: string[];
+  }) => {
+    void assignPaymentAction(occ.paymentId, patch).then(() => router.refresh());
+  };
 
   const dueAlert = today ? dueAlertFor(occ, today) : null;
   const dueStyle = dueAlert ? DUE_STYLE[dueAlert.level] : null;
@@ -144,7 +173,7 @@ export function OccurrenceItem({
     });
   };
 
-  const edgeColor = occ.account?.color ?? occ.brandColor ?? null;
+  const edgeColor = account?.color ?? occ.brandColor ?? null;
 
   return (
     <div
@@ -274,46 +303,55 @@ export function OccurrenceItem({
               fee
             </span>
           ) : null}
-          {occ.account ? (
+          {account ? (
             <span
               className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
               style={{
-                background: `${occ.account.color}22`,
-                color: occ.account.color,
+                background: `${account.color}22`,
+                color: account.color,
               }}
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ background: occ.account.color }}
+                style={{ background: account.color }}
               />
-              {occ.account.name}
+              {account.name}
             </span>
           ) : showAssign && assign ? (
             <InlineAssignChip
               label="account"
               options={assign.accounts}
-              onPick={(id) => assignPayment({ accountId: id })}
+              onPick={(id) => {
+                const a = assign.accounts.find((x) => x.id === id);
+                if (a) setOptAccount(a);
+                assignPayment({ accountId: id });
+              }}
             />
           ) : null}
-          {occ.budget ? (
+          {budget ? (
             <span
               className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
               style={{
-                background: `${occ.budget.color}22`,
-                color: occ.budget.color,
+                background: `${budget.color}22`,
+                color: budget.color,
               }}
             >
               <PiggyBank size={11} strokeWidth={2} className="shrink-0" />
-              {occ.budget.name}
+              {budget.name}
             </span>
           ) : showAssign && assign ? (
             <InlineAssignChip
               label="budget"
+              icon={<PiggyBank size={10} strokeWidth={2.5} />}
               options={assign.budgets}
-              onPick={(id) => assignPayment({ budgetId: id })}
+              onPick={(id) => {
+                const b = assign.budgets.find((x) => x.id === id);
+                if (b) setOptBudget(b);
+                assignPayment({ budgetId: id });
+              }}
             />
           ) : null}
-          {occ.tags.map((t) => (
+          {tags.map((t) => (
             <span
               key={t.id}
               className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
@@ -322,6 +360,31 @@ export function OccurrenceItem({
               {t.name}
             </span>
           ))}
+          {showAssign && assign ? (
+            <InlineTagChip
+              value={tags.map((t) => t.name)}
+              suggestions={assign.tags}
+              onChange={(names) => {
+                setOptTags(
+                  names.map((n) => {
+                    const lc = n.toLowerCase();
+                    const existing = occ.tags.find(
+                      (t) => t.name.toLowerCase() === lc,
+                    );
+                    const suggested = assign.tags.find(
+                      (t) => t.name.toLowerCase() === lc,
+                    );
+                    return {
+                      id: existing?.id ?? n,
+                      name: n,
+                      color: existing?.color ?? suggested?.color ?? '#6321d6',
+                    };
+                  }),
+                );
+                assignPayment({ tags: names });
+              }}
+            />
+          ) : null}
         </div>
       </div>
 
