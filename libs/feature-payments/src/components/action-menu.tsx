@@ -51,7 +51,11 @@ export function ActionMenu({
           setOpen((v) => !v);
         }}
         className={cn(
-          'grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink sm:h-7 sm:w-7',
+          // Bigger, forgiving tap target on touch (the whole card is
+          // click-to-edit, so a near-miss must not fall through to it); trims
+          // back to the icon-sized hitbox from `sm` up.
+          'relative grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink sm:h-7 sm:w-7',
+          "max-sm:before:absolute max-sm:before:-inset-x-1 max-sm:before:-inset-y-1.5 max-sm:before:content-['']",
           open && 'bg-surface-2 text-ink',
         )}
       >

@@ -62,7 +62,11 @@ function ChipButton({
         onToggle();
       }}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-full border border-dashed border-line-strong px-1.5 py-0.5 text-[10px] font-medium text-muted transition-colors hover:border-accent/60 hover:text-ink',
+        // The pill stays tiny, but on touch an invisible padded hitbox around
+        // it catches near-misses so they don't fall through to the
+        // click-to-edit card underneath.
+        'relative inline-flex items-center gap-0.5 rounded-full border border-dashed border-line-strong px-1.5 py-0.5 text-[10px] font-medium text-muted transition-colors hover:border-accent/60 hover:text-ink',
+        "max-sm:before:absolute max-sm:before:-inset-2 max-sm:before:content-['']",
         open && 'border-accent/60 text-ink',
       )}
     >
