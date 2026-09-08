@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Button, Field, Label, ResponsiveModal, cn } from '@wib/ui';
-import { deletePaymentAction } from '../lib/actions';
-import { deleteExpenseAction } from '../lib/budget-actions';
+import type { EditScope } from '../lib/actions';
 
 export type DeleteTarget =
   | {
@@ -21,26 +19,30 @@ export type DeleteTarget =
  * The confirm step for deleting a payment / expense straight from its row's
  * overflow menu — no need to open the full edit form. A recurring payment
  * additionally asks whether to drop just this occurrence or this one and
- * every later one.
+ * every later one. The parent does the delete (optimistically), so confirming
+ * just hands back the chosen scope.
  */
 export function DeleteConfirmModal({
   target,
-  onDone,
+  onConfirm,
+  onCancel,
 }: {
   target: DeleteTarget | null;
-  onDone: () => void;
+  onConfirm: (target: DeleteTarget, scope: EditScope | null) => void;
+  onCancel: () => void;
 }) {
   return (
     <ResponsiveModal
       open={target != null}
-      onOpenChange={(o) => !o && onDone()}
+      onOpenChange={(o) => !o && onCancel()}
       title={target ? `Delete ${target.name}` : 'Delete'}
     >
       {target ? (
         <DeleteForm
           key={target.kind === 'payment' ? target.paymentId : target.id}
           target={target}
-          onDone={onDone}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
         />
       ) : null}
     </ResponsiveModal>
@@ -49,55 +51,24 @@ export function DeleteConfirmModal({
 
 function DeleteForm({
   target,
-  onDone,
+  onConfirm,
+  onCancel,
 }: {
   target: DeleteTarget;
-  onDone: () => void;
+  onConfirm: (target: DeleteTarget, scope: EditScope | null) => void;
+  onCancel: () => void;
 }) {
-  const router = useRouter();
   const scoped = target.kind === 'payment' && target.recurring;
-  const [scope, setScope] = useState<'this' | 'future'>('this');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-
-  // Esc / backdrop already close via the modal; nothing to seed.
-  useEffect(() => setError(undefined), [target]);
-
-  const run = async () => {
-    setBusy(true);
-    setError(undefined);
-    const result =
-      target.kind === 'expense'
-        ? await deleteExpenseAction(target.id)
-        : await deletePaymentAction(
-            target.paymentId,
-            scoped
-              ? { scope, occurrenceDate: target.occurrenceDate }
-              : undefined,
-          );
-    setBusy(false);
-    if (result.ok) {
-      router.refresh();
-      onDone();
-    } else {
-      setError(result.error ?? 'Could not delete.');
-    }
-  };
+  const [scope, setScope] = useState<EditScope>('this');
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        void run();
+        onConfirm(target, scoped ? scope : null);
       }}
       className="flex flex-col gap-4"
     >
-      {error ? (
-        <p className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
-
       {scoped ? (
         <Field>
           <Label>Delete</Label>
@@ -134,17 +105,17 @@ function DeleteForm({
       ) : (
         <p className="text-sm text-ink-soft">
           {target.kind === 'expense'
-            ? 'This recorded expense will be removed. This cannot be undone.'
-            : 'This payment will be removed. This cannot be undone.'}
+            ? 'This recorded expense will be removed.'
+            : 'This payment will be removed.'}
         </p>
       )}
 
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" onClick={onDone}>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="danger" disabled={busy}>
-          {busy ? 'Deleting…' : 'Delete'}
+        <Button type="submit" variant="danger">
+          Delete
         </Button>
       </div>
     </form>

@@ -22,8 +22,11 @@ import {
   cn,
   useMediaQuery,
   usePushRefresh,
+  useToast,
 } from '@wib/ui';
 import { CalendarDays, List, Plus, SlidersHorizontal, X } from '@wib/ui/icons';
+import { deletePaymentAction, type EditScope } from '../lib/actions';
+import { deleteExpenseAction } from '../lib/budget-actions';
 import { applyOverride } from '../lib/apply-override';
 import { AddFab } from './add-fab';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
@@ -319,6 +322,7 @@ export function PaymentsView({
   // the background so the new payment / triaged transaction just appears.
   usePushRefresh(() => router.refresh());
 
+  const { toast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const openDelete = (paymentId: string, occurrenceDate: string) => {
     const occ = board.occurrences.find(
@@ -331,6 +335,83 @@ export function PaymentsView({
       name: occ.name,
       recurring: !occ.isOneTime,
       occurrenceDate,
+    });
+  };
+
+  // Deletes are optimistic: the row (or the row + every later occurrence)
+  // vanishes the instant you confirm, the server call runs in the background,
+  // and a failure puts it straight back with an error toast.
+  type PendingDelete =
+    | { kind: 'payment'; paymentId: string; scope: 'one' | 'from'; date: string }
+    | { kind: 'expense'; id: string };
+  const [pendingDeletes, setPendingDeletes] = useState<PendingDelete[]>([]);
+  const [, startDeleteTransition] = useTransition();
+
+  // Drop an optimistic entry once the refreshed server board no longer carries
+  // anything it was hiding — i.e. the delete landed.
+  useEffect(() => {
+    setPendingDeletes((prev) => {
+      if (prev.length === 0) return prev;
+      const next = prev.filter((d) => {
+        if (d.kind === 'expense') return expenses.some((e) => e.id === d.id);
+        // Keep hiding until the delete lands: for a single occurrence that's
+        // when it's gone or turned `skipped` (a scoped delete on a series);
+        // for "this + future" it's when nothing at/after the date remains.
+        return board.occurrences.some((o) =>
+          d.scope === 'one'
+            ? o.paymentId === d.paymentId &&
+              o.dueDate === d.date &&
+              o.status !== 'skipped'
+            : o.paymentId === d.paymentId && o.dueDate >= d.date,
+        );
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [board, expenses]);
+
+  const isExpenseHidden = (id: string) =>
+    pendingDeletes.some((d) => d.kind === 'expense' && d.id === id);
+  const isOccurrenceHidden = (o: { paymentId: string; dueDate: string }) =>
+    pendingDeletes.some(
+      (d) =>
+        d.kind === 'payment' &&
+        d.paymentId === o.paymentId &&
+        (d.scope === 'one' ? d.date === o.dueDate : o.dueDate >= d.date),
+    );
+
+  const confirmDelete = (target: DeleteTarget, scope: EditScope | null) => {
+    setDeleteTarget(null);
+    const entry: PendingDelete =
+      target.kind === 'expense'
+        ? { kind: 'expense', id: target.id }
+        : {
+            kind: 'payment',
+            paymentId: target.paymentId,
+            scope: scope === 'future' ? 'from' : 'one',
+            date: target.occurrenceDate,
+          };
+    setPendingDeletes((prev) => [...prev, entry]);
+
+    startDeleteTransition(async () => {
+      const res =
+        target.kind === 'expense'
+          ? await deleteExpenseAction(target.id)
+          : await deletePaymentAction(
+              target.paymentId,
+              scope
+                ? { scope, occurrenceDate: target.occurrenceDate }
+                : undefined,
+            );
+      if (res.ok) {
+        router.refresh();
+      } else {
+        setPendingDeletes((prev) => prev.filter((d) => d !== entry));
+        toast({
+          title: `Couldn’t delete ${target.name}`,
+          description: res.error ?? 'It has been put back — please try again.',
+          tone: 'danger',
+        });
+      }
     });
   };
 
@@ -725,12 +806,13 @@ export function PaymentsView({
           budgets={budgets}
           accounts={accounts}
           tags={tags}
-          expenses={expenses}
+          expenses={expenses.filter((e) => !isExpenseHidden(e.id))}
           reviewTransactions={visibleReview}
           filter={listFilter}
           unpaidOnly={unpaidOnly}
           stickyTop={panelH}
           goTodayRef={goTodayRef}
+          hideOccurrence={isOccurrenceHidden}
           onEdit={openEdit}
           onFlag={openFlag}
           onDelete={openDelete}
@@ -754,6 +836,7 @@ export function PaymentsView({
           board={board}
           month={calMonth}
           onMonthChange={changeMonth}
+          hideOccurrence={isOccurrenceHidden}
           onEdit={openEdit}
           onFlag={openFlag}
           onDelete={openDelete}
@@ -768,7 +851,8 @@ export function PaymentsView({
 
       <DeleteConfirmModal
         target={deleteTarget}
-        onDone={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
 
       <EnrichTransactionModal

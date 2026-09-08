@@ -33,13 +33,26 @@ interface PushPayload {
   title: string;
   body: string;
   url: string;
+  /** Coalescing key — byte-identical notices replace rather than stack. */
+  tag: string;
+}
+
+/** Stable, collision-cheap key for one notice's visible content. */
+function contentTag(title: string, body: string): string {
+  let h = 5381;
+  const s = `${title} ${body}`;
+  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return `wib-${(h >>> 0).toString(36)}`;
 }
 
 function toPayload(n: NotificationInput): string {
+  const title = n.title.slice(0, 200);
+  const body = (n.body ?? '').slice(0, 500);
   return JSON.stringify({
-    title: n.title.slice(0, 200),
-    body: (n.body ?? '').slice(0, 500),
+    title,
+    body,
     url: n.href ?? '/notifications',
+    tag: contentTag(title, body),
   } satisfies PushPayload);
 }
 

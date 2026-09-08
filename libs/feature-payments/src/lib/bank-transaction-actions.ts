@@ -4,14 +4,11 @@ import { requireUserId } from '@wib/auth/server';
 import type { FormState } from '@wib/auth';
 import {
   fetchBranding,
-  getExpense,
-  getPaymentRow,
   markBankTransactionCategorized,
   markBankTransactionIgnored,
   markBankTransactionsIgnored,
   updateBankTransactionEnrichment,
 } from '@wib/db';
-import { runRecordAutomations } from '@wib/feature-automations/server';
 import { revalidatePath } from 'next/cache';
 import { revalidateUserData } from './revalidate';
 
@@ -67,45 +64,16 @@ export async function categorizeBankTransactionAction(
   result: { type: 'expense' | 'payment'; id: string },
 ): Promise<FormState> {
   const userId = await requireUserId();
+  // The payment / expense itself was just created via `savePaymentAction` /
+  // `saveExpenseAction`, which already fired the "payment or expense added"
+  // automations. This step only links the transaction to that record — running
+  // the automations again here would double every notification.
   await markBankTransactionCategorized(
     userId,
     transactionId,
     result.type,
     result.id,
   );
-
-  // The triaged record is user-created — fire "payment or expense added".
-  try {
-    if (result.type === 'payment') {
-      const p = await getPaymentRow(userId, result.id);
-      if (p) {
-        await runRecordAutomations(userId, {
-          kind: 'payment',
-          recordId: p.id,
-          name: p.name,
-          amountMinor: p.amountMinor,
-          currency: p.currency,
-          recurrence: p.recurrence,
-          accountId: p.accountId,
-          methodId: p.methodId,
-        });
-      }
-    } else {
-      const e = await getExpense(userId, result.id);
-      if (e) {
-        await runRecordAutomations(userId, {
-          kind: 'expense',
-          recordId: e.id,
-          name: e.name,
-          amountMinor: e.amountMinor,
-          currency: e.currency,
-          accountId: e.accountId,
-        });
-      }
-    }
-  } catch (err) {
-    console.error('[triage] record automations failed', err);
-  }
 
   revalidatePath('/integrations');
   revalidatePath('/plan');

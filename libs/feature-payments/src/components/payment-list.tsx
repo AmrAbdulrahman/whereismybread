@@ -171,6 +171,7 @@ export function PaymentList({
   unpaidOnly = false,
   stickyTop = 0,
   goTodayRef,
+  hideOccurrence,
   onEdit,
   onFlag,
   onDelete,
@@ -202,6 +203,8 @@ export function PaymentList({
    * mobile header button) can trigger the same jump as the timeline rail.
    */
   goTodayRef?: { current: (() => void) | null };
+  /** Hide an occurrence client-side — an optimistically-deleted row. */
+  hideOccurrence?: (occ: BoardOccurrence) => boolean;
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
   onDelete?: (paymentId: string, dueDate: string) => void;
@@ -708,7 +711,8 @@ export function PaymentList({
           wantPlanned &&
           matchesFilter(o) &&
           o.status !== 'skipped' &&
-          (!unpaidOnly || !isPaid(o)),
+          (!unpaidOnly || !isPaid(o)) &&
+          !hideOccurrence?.(o),
       ),
     }));
     const nonEmpty = filteredGroups.filter((g) => g.occurrences.length > 0);

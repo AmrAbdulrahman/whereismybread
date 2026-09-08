@@ -36,6 +36,7 @@ export function PaymentCalendar({
   board,
   month,
   onMonthChange,
+  hideOccurrence,
   onEdit,
   onFlag,
   onDelete,
@@ -43,6 +44,8 @@ export function PaymentCalendar({
   board: PaymentBoard;
   month: IsoDate; // first of month
   onMonthChange: (month: IsoDate) => void;
+  /** Hide an occurrence client-side — an optimistically-deleted row. */
+  hideOccurrence?: (occ: BoardOccurrence) => boolean;
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
   onDelete?: (paymentId: string, dueDate: string) => void;
@@ -52,12 +55,13 @@ export function PaymentCalendar({
   const byDate = useMemo(() => {
     const map = new Map<string, BoardOccurrence[]>();
     for (const occ of board.occurrences) {
+      if (hideOccurrence?.(occ)) continue;
       const list = map.get(occ.dueDate);
       if (list) list.push(occ);
       else map.set(occ.dueDate, [occ]);
     }
     return map;
-  }, [board.occurrences]);
+  }, [board.occurrences, hideOccurrence]);
 
   const start = startOfMonth(month);
   const leadingBlanks = weekdayMonday0(start);
