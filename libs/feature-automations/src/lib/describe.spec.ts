@@ -7,6 +7,7 @@ const lookups: AutomationLookups = {
   banks: [{ id: 'b1', name: 'Monzo', color: '#000' }],
   methods: [{ id: 'm1', name: 'Amex' }],
   tags: [],
+  providers: [{ id: 'pr1', name: 'Pret', logoUrl: null, color: null }],
   budgets: [{ id: 'bd1', name: 'Groceries' }],
 };
 
@@ -44,7 +45,7 @@ describe('describeActions', () => {
           budgetId: 'bd1',
           name: 'Coffee',
           notes: null,
-          url: null,
+          providerId: null,
         },
         { type: 'notify', channel: 'email', message: 'hi <title>' },
       ],

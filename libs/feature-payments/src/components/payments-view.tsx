@@ -96,9 +96,7 @@ function toExpenseFormInitial(e: ExpenseLine): ExpenseFormInitial {
     amountMinor: e.amount.minorUnits,
     currency: e.amount.currency,
     notes: e.notes,
-    url: e.url,
-    logoUrl: e.logoUrl,
-    brandColor: e.brandColor,
+    providerId: e.providerId,
     tags: e.tags.map((t) => t.name),
     attachments: e.attachments,
   };

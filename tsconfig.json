@@ -56,6 +56,9 @@
     },
     {
       "path": "./libs/feature-automations"
+    },
+    {
+      "path": "./libs/feature-providers"
     }
   ],
   "compilerOptions": {}

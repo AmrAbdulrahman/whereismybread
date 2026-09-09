@@ -47,7 +47,7 @@ export const ACTION_LABELS: Record<AutomationActionType, string> = {
   set_tags: 'Set tags',
   set_name: 'Set the title',
   set_notes: 'Set the description',
-  set_url: 'Set the provider website',
+  set_provider: 'Set the provider',
   notify: 'Send a notification',
 };
 
@@ -63,5 +63,6 @@ export const ACTION_HINTS: Partial<Record<AutomationActionType, string>> = {
     'Method carried onto the payment when you triage it (payments only).',
   set_name: 'Replaces the merchant name shown and prefilled.',
   set_notes: 'Replaces the description prefilled into notes.',
-  set_url: 'The provider logo and colour are pulled in automatically.',
+  set_provider:
+    'The provider (with its icon, colour and default tags) carried onto the expense when you triage it.',
 };

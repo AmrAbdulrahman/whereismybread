@@ -6,7 +6,7 @@ import {
   expenseTags,
   type Expense,
 } from '../schema/budgets';
-import { accounts, banks } from '../schema/payments';
+import { accounts, banks, providers } from '../schema/payments';
 
 export interface ExpenseInput {
   /** `null` — the expense isn't tracked against any budget. */
@@ -21,10 +21,8 @@ export interface ExpenseInput {
   amountMinor: number;
   currency: string;
   notes: string | null;
-  /** Provider website + branding fetched from it. */
-  url: string | null;
-  logoUrl: string | null;
-  brandColor: string | null;
+  /** The reusable service provider behind this expense. */
+  providerId: string | null;
   /** Tag ids to link — the caller resolves names first (`getOrCreateTags`). */
   tagIds: string[];
 }
@@ -71,6 +69,20 @@ async function ownsBankOrNone(
   return owned.length > 0;
 }
 
+/** `true` when `providerId` is unset, or is a provider this user owns. */
+async function ownsProviderOrNone(
+  userId: string,
+  providerId: string | null,
+): Promise<boolean> {
+  if (!providerId) return true;
+  const owned = await getDb()
+    .select({ id: providers.id })
+    .from(providers)
+    .where(and(eq(providers.id, providerId), eq(providers.userId, userId)))
+    .limit(1);
+  return owned.length > 0;
+}
+
 /** Insert an expense — returns `null` if a given budget/account isn't the user's. */
 export async function createExpense(
   userId: string,
@@ -79,6 +91,7 @@ export async function createExpense(
   if (!(await ownsBudgetOrNone(userId, input.budgetId))) return null;
   if (!(await ownsAccountOrNone(userId, input.accountId))) return null;
   if (!(await ownsBankOrNone(userId, input.bankId))) return null;
+  if (!(await ownsProviderOrNone(userId, input.providerId))) return null;
 
   return getDb().transaction(async (tx) => {
     const rows = await tx
@@ -88,14 +101,12 @@ export async function createExpense(
         budgetId: input.budgetId,
         accountId: input.accountId,
         bankId: input.bankId,
+        providerId: input.providerId,
         name: input.name.trim(),
         date: input.date,
         amountMinor: input.amountMinor,
         currency: input.currency,
         notes: input.notes,
-        url: input.url,
-        logoUrl: input.logoUrl,
-        brandColor: input.brandColor,
       })
       .returning();
     const expense = rows[0];
@@ -122,6 +133,7 @@ export async function updateExpense(
   if (!(await ownsBudgetOrNone(userId, input.budgetId))) return null;
   if (!(await ownsAccountOrNone(userId, input.accountId))) return null;
   if (!(await ownsBankOrNone(userId, input.bankId))) return null;
+  if (!(await ownsProviderOrNone(userId, input.providerId))) return null;
 
   return getDb().transaction(async (tx) => {
     const rows = await tx
@@ -130,14 +142,12 @@ export async function updateExpense(
         budgetId: input.budgetId,
         accountId: input.accountId,
         bankId: input.bankId,
+        providerId: input.providerId,
         name: input.name.trim(),
         date: input.date,
         amountMinor: input.amountMinor,
         currency: input.currency,
         notes: input.notes,
-        url: input.url,
-        logoUrl: input.logoUrl,
-        brandColor: input.brandColor,
         updatedAt: new Date(),
       })
       .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
@@ -215,6 +225,19 @@ export async function setExpenseAccount(
     .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
 }
 
+/** Set (or clear) an expense's provider — used by the automations engine. */
+export async function setExpenseProvider(
+  userId: string,
+  id: string,
+  providerId: string | null,
+): Promise<void> {
+  if (providerId && !(await ownsProviderOrNone(userId, providerId))) return;
+  await getDb()
+    .update(expenses)
+    .set({ providerId, updatedAt: new Date() })
+    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
+}
+
 /** Set (or clear) an expense's budget — the inline "+ budget" chip on a plan card. */
 export async function setExpenseBudget(
   userId: string,
@@ -282,6 +305,8 @@ export interface ExpenseLine {
   amountMinor: number;
   currency: string;
   notes: string | null;
+  providerId: string | null;
+  providerName: string | null;
   url: string | null;
   logoUrl: string | null;
   brandColor: string | null;
@@ -317,7 +342,8 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
           'occurredAt', e.occurred_at,
           'amountMinor', e.amount_minor, 'currency', e.currency,
           'notes', e.notes,
-          'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
+          'providerId', e.provider_id, 'providerName', pr.name,
+          'url', pr.url, 'logoUrl', pr.logo_url, 'brandColor', pr.color,
           'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
           'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
           'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,
@@ -344,6 +370,7 @@ export async function listExpenses(userId: string): Promise<ExpenseLine[]> {
       left join budgets b on b.id = e.budget_id
       left join accounts ac on ac.id = e.account_id
       left join banks bk on bk.id = e.bank_id
+      left join providers pr on pr.id = e.provider_id
       where e.user_id = ${userId}
     ), '[]'::jsonb) as expenses
   `;

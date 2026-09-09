@@ -213,12 +213,7 @@ export async function savePaymentAction(
     anchorDate: oneTime ? v.anchorDate : anchorForRecurrence(),
     dayOfMonth: oneTime ? null : domDay,
     endsOn: oneTime ? null : v.endsOn,
-    // The clickable provider link belongs to the subscription toggle, but the
-    // logo + brand colour are just display and can ride on any payment (e.g.
-    // inherited from an enriched review transaction).
-    url: isSub ? v.url : null,
-    logoUrl: v.logoUrl,
-    brandColor: v.brandColor,
+    providerId: v.providerId,
     isSubscription: isSub,
     notes: v.notes,
     tagIds: tags.map((t) => t.id),

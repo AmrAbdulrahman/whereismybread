@@ -67,8 +67,8 @@ export type AutomationAction =
       accountId?: string | null;
       bankId?: string | null;
       budgetId?: string | null;
-      /** Provider website — its logo + colour are pulled onto the expense. */
-      url?: string | null;
+      /** The reusable service provider to attach to the expense. */
+      providerId?: string | null;
       /** Title / notes (templated). Absent → the merchant name / raw description. */
       name?: string | null;
       notes?: string | null;
@@ -88,7 +88,7 @@ export type AutomationAction =
   | { type: 'set_tags'; tags: string[] }
   | { type: 'set_name'; value: string }
   | { type: 'set_notes'; value: string }
-  | { type: 'set_url'; value: string };
+  | { type: 'set_provider'; providerId: string };
 
 export type AutomationActionType = AutomationAction['type'];
 
@@ -197,7 +197,7 @@ export function actionTypesForTrigger(
         'set_tags',
         'set_account',
         'set_method',
-        'set_url',
+        'set_provider',
         'set_name',
         'set_notes',
         'log_expense',

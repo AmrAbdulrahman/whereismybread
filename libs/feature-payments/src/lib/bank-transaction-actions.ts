@@ -3,7 +3,6 @@
 import { requireUserId } from '@wib/auth/server';
 import type { FormState } from '@wib/auth';
 import {
-  fetchBranding,
   getBankTransactionsByIds,
   markBankTransactionCategorized,
   markBankTransactionIgnored,
@@ -20,12 +19,12 @@ export interface EnrichTransactionInput {
   accountId?: string | null;
   methodId?: string | null;
   tags?: string[];
-  url?: string | null;
+  providerId?: string | null;
 }
 
 /**
  * Stamp a pending review transaction with triage hints from the "edit details"
- * modal. When `url` is given, the provider's logo + colour are pulled in too.
+ * modal — the payment / expense form inherits them on triage.
  */
 export async function enrichBankTransactionAction(
   id: string,
@@ -39,21 +38,8 @@ export async function enrichBankTransactionAction(
   if (input.accountId !== undefined) patch.accountId = input.accountId || null;
   if (input.methodId !== undefined) patch.methodId = input.methodId || null;
   if (Array.isArray(input.tags)) patch.tags = input.tags;
-  if (input.url !== undefined) {
-    const url = (input.url ?? '').trim();
-    patch.url = url || null;
-    patch.logoUrl = null;
-    patch.brandColor = null;
-    if (url) {
-      try {
-        const b = await fetchBranding(url);
-        if (b.logoUrl) patch.logoUrl = b.logoUrl;
-        if (b.color) patch.brandColor = b.color;
-      } catch {
-        // keep the URL, skip the image
-      }
-    }
-  }
+  if (input.providerId !== undefined)
+    patch.providerId = input.providerId || null;
   await updateBankTransactionEnrichment(userId, id, patch);
   revalidatePath('/integrations');
   revalidatePath('/plan');

@@ -59,6 +59,9 @@
       "path": "../../libs/feature-tags"
     },
     {
+      "path": "../../libs/feature-providers"
+    },
+    {
       "path": "../../libs/feature-payments"
     },
     {

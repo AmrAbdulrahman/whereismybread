@@ -116,9 +116,7 @@ export function TransactionTriageModal({
                 bankId: txn.bankId,
                 accountId: txn.accountId,
                 tags: txn.tags,
-                url: txn.url,
-                logoUrl: txn.logoUrl,
-                brandColor: txn.brandColor,
+                providerId: txn.providerId,
               }}
               onDone={(expense) => onExpenseDone(txn.id, expense)}
               onCancel={onClose}
@@ -142,9 +140,7 @@ export function TransactionTriageModal({
                 accountId: txn.accountId,
                 methodId: txn.methodId,
                 tags: txn.tags,
-                url: txn.url,
-                logoUrl: txn.logoUrl,
-                brandColor: txn.brandColor,
+                providerId: txn.providerId,
                 date: txn.occurredAt.slice(0, 10),
               }}
               onDone={(payment) => onPaymentDone(txn.id, payment)}

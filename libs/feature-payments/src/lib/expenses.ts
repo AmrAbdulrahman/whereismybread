@@ -17,6 +17,8 @@ export const getExpensesData = cache(async (): Promise<ExpenseLine[]> => {
     occurredAt: e.occurredAt,
     amount: money(e.amountMinor, e.currency),
     notes: e.notes,
+    providerId: e.providerId,
+    providerName: e.providerName,
     url: e.url,
     logoUrl: e.logoUrl,
     brandColor: e.brandColor,

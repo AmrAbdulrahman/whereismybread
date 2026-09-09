@@ -99,10 +99,10 @@ export function BankTransactionRow({
             className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
           />
         ) : null}
-        {txn.logoUrl ? (
+        {txn.provider?.logoUrl ? (
           <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-md border border-line bg-surface">
             <img
-              src={txn.logoUrl}
+              src={txn.provider.logoUrl}
               alt=""
               className="h-full w-full object-contain"
             />

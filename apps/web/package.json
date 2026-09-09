@@ -12,6 +12,7 @@
     "@wib/feature-automations": "workspace:*",
     "@wib/feature-insights": "workspace:*",
     "@wib/feature-payments": "workspace:*",
+    "@wib/feature-providers": "workspace:*",
     "@wib/feature-tags": "workspace:*",
     "@wib/ui": "workspace:*",
     "@wib/updates": "workspace:*",

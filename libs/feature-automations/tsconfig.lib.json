@@ -46,6 +46,9 @@
       "path": "../ui/tsconfig.lib.json"
     },
     {
+      "path": "../feature-providers/tsconfig.lib.json"
+    },
+    {
       "path": "../domain/tsconfig.lib.json"
     },
     {

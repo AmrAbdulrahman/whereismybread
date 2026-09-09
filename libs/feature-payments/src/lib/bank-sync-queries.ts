@@ -8,6 +8,7 @@ import {
   listBankConnections,
   listBanks,
   listPendingBankTransactions,
+  listProviders,
   listStatementImports,
   type BankConnection,
 } from '@wib/db';
@@ -51,10 +52,15 @@ export interface BankTransactionRow {
   methodId: string | null;
   /** Tag names to prefill. */
   tags: string[];
-  /** Provider website + branding. */
-  url: string | null;
-  logoUrl: string | null;
-  brandColor: string | null;
+  /** The reusable service provider to prefill / assign. */
+  providerId: string | null;
+  /** The resolved provider, for display in the triage rows / modals. */
+  provider: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+    color: string | null;
+  } | null;
 }
 
 export interface StatementImportSummary {
@@ -205,6 +211,9 @@ async function loadBankTransactionsData(
   const imports = await listStatementImports(userId, 5);
   const connections = await connectionsFor(userId);
   const connBankByAccountConn = connections[0]?.bankId ?? null;
+  const providerById = new Map(
+    (await listProviders(userId)).map((p) => [p.id, p]),
+  );
 
   return {
     pending: transactions.map((t) => {
@@ -227,9 +236,15 @@ async function loadBankTransactionsData(
         accountId: t.triageAccountId,
         methodId: t.triageMethodId,
         tags: t.tags,
-        url: t.url,
-        logoUrl: t.logoUrl,
-        brandColor: t.brandColor,
+        providerId: t.providerId,
+        provider: (() => {
+          const p = t.providerId
+            ? providerById.get(t.providerId)
+            : undefined;
+          return p
+            ? { id: p.id, name: p.name, logoUrl: p.logoUrl, color: p.color }
+            : null;
+        })(),
       };
     }),
     imports: imports.map((i) => ({

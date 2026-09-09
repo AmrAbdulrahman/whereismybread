@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '../client';
 import { expenses } from '../schema/budgets';
-import { accounts, paymentMethods } from '../schema/payments';
+import { accounts, paymentMethods, providers } from '../schema/payments';
 import {
   bankAccounts,
   bankConnections,
@@ -534,9 +534,7 @@ export async function getBankTransactionsByIds(
 export interface BankTransactionEnrichment {
   accountId?: string | null;
   methodId?: string | null;
-  url?: string | null;
-  logoUrl?: string | null;
-  brandColor?: string | null;
+  providerId?: string | null;
   nameOverride?: string | null;
   notesOverride?: string | null;
   /** Tag names (replaces the stored list). */
@@ -585,9 +583,23 @@ export async function updateBankTransactionEnrichment(
       set['triageMethodId'] = null;
     }
   }
-  if ('url' in patch) set['url'] = patch.url ?? null;
-  if ('logoUrl' in patch) set['logoUrl'] = patch.logoUrl ?? null;
-  if ('brandColor' in patch) set['brandColor'] = patch.brandColor ?? null;
+  if ('providerId' in patch) {
+    if (patch.providerId) {
+      const owned = await getDb()
+        .select({ id: providers.id })
+        .from(providers)
+        .where(
+          and(
+            eq(providers.id, patch.providerId),
+            eq(providers.userId, userId),
+          ),
+        )
+        .limit(1);
+      set['providerId'] = owned[0] ? patch.providerId : null;
+    } else {
+      set['providerId'] = null;
+    }
+  }
   if ('nameOverride' in patch) set['nameOverride'] = patch.nameOverride ?? null;
   if ('notesOverride' in patch)
     set['notesOverride'] = patch.notesOverride ?? null;

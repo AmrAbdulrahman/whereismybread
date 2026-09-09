@@ -46,7 +46,7 @@ interface ActionRow {
   methodId: string;
   bankId: string;
   budgetId: string;
-  url: string;
+  providerId: string;
   value: string;
   channel: NotifyChannel;
   title: string;
@@ -100,7 +100,7 @@ function blankAction(trigger: AutomationTrigger): ActionRow {
     methodId: '',
     bankId: '',
     budgetId: '',
-    url: '',
+    providerId: '',
     value: '',
     channel: 'both',
     title: '',
@@ -158,7 +158,7 @@ export function AutomationForm({
             methodId: r.methodId ?? '',
             bankId: r.bankId ?? '',
             budgetId: r.budgetId ?? '',
-            url: r.url ?? '',
+            providerId: r.providerId ?? '',
             value: r.value ?? '',
             channel: r.channel ?? 'both',
             title: r.title ?? '',
@@ -224,7 +224,7 @@ export function AutomationForm({
         methodId: a.methodId,
         bankId: a.bankId,
         budgetId: a.budgetId,
-        url: a.url,
+        providerId: a.providerId,
         value: a.value,
         channel: a.channel,
         title: a.title,
@@ -485,10 +485,10 @@ export function AutomationForm({
               a.type === 'create_payment';
             const needsMethod =
               a.type === 'set_method' || a.type === 'create_payment';
+            const needsProvider =
+              a.type === 'set_provider' || a.type === 'log_expense';
             const needsValue =
-              a.type === 'set_name' ||
-              a.type === 'set_notes' ||
-              a.type === 'set_url';
+              a.type === 'set_name' || a.type === 'set_notes';
             return (
               <div
                 key={i}
@@ -531,31 +531,40 @@ export function AutomationForm({
                   <>
                     <Input
                       aria-label={
-                        a.type === 'set_url'
-                          ? 'Provider website'
-                          : a.type === 'set_name'
-                            ? 'New title'
-                            : 'New description'
+                        a.type === 'set_name' ? 'New title' : 'New description'
                       }
                       placeholder={
-                        a.type === 'set_url'
-                          ? 'netflix.com'
-                          : a.type === 'set_name'
-                            ? 'e.g. Coffee | <title>'
-                            : 'e.g. <amount> at <bank> on <date>'
+                        a.type === 'set_name'
+                          ? 'e.g. Coffee | <title>'
+                          : 'e.g. <amount> at <bank> on <date>'
                       }
                       value={a.value}
                       onChange={(e) => setAct(i, { value: e.target.value })}
                     />
-                    {a.type === 'set_name' || a.type === 'set_notes' ? (
-                      <TemplateChips
-                        trigger={trigger}
-                        onInsert={(tok) =>
-                          setAct(i, { value: a.value + tok })
-                        }
-                      />
-                    ) : null}
+                    <TemplateChips
+                      trigger={trigger}
+                      onInsert={(tok) => setAct(i, { value: a.value + tok })}
+                    />
                   </>
+                ) : null}
+                {needsProvider ? (
+                  <select
+                    aria-label="Provider"
+                    className={selectCls}
+                    value={a.providerId}
+                    onChange={(e) => setAct(i, { providerId: e.target.value })}
+                  >
+                    <option value="">
+                      {a.type === 'set_provider'
+                        ? 'Choose a provider…'
+                        : 'No provider'}
+                    </option>
+                    {lookups.providers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
                 ) : null}
                 {a.type === 'notify' ? (
                   <>
@@ -669,11 +678,6 @@ export function AutomationForm({
                 ) : null}
                 {a.type === 'log_expense' ? (
                   <>
-                    <Input
-                      placeholder="Provider website (optional)"
-                      value={a.url}
-                      onChange={(e) => setAct(i, { url: e.target.value })}
-                    />
                     <select
                       aria-label="Bank"
                       className={selectCls}

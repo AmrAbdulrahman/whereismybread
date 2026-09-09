@@ -168,9 +168,7 @@ export async function saveExpenseAction(
     amountMinor,
     currency: parsed.data.currency,
     notes: parsed.data.notes,
-    url: parsed.data.url,
-    logoUrl: parsed.data.logoUrl,
-    brandColor: parsed.data.brandColor,
+    providerId: parsed.data.providerId,
     tagIds: tagRows.map((t) => t.id),
   };
   const budgetGoneError = 'That budget or account no longer exists.';

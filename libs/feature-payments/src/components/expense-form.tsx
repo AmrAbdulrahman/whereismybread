@@ -31,7 +31,7 @@ import type { OccurrenceAttachment } from '../lib/types';
 import { AccountForm } from './account-form';
 import { AttachmentsField } from './attachments-field';
 import { BankForm } from './bank-form';
-import { ProviderField } from './provider-field';
+import { ProviderPicker } from '@wib/feature-providers';
 
 export interface ExpenseFormBudgetOption {
   id: string;
@@ -74,9 +74,7 @@ export interface ExpenseFormInitial {
   amountMinor: number;
   currency: string;
   notes: string | null;
-  url: string | null;
-  logoUrl: string | null;
-  brandColor: string | null;
+  providerId: string | null;
   tags: string[];
   attachments: OccurrenceAttachment[];
 }
@@ -89,9 +87,7 @@ export interface ExpenseFormPrefill {
   bankId?: string | null;
   accountId?: string | null;
   tags?: string[];
-  url?: string | null;
-  logoUrl?: string | null;
-  brandColor?: string | null;
+  providerId?: string | null;
 }
 
 export function ExpenseForm({
@@ -159,9 +155,7 @@ export function ExpenseForm({
           amount: (initial.amountMinor / 100).toFixed(2),
           currency: initial.currency,
           notes: initial.notes ?? '',
-          url: initial.url ?? '',
-          logoUrl: initial.logoUrl ?? '',
-          brandColor: initial.brandColor ?? '',
+          providerId: initial.providerId ?? null,
           attachments: [],
         }
       : {
@@ -177,12 +171,21 @@ export function ExpenseForm({
             budgets.find((b) => b.id === budgetId)?.currency ??
             'EUR',
           notes: prefill?.notes ?? '',
-          url: prefill?.url ?? '',
-          logoUrl: prefill?.logoUrl ?? '',
-          brandColor: prefill?.brandColor ?? '',
+          providerId: prefill?.providerId ?? null,
           attachments: [],
         },
   });
+
+  const mergeProviderTags = (names: string[]) => {
+    if (names.length === 0) return;
+    const current = (getValues('tags') ?? []) as string[];
+    const lower = new Set(current.map((t) => t.toLowerCase()));
+    const merged = [
+      ...current,
+      ...names.filter((n) => !lower.has(n.toLowerCase())),
+    ];
+    setValue('tags', merged, { shouldDirty: true });
+  };
 
   const submit = handleSubmit(async (values) => {
     setFormError(undefined);
@@ -278,22 +281,18 @@ export function ExpenseForm({
         ) : null}
       </Field>
 
-      <ProviderField
-        url={String(watch('url') ?? '')}
-        onUrlChange={(v) => setValue('url', v, { shouldDirty: true })}
-        logoUrl={(watch('logoUrl') as string | null) || null}
-        onLogoUrlChange={(v) =>
-          setValue('logoUrl', v ?? '', { shouldDirty: true })
-        }
-        onBrandColorChange={(v) =>
-          setValue('brandColor', v ?? '', { shouldDirty: true })
-        }
-        name={String(watch('name') ?? '')}
-        onNameChange={(v) => setValue('name', v, { shouldDirty: true })}
-        error={
-          typeof errors.url?.message === 'string' ? errors.url.message : undefined
-        }
-        id="expense-url"
+      <Controller
+        control={control}
+        name="providerId"
+        render={({ field }) => (
+          <ProviderPicker
+            value={(field.value as string | null) ?? null}
+            onChange={(providerId, defaultTagNames) => {
+              field.onChange(providerId);
+              mergeProviderTags(defaultTagNames);
+            }}
+          />
+        )}
       />
 
       <Field>

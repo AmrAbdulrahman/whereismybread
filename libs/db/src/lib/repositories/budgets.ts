@@ -22,6 +22,11 @@ export type BudgetExpense = Expense & {
   bankColor: string | null;
   bankIconKey: string | null;
   bankLogoUrl: string | null;
+  /** Provider branding, flattened onto the row (legacy key names). */
+  providerName: string | null;
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
   tags: BudgetExpenseTag[];
   attachments: BudgetExpenseAttachment[];
 };
@@ -84,7 +89,8 @@ export async function getBudgetsBundle(
                 'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
                 'amountMinor', e.amount_minor,
                 'currency', e.currency, 'notes', e.notes,
-                'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
+                'providerId', e.provider_id, 'providerName', pr.name,
+                'url', pr.url, 'logoUrl', pr.logo_url, 'brandColor', pr.color,
                 'createdAt', e.created_at, 'updatedAt', e.updated_at,
                 'tags', coalesce((
                   select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
@@ -107,6 +113,7 @@ export async function getBudgetsBundle(
             from expenses e
             left join accounts ac on ac.id = e.account_id
             left join banks bk on bk.id = e.bank_id
+            left join providers pr on pr.id = e.provider_id
             where e.budget_id = b.id
           ), '[]'::jsonb)
         )

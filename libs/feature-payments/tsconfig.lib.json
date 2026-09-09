@@ -46,6 +46,12 @@
       "path": "../ui/tsconfig.lib.json"
     },
     {
+      "path": "../feature-providers/tsconfig.lib.json"
+    },
+    {
+      "path": "../feature-automations/tsconfig.lib.json"
+    },
+    {
       "path": "../domain/tsconfig.lib.json"
     },
     {
@@ -56,9 +62,6 @@
     },
     {
       "path": "../auth/tsconfig.lib.json"
-    },
-    {
-      "path": "../feature-automations/tsconfig.lib.json"
     }
   ]
 }

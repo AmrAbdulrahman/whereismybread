@@ -9,6 +9,9 @@ export type {
   Bank,
   PaymentMethod,
   RecipientMethod,
+  Provider,
+  NewProvider,
+  ProviderTag,
   Payment,
   NewPayment,
   PaymentEvent,
@@ -114,6 +117,23 @@ export {
 } from './lib/repositories/banks';
 
 export {
+  listProviders,
+  listProvidersWithUsage,
+  getProvider,
+  getProviderByName,
+  getProviderByHost,
+  createProvider,
+  getOrCreateProvider,
+  updateProvider,
+  deleteProvider,
+  setProviderDefaultTags,
+  getProviderDefaultTags,
+  providerHost,
+  type ProviderWithUsage,
+  type ProviderInput,
+} from './lib/repositories/providers';
+
+export {
   listRecipientMethods,
   createRecipientMethod,
   updateRecipientMethod,
@@ -133,6 +153,7 @@ export {
   setPaymentAccount,
   setPaymentBudget,
   setPaymentMethod,
+  setPaymentProvider,
   setPaymentTags,
   deletePaymentFrom,
   splitPaymentForward,

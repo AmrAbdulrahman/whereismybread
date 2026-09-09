@@ -11,9 +11,9 @@ import {
   TagInput,
   cn,
 } from '@wib/ui';
+import { ProviderPicker } from '@wib/feature-providers';
 import { enrichBankTransactionAction } from '../lib/bank-transaction-actions';
 import type { BankTransactionRow as BankTransactionRowData } from '../lib/bank-sync-queries';
-import { ProviderField } from './provider-field';
 
 /**
  * "Edit details" on a pending review transaction — stamps a title, notes,
@@ -42,11 +42,9 @@ export function EnrichTransactionModal({
   const [accountId, setAccountId] = useState('');
   const [methodId, setMethodId] = useState('');
   const [tagNames, setTagNames] = useState<string[]>([]);
-  const [url, setUrl] = useState('');
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [providerId, setProviderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [key, setKey] = useState(0);
 
   // Seed the fields from the transaction each time the modal opens on one.
   const txnId = txn?.id ?? null;
@@ -57,10 +55,8 @@ export function EnrichTransactionModal({
     setAccountId(txn.accountId ?? '');
     setMethodId(txn.methodId ?? '');
     setTagNames(txn.tags);
-    setUrl(txn.url ?? '');
-    setLogoUrl(txn.logoUrl);
+    setProviderId(txn.providerId);
     setError(undefined);
-    setKey((k) => k + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed on open/txn only
   }, [open, txnId]);
 
@@ -74,7 +70,7 @@ export function EnrichTransactionModal({
       accountId: accountId || null,
       methodId: methodId || null,
       tags: tagNames,
-      url: url || null,
+      providerId: providerId || null,
     });
     setBusy(false);
     if (!res.ok) {
@@ -129,15 +125,21 @@ export function EnrichTransactionModal({
           />
         </Field>
 
-        <ProviderField
-          key={key}
-          url={url}
-          onUrlChange={setUrl}
-          logoUrl={logoUrl}
-          onLogoUrlChange={setLogoUrl}
-          name={name}
-          onNameChange={setName}
-          id="enrich-url"
+        <ProviderPicker
+          value={providerId}
+          onChange={(id, defaultTagNames) => {
+            setProviderId(id);
+            if (defaultTagNames.length > 0)
+              setTagNames((prev) => {
+                const lower = new Set(prev.map((t) => t.toLowerCase()));
+                return [
+                  ...prev,
+                  ...defaultTagNames.filter(
+                    (n) => !lower.has(n.toLowerCase()),
+                  ),
+                ];
+              });
+          }}
         />
 
         <Field>

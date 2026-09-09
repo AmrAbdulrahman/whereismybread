@@ -56,6 +56,8 @@ export const getBudgetsData = cache(async (): Promise<BudgetSummary[]> => {
       occurredAt: e.occurredAt ? String(e.occurredAt) : null,
       amount: money(e.amountMinor, e.currency),
       notes: e.notes,
+      providerId: e.providerId,
+      providerName: e.providerName,
       url: e.url,
       logoUrl: e.logoUrl,
       brandColor: e.brandColor,

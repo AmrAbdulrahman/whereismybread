@@ -62,6 +62,7 @@ export {
   type PaletteColor,
 } from './lib/colors';
 export { MethodIcon, METHOD_ICON_KEYS } from './components/method-icon';
+export { fileToLogoDataUrl } from './lib/logo-file';
 export {
   AppShell,
   NavBadge,

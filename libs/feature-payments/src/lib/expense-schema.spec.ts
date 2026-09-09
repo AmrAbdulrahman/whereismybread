@@ -62,15 +62,16 @@ describe('expenseFormSchema', () => {
     if (parsed.success) expect(parsed.data.notes).toBeNull();
   });
 
-  it('fills in the scheme for a bare provider domain', () => {
-    const parsed = expenseFormSchema.safeParse({ ...base, url: 'netflix.com' });
+  it('treats a blank provider id as unset', () => {
+    const parsed = expenseFormSchema.safeParse({ ...base, providerId: '' });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.url).toBe('https://netflix.com');
+    if (parsed.success) expect(parsed.data.providerId).toBeNull();
   });
 
-  it('treats a blank provider url as unset', () => {
-    const parsed = expenseFormSchema.safeParse({ ...base, url: '' });
+  it('keeps a valid provider id', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const parsed = expenseFormSchema.safeParse({ ...base, providerId: id });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.url).toBeNull();
+    if (parsed.success) expect(parsed.data.providerId).toBe(id);
   });
 });

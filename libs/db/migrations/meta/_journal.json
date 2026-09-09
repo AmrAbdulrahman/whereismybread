@@ -323,6 +323,20 @@
       "when": 1788875129100,
       "tag": "0045_payment_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1788976548535,
+      "tag": "0046_providers_add",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1788976638876,
+      "tag": "0047_providers_drop_inline",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import type {
@@ -26,22 +26,20 @@ import {
   Label,
   MethodIcon,
   ResponsiveModal,
-  Spinner,
   TagInput,
   cn,
 } from '@wib/ui';
-import { ImagePlus, Plus } from '@wib/ui/icons';
+import { Plus } from '@wib/ui/icons';
+import { ProviderPicker } from '@wib/feature-providers';
 import {
   deletePaymentAction,
   discardBlobsAction,
-  fetchBrandingAction,
   removeAttachmentAction,
   resetOccurrenceAction,
   savePaymentAction,
   uploadAttachmentAction,
 } from '../lib/actions';
 import { readLastCurrency, writeLastCurrency } from '../lib/last-currency';
-import { fileToLogoDataUrl } from '../lib/logo-file';
 import { paymentFormSchema, type PaymentFormValues } from '../lib/schema';
 import { AccountForm } from './account-form';
 import { AttachmentsField } from './attachments-field';
@@ -82,9 +80,7 @@ export interface PaymentFormPrefill {
   accountId?: string | null;
   methodId?: string | null;
   tags?: string[];
-  url?: string | null;
-  logoUrl?: string | null;
-  brandColor?: string | null;
+  providerId?: string | null;
   /**
    * The date the money actually moved (YYYY-MM-DD), e.g. a synced bank
    * transaction's booking date. Seeds the one-time date / recurring
@@ -238,9 +234,7 @@ export function PaymentForm({
               .replace(/^0/, '')
           : ''),
       endsOn: initial?.endsOn ?? '',
-      url: initial?.url ?? prefill?.url ?? '',
-      logoUrl: initial?.logoUrl ?? prefill?.logoUrl ?? '',
-      brandColor: initial?.brandColor ?? prefill?.brandColor ?? '',
+      providerId: initial?.providerId ?? prefill?.providerId ?? null,
       notes: initial?.notes ?? prefill?.notes ?? '',
       tags: initial?.tags ?? prefill?.tags ?? [],
     },
@@ -260,8 +254,17 @@ export function PaymentForm({
   /** Editing one occurrence of a per-unit payment → the qty field is "this month". */
   const editingOccurrence = perUnit && !!occurrenceDate;
   const feeKind = watch('feeKind') ?? 'none';
-  const url = watch('url');
-  const logoUrl = watch('logoUrl');
+
+  const mergeProviderTags = (names: string[]) => {
+    if (names.length === 0) return;
+    const current = (getValues('tags') ?? []) as string[];
+    const lower = new Set(current.map((t) => t.toLowerCase()));
+    const merged = [
+      ...current,
+      ...names.filter((n) => !lower.has(n.toLowerCase())),
+    ];
+    setValue('tags', merged, { shouldDirty: true });
+  };
 
   // Recurring payments choose a day of the month (annual ones also a month);
   // the anchor date (series start) is synthesized from it so the rest of the
@@ -291,71 +294,6 @@ export function PaymentForm({
     getValues,
     setValue,
   ]);
-
-  // Live branding: when a URL is entered, pull the logo + brand colour in.
-  const [brandingBusy, setBrandingBusy] = useState(false);
-  const [brandingNote, setBrandingNote] = useState<string>();
-  const lastFetched = useRef<string>(String(initial?.url ?? ''));
-  /** Set once the user uploads a logo by hand — a URL fetch won't overwrite it. */
-  const manualLogo = useRef(false);
-
-  // Manual logo upload: read the file, downscale, store as a data URI.
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const [logoError, setLogoError] = useState<string>();
-  const onLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setLogoError(undefined);
-    try {
-      const uri = await fileToLogoDataUrl(file);
-      manualLogo.current = true;
-      setValue('logoUrl', uri, { shouldDirty: true });
-    } catch (err) {
-      setLogoError(
-        err instanceof Error ? err.message : 'Could not use that image.',
-      );
-    }
-  };
-
-  useEffect(() => {
-    const value = String(url ?? '').trim();
-    if (
-      !/^https?:\/\/.+\..+/i.test(value) &&
-      !/^[\w-]+\.[a-z]{2,}/i.test(value)
-    ) {
-      return;
-    }
-    if (value === lastFetched.current) return;
-    const handle = setTimeout(async () => {
-      lastFetched.current = value;
-      manualLogo.current = false;
-      setBrandingNote(undefined);
-      setBrandingBusy(true);
-      try {
-        const result = await fetchBrandingAction(value);
-        if (!result.ok) {
-          setBrandingNote(result.error);
-          return;
-        }
-        const { branding } = result;
-        if (branding.logoUrl && !manualLogo.current)
-          setValue('logoUrl', branding.logoUrl, { shouldDirty: true });
-        if (branding.color)
-          setValue('brandColor', branding.color, { shouldDirty: true });
-        if (branding.name && !getValues('name')?.trim())
-          setValue('name', branding.name, { shouldDirty: true });
-        setBrandingNote(
-          branding.logoUrl
-            ? 'Pulled in the logo and colour.'
-            : 'Found a colour.',
-        );
-      } finally {
-        setBrandingBusy(false);
-      }
-    }, 700);
-    return () => clearTimeout(handle);
-  }, [url, getValues, setValue]);
 
   const methodId = watch('methodId');
   const selectedMethod = methods.find((m) => m.id === methodId) ?? null;
@@ -458,9 +396,6 @@ export function PaymentForm({
                 setValue('recurrence', r, { shouldDirty: true });
                 if (r === 'one_time') {
                   setValue('endsOn', null, { shouldDirty: true });
-                  setValue('url', '', { shouldDirty: true });
-                  setValue('logoUrl', '', { shouldDirty: true });
-                  setValue('brandColor', '', { shouldDirty: true });
                 } else if (r === 'annual' && !getValues('monthOfYear')) {
                   setValue(
                     'monthOfYear',
@@ -482,58 +417,19 @@ export function PaymentForm({
         </div>
       </Field>
 
-      {isRecurring ? (
-        <Field>
-          <Label htmlFor="url">Provider</Label>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => logoInputRef.current?.click()}
-              aria-label={logoUrl ? 'Replace logo' : 'Upload a logo'}
-              title={logoUrl ? 'Replace logo' : 'Upload a logo'}
-              className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md border border-line bg-surface text-muted hover:border-line-strong hover:text-ink"
-            >
-              {logoUrl ? (
-                <img
-                  src={String(logoUrl)}
-                  alt=""
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <ImagePlus size={15} strokeWidth={2} />
-              )}
-            </button>
-            <input
-              ref={logoInputRef}
-              id="provider-logo"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onLogoFile}
-            />
-            <Input
-              id="url"
-              type="url"
-              inputMode="url"
-              placeholder="netflix.com"
-              className="flex-1"
-              {...register('url')}
-            />
-            {brandingBusy ? <Spinner /> : null}
-          </div>
-          {logoError ? (
-            <p className="text-xs text-danger">{logoError}</p>
-          ) : fieldMessage(errors, 'url') ? (
-            <p className="text-xs text-danger">{fieldMessage(errors, 'url')}</p>
-          ) : brandingNote ? (
-            <p className="text-xs text-muted">{brandingNote}</p>
-          ) : (
-            <p className="text-xs text-muted">
-              Paste the provider’s site, or tap the icon to upload a logo.
-            </p>
-          )}
-        </Field>
-      ) : null}
+      <Controller
+        control={control}
+        name="providerId"
+        render={({ field }) => (
+          <ProviderPicker
+            value={(field.value as string | null) ?? null}
+            onChange={(providerId, defaultTagNames) => {
+              field.onChange(providerId);
+              mergeProviderTags(defaultTagNames);
+            }}
+          />
+        )}
+      />
 
       <Field>
         <Label htmlFor="name">Description</Label>

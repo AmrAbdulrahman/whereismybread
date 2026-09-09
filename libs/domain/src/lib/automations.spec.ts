@@ -115,9 +115,9 @@ describe('catalogue helpers', () => {
   it('offers enrich actions only on the review event', () => {
     const review = actionTypesForTrigger('review_expense_created');
     expect(review).toEqual(
-      expect.arrayContaining(['set_tags', 'set_name', 'set_notes', 'set_url']),
+      expect.arrayContaining(['set_tags', 'set_name', 'set_notes', 'set_provider']),
     );
-    for (const t of ['set_tags', 'set_name', 'set_notes', 'set_url'] as const) {
+    for (const t of ['set_tags', 'set_name', 'set_notes', 'set_provider'] as const) {
       expect(actionTypesForTrigger('record_created')).not.toContain(t);
       expect(isTerminalAction(t)).toBe(false);
     }

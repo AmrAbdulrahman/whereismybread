@@ -17,10 +17,10 @@ describe('paymentFormSchema', () => {
     if (parsed.success) expect(parsed.data.endsOn).toBeNull();
   });
 
-  it('treats a blank service URL as unset', () => {
-    const parsed = paymentFormSchema.safeParse({ ...base, url: '' });
+  it('treats a blank provider id as unset', () => {
+    const parsed = paymentFormSchema.safeParse({ ...base, providerId: '' });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.url).toBeNull();
+    if (parsed.success) expect(parsed.data.providerId).toBeNull();
   });
 
   it('still keeps a real end date', () => {
@@ -40,19 +40,11 @@ describe('paymentFormSchema', () => {
     expect(parsed.success).toBe(false);
   });
 
-  it('keeps a valid service URL', () => {
-    const parsed = paymentFormSchema.safeParse({
-      ...base,
-      url: 'https://netflix.com',
-    });
+  it('keeps a valid provider id', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const parsed = paymentFormSchema.safeParse({ ...base, providerId: id });
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.url).toBe('https://netflix.com');
-  });
-
-  it('fills in the scheme for a bare domain', () => {
-    const parsed = paymentFormSchema.safeParse({ ...base, url: 'netflix.com' });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.url).toBe('https://netflix.com');
+    if (parsed.success) expect(parsed.data.providerId).toBe(id);
   });
 
   it('defaults to a fixed amount', () => {

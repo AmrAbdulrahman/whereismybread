@@ -40,6 +40,7 @@ const navItems: NavEntry[] = [
   { href: '/budgets', label: 'Budgets', icon: icons.budgets },
 
   { separator: true },
+  { href: '/providers', label: 'Providers', icon: icons.providers },
   { href: '/banks', label: 'Banks', icon: icons.banks },
   { href: '/tags', label: 'Tags', icon: icons.tags },
   {

@@ -5,19 +5,6 @@ import { attachmentDraftSchema } from './attachments';
 const blankToNull = (v: unknown): unknown =>
   typeof v === 'string' && v.trim() === '' ? null : v;
 
-/** Accept a bare domain — "netflix.com" — and fill in the scheme. */
-const normalizeUrl = (v: unknown): unknown => {
-  if (typeof v !== 'string') return v;
-  const t = v.trim();
-  if (t === '') return null;
-  return /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t}`;
-};
-
-const optionalUrl = z.preprocess(
-  normalizeUrl,
-  z.string().trim().url('Enter a valid URL').max(2048).nullable().default(null),
-);
-
 /** One record of a `group` payment — a named value in its own currency. */
 export const lineItemSchema = z.object({
   id: z.string().min(1),
@@ -149,20 +136,10 @@ export const paymentFormSchema = z
         .nullable()
         .default(null),
     ),
-    /** The service / provider website. */
-    url: optionalUrl,
-    /** Filled in by the branding fetch — not typed by the user. */
-    logoUrl: z.preprocess(
+    /** The reusable service provider behind this payment. */
+    providerId: z.preprocess(
       blankToNull,
-      z.string().max(300_000).nullable().default(null),
-    ),
-    brandColor: z.preprocess(
-      blankToNull,
-      z
-        .string()
-        .regex(/^#[0-9a-fA-F]{6}$/)
-        .nullable()
-        .default(null),
+      z.string().uuid().nullable().default(null),
     ),
     notes: z.preprocess(
       blankToNull,

@@ -19,10 +19,18 @@ export type BoardAttachment = Pick<
   'id' | 'name' | 'contentType' | 'size' | 'url' | 'pathname'
 >;
 
-/** A payment row with its tags (id/name/color) and attachments folded in. */
+/**
+ * A payment row with its tags (id/name/color) and attachments folded in, plus
+ * the branding of its linked provider flattened onto the row (`url` / `logoUrl`
+ * / `brandColor` — kept as the legacy key names so render code is untouched).
+ */
 export type PaymentWithTags = Payment & {
   tags: Array<{ id: string; name: string; color: string }>;
   attachments: BoardAttachment[];
+  providerName: string | null;
+  url: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
 };
 
 export interface BoardBundle {
@@ -120,6 +128,10 @@ export async function getBoardBundle(
       coalesce((
         select jsonb_agg(
           to_jsonb(p) || jsonb_build_object(
+            'providerName', pr.name,
+            'url', pr.url,
+            'logoUrl', pr.logo_url,
+            'brandColor', pr.color,
             'tags', coalesce((
               select jsonb_agg(jsonb_build_object(
                 'id', tg.id, 'name', tg.name, 'color', tg.color))
@@ -140,6 +152,7 @@ export async function getBoardBundle(
           order by p.created_at, p.id
         )
         from payments p
+        left join providers pr on pr.id = p.provider_id
         where p.user_id = ${userId} and p.archived_at is null
       ), '[]'::jsonb) as payments,
       coalesce((
@@ -168,7 +181,8 @@ export async function getBoardBundle(
                   'name', e.name, 'date', e.date, 'occurredAt', e.occurred_at,
                   'amountMinor', e.amount_minor,
                   'currency', e.currency, 'notes', e.notes,
-                  'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
+                  'providerId', e.provider_id, 'providerName', pr.name,
+                  'url', pr.url, 'logoUrl', pr.logo_url, 'brandColor', pr.color,
                   'createdAt', e.created_at, 'updatedAt', e.updated_at,
                   'tags', coalesce((
                     select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'color', t.color)
@@ -191,6 +205,7 @@ export async function getBoardBundle(
               from expenses e
               left join accounts ac on ac.id = e.account_id
               left join banks bk on bk.id = e.bank_id
+              left join providers pr on pr.id = e.provider_id
               where e.budget_id = b.id
             ), '[]'::jsonb)
           )
@@ -206,7 +221,8 @@ export async function getBoardBundle(
             'occurredAt', e.occurred_at,
             'amountMinor', e.amount_minor, 'currency', e.currency,
             'notes', e.notes,
-            'url', e.url, 'logoUrl', e.logo_url, 'brandColor', e.brand_color,
+            'providerId', e.provider_id, 'providerName', pr.name,
+            'url', pr.url, 'logoUrl', pr.logo_url, 'brandColor', pr.color,
             'budgetId', e.budget_id, 'budgetName', b.name, 'budgetColor', b.color,
             'accountId', e.account_id, 'accountName', ac.name, 'accountColor', ac.color,
             'bankId', e.bank_id, 'bankName', bk.name, 'bankColor', bk.color,
@@ -233,6 +249,7 @@ export async function getBoardBundle(
         left join budgets b on b.id = e.budget_id
         left join accounts ac on ac.id = e.account_id
         left join banks bk on bk.id = e.bank_id
+        left join providers pr on pr.id = e.provider_id
         where e.user_id = ${userId}
       ), '[]'::jsonb) as expenses,
       exists(

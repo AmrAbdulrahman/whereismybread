@@ -8,7 +8,6 @@ import {
   createExpense,
   createNotifications,
   createPayment,
-  fetchBranding,
   getBankTransactionsByIds,
   getOrCreateTags,
   listAccounts,
@@ -188,9 +187,7 @@ interface Stamp {
   accountId: string | null;
   methodId: string | null;
   tags: string[];
-  url: string | null;
-  logoUrl: string | null;
-  brandColor: string | null;
+  providerId: string | null;
 }
 
 function initStamp(txn: BankTransaction): Stamp {
@@ -200,9 +197,7 @@ function initStamp(txn: BankTransaction): Stamp {
     accountId: txn.triageAccountId,
     methodId: txn.triageMethodId,
     tags: [...txn.tags],
-    url: txn.url,
-    logoUrl: txn.logoUrl,
-    brandColor: txn.brandColor,
+    providerId: txn.providerId,
   };
 }
 
@@ -226,7 +221,7 @@ async function applyReviewEnrich(
         | 'set_method'
         | 'set_name'
         | 'set_notes'
-        | 'set_url';
+        | 'set_provider';
     }
   >,
 ): Promise<void> {
@@ -263,20 +258,10 @@ async function applyReviewEnrich(
       stamp.tags = uniq([...stamp.tags, ...action.tags]);
       await updateBankTransactionEnrichment(userId, txnId, { tags: stamp.tags });
       return;
-    case 'set_url': {
-      stamp.url = action.value;
-      let branding: { logoUrl?: string; color?: string } = {};
-      try {
-        branding = await fetchBranding(action.value);
-      } catch {
-        // network / SSRF guard — keep the URL, skip the image
-      }
-      if (branding.logoUrl) stamp.logoUrl = branding.logoUrl;
-      if (branding.color) stamp.brandColor = branding.color;
+    case 'set_provider': {
+      stamp.providerId = action.providerId;
       await updateBankTransactionEnrichment(userId, txnId, {
-        url: stamp.url,
-        logoUrl: stamp.logoUrl,
-        brandColor: stamp.brandColor,
+        providerId: action.providerId,
       });
       return;
     }
@@ -317,23 +302,12 @@ async function applyReviewTerminal(
       ? (await getOrCreateTags(userId, tagNames)).map((t) => t.id)
       : [];
 
-  // Resolve the provider website + its branding: the action's own `url`
-  // (log_expense sub-form) wins, else whatever the enrich actions stamped.
-  const actionUrl =
-    action.type === 'log_expense' ? action.url ?? null : null;
-  let url = actionUrl ?? stamp.url;
-  let logoUrl = stamp.logoUrl;
-  let brandColor = stamp.brandColor;
-  if (url && !logoUrl) {
-    try {
-      const b = await fetchBranding(url);
-      if (b.logoUrl) logoUrl = b.logoUrl;
-      if (b.color) brandColor = b.color;
-    } catch {
-      // keep the URL, skip the image
-    }
-  }
-  if (!url) url = null;
+  // Resolve the provider: the action's own pick (log_expense sub-form) wins,
+  // else whatever a `set_provider` enrich action stamped.
+  const providerId =
+    action.type === 'log_expense'
+      ? (action.providerId ?? stamp.providerId)
+      : stamp.providerId;
 
   if (action.type === 'log_expense') {
     // The stored budget id is one month's instance of a recurring series —
@@ -350,9 +324,7 @@ async function applyReviewTerminal(
       amountMinor,
       currency: txn.currency,
       notes,
-      url,
-      logoUrl,
-      brandColor,
+      providerId,
       tagIds,
     });
     if (expense) {
@@ -381,9 +353,7 @@ async function applyReviewTerminal(
     anchorDate: date,
     dayOfMonth: null,
     endsOn: null,
-    url,
-    logoUrl,
-    brandColor,
+    providerId,
     isSubscription: false,
     budgetId: null,
     notes,
@@ -404,7 +374,7 @@ const ENRICH_TYPES = new Set([
   'set_method',
   'set_name',
   'set_notes',
-  'set_url',
+  'set_provider',
 ]);
 
 /**
@@ -448,7 +418,7 @@ async function processReviewTxn(
                 | 'set_method'
                 | 'set_name'
                 | 'set_notes'
-                | 'set_url';
+                | 'set_provider';
             }
           >,
         );

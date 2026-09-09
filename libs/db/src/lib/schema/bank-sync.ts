@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { accounts, banks, paymentMethods } from './payments';
+import { accounts, banks, paymentMethods, providers } from './payments';
 import { users } from './users';
 
 export const bankTransactionStatusEnum = pgEnum('bank_transaction_status', [
@@ -200,10 +200,10 @@ export const bankTransactions = pgTable(
     ),
     /** Tag names to prefill (these rows are transient — names, not ids). */
     tags: text('tags').array().notNull().default([]),
-    /** Provider website + branding pulled from it. */
-    url: text('url'),
-    logoUrl: text('logo_url'),
-    brandColor: text('brand_color'),
+    /** The reusable service provider to prefill / assign on triage. */
+    providerId: uuid('provider_id').references(() => providers.id, {
+      onDelete: 'set null',
+    }),
     ...audit,
   },
   (t) => [
@@ -214,6 +214,7 @@ export const bankTransactions = pgTable(
       t.occurredAt,
     ),
     index('bank_transactions_bank_idx').on(t.bankId),
+    index('bank_transactions_provider_idx').on(t.providerId),
   ],
 );
 

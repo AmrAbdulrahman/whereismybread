@@ -49,6 +49,8 @@ export function describeActions(
     id ? lookups.banks.find((b) => b.id === id)?.name : undefined;
   const budgetName = (id?: string | null) =>
     id ? lookups.budgets.find((b) => b.id === id)?.name : undefined;
+  const providerName = (id?: string | null) =>
+    id ? lookups.providers.find((p) => p.id === id)?.name : undefined;
 
   return actions.map((a): ActionLine => {
     const label = ACTION_LABELS[a.type] ?? a.type;
@@ -71,8 +73,11 @@ export function describeActions(
       case 'set_name':
       case 'set_notes':
         return { label, detail: `“${a.value}”` };
-      case 'set_url':
-        return { label, detail: a.value };
+      case 'set_provider':
+        return {
+          label,
+          detail: providerName(a.providerId) ?? 'unknown provider',
+        };
       case 'log_expense': {
         const bits: string[] = [];
         if (a.name) bits.push(`title “${a.name}”`);
@@ -84,7 +89,8 @@ export function describeActions(
         if (bank) bits.push(`bank ${bank}`);
         const budget = budgetName(a.budgetId);
         if (budget) bits.push(`budget ${budget}`);
-        if (a.url) bits.push(a.url);
+        const provider = providerName(a.providerId);
+        if (provider) bits.push(`provider ${provider}`);
         return { label, detail: bits.join(' · ') || undefined };
       }
       case 'create_payment': {

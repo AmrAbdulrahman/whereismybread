@@ -33,7 +33,7 @@ export const actionSchema = z.object({
     'set_tags',
     'set_name',
     'set_notes',
-    'set_url',
+    'set_provider',
   ]),
   /** Tag names (log_expense / create_payment / add_tags / set_tags). */
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional().default([]),
@@ -41,9 +41,9 @@ export const actionSchema = z.object({
   methodId: z.string().optional().default(''),
   bankId: z.string().optional().default(''),
   budgetId: z.string().optional().default(''),
-  /** Provider website (log_expense). */
-  url: z.string().trim().optional().default(''),
-  /** Free text for set_name / set_notes / set_url. */
+  /** Reusable provider (log_expense / set_provider). */
+  providerId: z.string().optional().default(''),
+  /** Free text for set_name / set_notes. */
   value: z.string().optional().default(''),
   /** notify: where it delivers. */
   channel: z
@@ -104,16 +104,20 @@ export const automationFormSchema = z
         });
       }
       if (
-        (a.type === 'set_name' ||
-          a.type === 'set_notes' ||
-          a.type === 'set_url') &&
+        (a.type === 'set_name' || a.type === 'set_notes') &&
         !a.value.trim()
       ) {
         ctx.addIssue({
           code: 'custom',
           path: ['actions', i, 'value'],
-          message:
-            a.type === 'set_url' ? 'Enter a website' : 'Enter some text',
+          message: 'Enter some text',
+        });
+      }
+      if (a.type === 'set_provider' && !a.providerId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['actions', i, 'providerId'],
+          message: 'Pick a provider',
         });
       }
     });
@@ -189,8 +193,8 @@ export function toStoredAction(a: AutomationFormParsed['actions'][number]): Auto
       return { type: 'set_name', value: a.value.trim() };
     case 'set_notes':
       return { type: 'set_notes', value: a.value.trim() };
-    case 'set_url':
-      return { type: 'set_url', value: a.value.trim() };
+    case 'set_provider':
+      return { type: 'set_provider', providerId: a.providerId };
     case 'log_expense':
       return {
         type: 'log_expense',
@@ -198,7 +202,7 @@ export function toStoredAction(a: AutomationFormParsed['actions'][number]): Auto
         accountId: a.accountId || null,
         bankId: a.bankId || null,
         budgetId: a.budgetId || null,
-        url: a.url.trim() || null,
+        providerId: a.providerId || null,
         name: a.title.trim() || null,
         notes: a.notes.trim() || null,
       };
@@ -240,7 +244,7 @@ export function toFormAction(
     methodId: '',
     bankId: '',
     budgetId: '',
-    url: '',
+    providerId: '',
     value: '',
     channel: 'both' as NotifyChannel,
     title: '',
@@ -258,8 +262,10 @@ export function toFormAction(
     return { ...base, tags: a.tags };
   if (a.type === 'set_account') return { ...base, accountId: a.accountId };
   if (a.type === 'set_method') return { ...base, methodId: a.methodId };
-  if (a.type === 'set_name' || a.type === 'set_notes' || a.type === 'set_url')
+  if (a.type === 'set_name' || a.type === 'set_notes')
     return { ...base, value: a.value };
+  if (a.type === 'set_provider')
+    return { ...base, providerId: a.providerId };
   if (a.type === 'log_expense')
     return {
       ...base,
@@ -267,7 +273,7 @@ export function toFormAction(
       accountId: a.accountId ?? '',
       bankId: a.bankId ?? '',
       budgetId: a.budgetId ?? '',
-      url: a.url ?? '',
+      providerId: a.providerId ?? '',
       title: a.name ?? '',
       notes: a.notes ?? '',
     };

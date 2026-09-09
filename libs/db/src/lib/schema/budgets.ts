@@ -10,7 +10,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { accounts, banks, tags } from './payments';
+import { accounts, banks, providers, tags } from './payments';
 import { users } from './users';
 
 export const budgetPeriodEnum = pgEnum('budget_period', ['month', 'week']);
@@ -85,6 +85,9 @@ export const expenses = pgTable(
     bankId: uuid('bank_id').references(() => banks.id, {
       onDelete: 'set null',
     }),
+    providerId: uuid('provider_id').references(() => providers.id, {
+      onDelete: 'set null',
+    }),
     name: text('name').notNull(),
     date: date('date').notNull(),
     /**
@@ -96,11 +99,6 @@ export const expenses = pgTable(
     amountMinor: integer('amount_minor').notNull(),
     currency: text('currency').notNull().default('EUR'),
     notes: text('notes'),
-    /** The service / provider's website. */
-    url: text('url'),
-    /** Logo (data: URI) and brand colour fetched from `url`. */
-    logoUrl: text('logo_url'),
-    brandColor: text('brand_color'),
     ...audit,
   },
   (t) => [
@@ -108,6 +106,7 @@ export const expenses = pgTable(
     index('expenses_user_date_idx').on(t.userId, t.date),
     index('expenses_account_idx').on(t.accountId),
     index('expenses_bank_idx').on(t.bankId),
+    index('expenses_provider_idx').on(t.providerId),
   ],
 );
 

@@ -13,7 +13,7 @@ import {
 } from '@wib/ui';
 import { ImagePlus } from '@wib/ui/icons';
 import { fetchBrandingAction } from '../lib/actions';
-import { fileToLogoDataUrl } from '../lib/logo-file';
+import { fileToLogoDataUrl } from '@wib/ui';
 
 const looksLikeSite = (v: string) =>
   /^https?:\/\/.+\..+/i.test(v) || /^[\w-]+\.[a-z]{2,}/i.test(v);

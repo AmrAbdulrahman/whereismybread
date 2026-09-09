@@ -13,6 +13,7 @@ import {
   paymentMethods,
   paymentTags,
   payments,
+  providers,
   tags,
   type Account,
   type Bank,
@@ -48,14 +49,13 @@ export interface PaymentInput {
   /** A budget this payment is categorised under — a label only, no plan maths. */
   budgetId: string | null;
   bankId: string | null;
+  /** The reusable service provider behind this payment. */
+  providerId: string | null;
   recipientMethodId: string | null;
   recurrence: Recurrence;
   anchorDate: string;
   dayOfMonth: number | null;
   endsOn: string | null;
-  url: string | null;
-  logoUrl: string | null;
-  brandColor: string | null;
   isSubscription: boolean;
   notes: string | null;
   tagIds: string[];
@@ -182,14 +182,12 @@ const paymentColumns = (input: PaymentInput) => ({
   accountId: input.accountId,
   budgetId: input.budgetId,
   bankId: input.bankId,
+  providerId: input.providerId,
   recipientMethodId: input.recipientMethodId,
   recurrence: input.recurrence,
   anchorDate: input.anchorDate,
   dayOfMonth: input.dayOfMonth,
   endsOn: input.endsOn,
-  url: input.url,
-  logoUrl: input.logoUrl,
-  brandColor: input.brandColor,
   isSubscription: input.isSubscription,
   notes: input.notes,
 });
@@ -477,6 +475,26 @@ export async function setPaymentBudget(
   await getDb()
     .update(payments)
     .set({ budgetId, updatedAt: new Date() })
+    .where(and(eq(payments.id, id), eq(payments.userId, userId)));
+}
+
+/** Set (or clear) a payment's provider — used by the automations engine. */
+export async function setPaymentProvider(
+  userId: string,
+  id: string,
+  providerId: string | null,
+): Promise<void> {
+  if (providerId) {
+    const ok = await getDb()
+      .select({ id: providers.id })
+      .from(providers)
+      .where(and(eq(providers.id, providerId), eq(providers.userId, userId)))
+      .limit(1);
+    if (!ok[0]) return;
+  }
+  await getDb()
+    .update(payments)
+    .set({ providerId, updatedAt: new Date() })
     .where(and(eq(payments.id, id), eq(payments.userId, userId)));
 }
 

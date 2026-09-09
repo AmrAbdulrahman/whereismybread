@@ -118,6 +118,8 @@ export interface BoardOccurrence {
   isSubscription: boolean;
   /** True when this month has a per-occurrence override. */
   isException: boolean;
+  providerId: string | null;
+  providerName: string | null;
   url: string | null;
   logoUrl: string | null;
   brandColor: string | null;
@@ -222,9 +224,7 @@ export interface EditablePayment {
   /** For annual payments — the month (1–12) it lands each year, as typed ('' if none). */
   monthOfYear: string;
   endsOn: string | null;
-  url: string | null;
-  logoUrl: string | null;
-  brandColor: string | null;
+  providerId: string | null;
   isSubscription: boolean;
   notes: string | null;
   tags: string[];
@@ -301,6 +301,8 @@ export interface BudgetExpenseView {
   /** In its own currency — converted into the budget's for totals. */
   amount: Money;
   notes: string | null;
+  providerId: string | null;
+  providerName: string | null;
   url: string | null;
   logoUrl: string | null;
   brandColor: string | null;
@@ -359,6 +361,8 @@ export interface ExpenseLine {
   occurredAt: string | null;
   amount: Money;
   notes: string | null;
+  providerId: string | null;
+  providerName: string | null;
   url: string | null;
   logoUrl: string | null;
   brandColor: string | null;

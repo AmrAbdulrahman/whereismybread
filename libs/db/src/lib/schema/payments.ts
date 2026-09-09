@@ -95,6 +95,50 @@ export const banks = pgTable(
   ],
 );
 
+/**
+ * A reusable service provider — Netflix, the landlord, the gym… Owned per user
+ * and referenced by payments, expenses, bank transactions and automations
+ * instead of each of those carrying its own website + fetched branding.
+ */
+export const providers = pgTable(
+  'providers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** The provider's website — used to fetch the icon + brand colour. */
+    url: text('url'),
+    /** Icon as a `data:` URI — fetched from `url` or hand-uploaded. */
+    logoUrl: text('logo_url'),
+    /** Brand colour (hex) — the fallback dot when there's no logo. */
+    color: text('color'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...audit,
+  },
+  (t) => [
+    uniqueIndex('providers_user_name_uq').on(t.userId, sql`lower(${t.name})`),
+  ],
+);
+
+/**
+ * Tags that auto-populate (additively, still editable) when this provider is
+ * picked on a payment or expense.
+ */
+export const providerTags = pgTable(
+  'provider_tags',
+  {
+    providerId: uuid('provider_id')
+      .notNull()
+      .references(() => providers.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.providerId, t.tagId] })],
+);
+
 export const paymentMethods = pgTable(
   'payment_methods',
   {
@@ -205,6 +249,10 @@ export const payments = pgTable('payments', {
   bankId: uuid('bank_id').references(() => banks.id, {
     onDelete: 'set null',
   }),
+  /** The reusable service provider behind this payment. */
+  providerId: uuid('provider_id').references(() => providers.id, {
+    onDelete: 'set null',
+  }),
   /** How this manual payment is sent to the recipient. */
   recipientMethodId: uuid('recipient_method_id').references(
     () => recipientMethods.id,
@@ -214,11 +262,6 @@ export const payments = pgTable('payments', {
   anchorDate: date('anchor_date').notNull(),
   dayOfMonth: integer('day_of_month'),
   endsOn: date('ends_on'),
-  /** The service / provider's website. */
-  url: text('url'),
-  /** Logo (data: URI) and brand colour fetched from `url`. */
-  logoUrl: text('logo_url'),
-  brandColor: text('brand_color'),
   isSubscription: boolean('is_subscription').notNull().default(false),
   notes: text('notes'),
   /** A user note flagging the whole series for attention; `null` = not flagged. */
@@ -231,6 +274,7 @@ export const payments = pgTable('payments', {
     .on(t.userId)
     .where(sql`${t.archivedAt} is null`),
   index('payments_budget_idx').on(t.budgetId),
+  index('payments_provider_idx').on(t.providerId),
 ]);
 
 export const paymentTags = pgTable(
@@ -284,6 +328,7 @@ export interface PaymentOverrides {
   methodId?: string | null;
   accountId?: string | null;
   bankId?: string | null;
+  providerId?: string | null;
   recipientMethodId?: string | null;
   notes?: string | null;
 }
@@ -324,6 +369,9 @@ export const paymentEvents = pgTable(
 export type Tag = typeof tags.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
 export type Bank = typeof banks.$inferSelect;
+export type Provider = typeof providers.$inferSelect;
+export type NewProvider = typeof providers.$inferInsert;
+export type ProviderTag = typeof providerTags.$inferSelect;
 export type PaymentMethod = typeof paymentMethods.$inferSelect;
 export type RecipientMethod = typeof recipientMethods.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
