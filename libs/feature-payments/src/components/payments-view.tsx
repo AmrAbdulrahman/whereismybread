@@ -32,6 +32,10 @@ import {
 } from '@wib/feature-automations';
 import { deletePaymentAction, type EditScope } from '../lib/actions';
 import { deleteExpenseAction } from '../lib/budget-actions';
+import {
+  automationDraftFor,
+  buildAutomationLookups,
+} from '../lib/automation-lookups';
 import { applyOverride } from '../lib/apply-override';
 import { AddFab } from './add-fab';
 import { BudgetForm, type BudgetFormInitial } from './budget-form';
@@ -368,55 +372,18 @@ export function PaymentsView({
   const highlightExpense = (id: string) =>
     highlight != null && id === highlight.recordId;
 
-  // "Create automation" from a card's ⋮ menu — opens the automation dialog
-  // pre-filled with conditions that match this row (name + amount). The
-  // lookups the form needs are all already on this page.
-  const automationLookups: AutomationLookups = useMemo(() => {
-    // Recurring monthly series only, one entry each (earliest instance id).
-    const byName = new Map<
-      string,
-      { id: string; name: string; startDate: string }
-    >();
-    for (const b of budgets) {
-      if (!b.recurring || b.closedAt) continue;
-      const key = b.name.toLowerCase();
-      const cur = byName.get(key);
-      if (!cur || b.startDate < cur.startDate) {
-        byName.set(key, { id: b.id, name: b.name, startDate: b.startDate });
-      }
-    }
-    return {
-      accounts: accounts.map((a) => ({
-        id: a.id,
-        name: a.name,
-        color: a.color,
-      })),
-      banks: banks.map((b) => ({ id: b.id, name: b.name, color: b.color })),
-      methods: methods.map((m) => ({ id: m.id, name: m.name })),
-      tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
-      budgets: [...byName.values()]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map(({ id, name }) => ({ id, name })),
-    };
-  }, [accounts, banks, methods, tags, budgets]);
+  // "Create automation" from a card's ⋮ menu / a review row — opens the
+  // automation dialog pre-filled to match that row (name + amount). All the
+  // lookups the form needs are already on this page.
+  const automationLookups: AutomationLookups = useMemo(
+    () => buildAutomationLookups({ accounts, banks, methods, tags, budgets }),
+    [accounts, banks, methods, tags, budgets],
+  );
 
   const [automationDraft, setAutomationDraft] =
     useState<AutomationFormInitial | null>(null);
-  const openCreateAutomation = (name: string, amountMinor: number) => {
-    setAutomationDraft({
-      name: `Auto-file ${name}`.slice(0, 80),
-      trigger: 'review_expense_created',
-      conditions: [
-        { field: 'name', operator: 'contains', value: name },
-        {
-          field: 'amount',
-          operator: 'equals',
-          value: (Math.abs(amountMinor) / 100).toFixed(2),
-        },
-      ],
-      actions: [],
-    });
-  };
+  const openCreateAutomation = (name: string, amountMinor: number) =>
+    setAutomationDraft(automationDraftFor(name, amountMinor));
 
   // A push (bank sync finished, an automation fired) refreshes the board in
   // the background so the new payment / triaged transaction just appears.
@@ -933,6 +900,12 @@ export function PaymentsView({
             settleReview(txn.id, () => ignoreBankTransactionAction(txn.id))
           }
           onReviewDetails={(txn) => setReviewDetailsId(txn.id)}
+          onReviewCreateAutomation={(txn) =>
+            openCreateAutomation(
+              txn.displayName || txn.merchant || txn.description,
+              txn.amountMinor,
+            )
+          }
         />
       ) : (
         <PaymentCalendar

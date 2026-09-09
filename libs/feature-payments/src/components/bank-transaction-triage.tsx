@@ -3,13 +3,21 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMoney, money, type RateMap } from '@wib/domain';
-import { Button } from '@wib/ui';
+import { Button, ResponsiveModal } from '@wib/ui';
 import { Search, X } from '@wib/ui/icons';
+import {
+  AutomationForm,
+  type AutomationFormInitial,
+} from '@wib/feature-automations';
 import {
   bulkIgnoreBankTransactionsAction,
   categorizeBankTransactionAction,
   ignoreBankTransactionAction,
 } from '../lib/bank-transaction-actions';
+import {
+  automationDraftFor,
+  buildAutomationLookups,
+} from '../lib/automation-lookups';
 import type { BankTransactionRow as BankTransactionRowData } from '../lib/bank-sync-queries';
 import type { BudgetSummary, PaymentsContext } from '../lib/types';
 import { BankTransactionRow } from './bank-transaction-row';
@@ -61,6 +69,20 @@ export function BankTransactionTriage({
   const close = () => setSheet({ mode: 'closed' });
   const [enrichId, setEnrichId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+
+  const automationLookups = useMemo(
+    () =>
+      buildAutomationLookups({
+        accounts: context.accounts,
+        banks: context.banks,
+        methods: context.methods,
+        tags: context.tags,
+        budgets,
+      }),
+    [context, budgets],
+  );
+  const [automationDraft, setAutomationDraft] =
+    useState<AutomationFormInitial | null>(null);
 
   const unhandled = useMemo(
     () => pending.filter((t) => !handled.has(t.id)),
@@ -208,6 +230,14 @@ export function BankTransactionTriage({
               onCreatePayment={() => setSheet({ mode: 'payment', txn })}
               onEdit={() => setEnrichId(txn.id)}
               onOpenDetails={() => setEnrichId(txn.id)}
+              onCreateAutomation={() =>
+                setAutomationDraft(
+                  automationDraftFor(
+                    txn.displayName || txn.merchant || txn.description,
+                    txn.amountMinor,
+                  ),
+                )
+              }
               onIgnore={() =>
                 settle([txn.id], () => ignoreBankTransactionAction(txn.id))
               }
@@ -258,6 +288,24 @@ export function BankTransactionTriage({
           startTransition(() => router.refresh());
         }}
       />
+
+      <ResponsiveModal
+        open={automationDraft != null}
+        onOpenChange={(o) => !o && setAutomationDraft(null)}
+        title="New automation"
+      >
+        {automationDraft ? (
+          <AutomationForm
+            initial={automationDraft}
+            lookups={automationLookups}
+            onDone={() => {
+              setAutomationDraft(null);
+              startTransition(() => router.refresh());
+            }}
+            onCancel={() => setAutomationDraft(null)}
+          />
+        ) : null}
+      </ResponsiveModal>
     </div>
   );
 }

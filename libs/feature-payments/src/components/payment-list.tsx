@@ -187,6 +187,7 @@ export function PaymentList({
   onReviewPayment,
   onReviewIgnore,
   onReviewDetails,
+  onReviewCreateAutomation,
 }: {
   board: PaymentBoard;
   budgets?: BudgetSummary[];
@@ -228,6 +229,7 @@ export function PaymentList({
   onReviewPayment?: (txn: BankTransactionRow) => void;
   onReviewIgnore?: (txn: BankTransactionRow) => void;
   onReviewDetails?: (txn: BankTransactionRow) => void;
+  onReviewCreateAutomation?: (txn: BankTransactionRow) => void;
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
@@ -1613,6 +1615,11 @@ export function PaymentList({
                             onOpenDetails={
                               onReviewDetails
                                 ? () => onReviewDetails(txn)
+                                : undefined
+                            }
+                            onCreateAutomation={
+                              onReviewCreateAutomation
+                                ? () => onReviewCreateAutomation(txn)
                                 : undefined
                             }
                           />

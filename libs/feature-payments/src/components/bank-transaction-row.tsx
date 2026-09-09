@@ -2,7 +2,7 @@
 
 import { formatMoney, money } from '@wib/domain';
 import { cn } from '@wib/ui';
-import { CalendarDays, Pencil, Receipt, X } from '@wib/ui/icons';
+import { CalendarDays, Pencil, Receipt, X, Zap } from '@wib/ui/icons';
 import type { BankTransactionRow as BankTransactionRowData } from '../lib/bank-sync-queries';
 
 function dateLabel(iso: string): string {
@@ -39,6 +39,7 @@ export function BankTransactionRow({
   onIgnore,
   onEdit,
   onOpenDetails,
+  onCreateAutomation,
 }: {
   txn: BankTransactionRowData;
   variant?: 'inbox' | 'day';
@@ -53,6 +54,8 @@ export function BankTransactionRow({
   onEdit?: () => void;
   /** Click anywhere on the row (outside a button) to open its details. */
   onOpenDetails?: () => void;
+  /** Open the "new automation" dialog pre-filled to match this transaction. */
+  onCreateAutomation?: () => void;
 }) {
   const negative = txn.amountMinor < 0;
   const meta = [
@@ -146,7 +149,7 @@ export function BankTransactionRow({
           {formatMoney(money(txn.amountMinor, txn.currency))}
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onLogExpense}
@@ -163,27 +166,36 @@ export function BankTransactionRow({
           <CalendarDays size={12} strokeWidth={2} />
           Create a planned payment
         </button>
-        {onEdit && variant === 'inbox' ? (
+        <div className="ml-auto flex items-center gap-0.5">
+          {onCreateAutomation ? (
+            <button
+              type="button"
+              onClick={onCreateAutomation}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink"
+            >
+              <Zap size={12} strokeWidth={2} />
+              Automate
+            </button>
+          ) : null}
+          {onEdit && variant === 'inbox' ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink"
+            >
+              <Pencil size={12} strokeWidth={2} />
+              Edit details
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={onEdit}
-            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink"
+            onClick={onIgnore}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink"
           >
-            <Pencil size={12} strokeWidth={2} />
-            Edit details
+            <X size={12} strokeWidth={2} />
+            Ignore
           </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={onIgnore}
-          className={cn(
-            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:text-ink',
-            !(onEdit && variant === 'inbox') && 'ml-auto',
-          )}
-        >
-          <X size={12} strokeWidth={2} />
-          Ignore
-        </button>
+        </div>
       </div>
     </div>
   );
