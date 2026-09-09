@@ -39,6 +39,7 @@ import {
   type AutomationAction,
   type AutomationSubject,
   type NotifyChannel,
+  type RecordSource,
   type SyncSummary,
 } from '@wib/domain';
 import { sendPushToUser } from './push';
@@ -86,6 +87,12 @@ function reviewTemplateVars(
 
 export interface RecordSubjectInput {
   kind: 'payment' | 'expense';
+  /**
+   * How the record came to be — `manual` for a user-created payment/expense
+   * (incl. bank-transaction triage), `automation` when the engine auto-filed
+   * it from a review rule. Scopes which `record_created` automations fire.
+   */
+  source: RecordSource;
   recordId: string;
   name: string;
   amountMinor: number;
@@ -115,6 +122,7 @@ async function recordSubject(
   }
   return buildRecordSubject({
     kind: input.kind,
+    source: input.source,
     name: input.name,
     amountMinor: input.amountMinor,
     currency: input.currency,
@@ -268,6 +276,26 @@ async function applyReviewEnrich(
   }
 }
 
+/**
+ * Fire the user's `record_created` automations for a record the engine just
+ * auto-filed (source `automation`). Isolated — a rule failure must not fail
+ * the sync. No chain risk: `record_created` actions only tag / set account /
+ * set method / notify, none of which create another record.
+ */
+async function fireRecordAutomations(
+  userId: string,
+  input: RecordSubjectInput,
+): Promise<void> {
+  try {
+    await runRecordAutomations(userId, input);
+  } catch (err) {
+    console.error(
+      '[automations] record automations (source: automation) failed',
+      err,
+    );
+  }
+}
+
 async function applyReviewTerminal(
   userId: string,
   txn: BankTransaction,
@@ -329,6 +357,16 @@ async function applyReviewTerminal(
     });
     if (expense) {
       await markBankTransactionCategorized(userId, txn.id, 'expense', expense.id);
+      await fireRecordAutomations(userId, {
+        kind: 'expense',
+        source: 'automation',
+        recordId: expense.id,
+        name,
+        amountMinor,
+        currency: txn.currency,
+        accountId,
+        methodId: null,
+      });
     }
     return;
   }
@@ -366,6 +404,17 @@ async function applyReviewTerminal(
     dueDate: date,
     status: 'paid',
   }).catch(() => undefined);
+  await fireRecordAutomations(userId, {
+    kind: 'payment',
+    source: 'automation',
+    recordId: payment.id,
+    name,
+    amountMinor,
+    currency: txn.currency,
+    recurrence: 'one_time',
+    accountId,
+    methodId: stamp.methodId ?? null,
+  });
 }
 
 const ENRICH_TYPES = new Set([
@@ -676,9 +725,11 @@ function reviewNotices(
 }
 
 /**
- * Run the user's "payment or expense added" automations against one record the
- * user just created. Never called for engine-created records, so rules can't
- * chain.
+ * Run the user's "payment or expense added" automations against one record
+ * that was just created. `input.source` (`manual` | `automation`) scopes which
+ * rules match: a rule with a `source` condition only fires for that source; a
+ * rule without one fires for either. Engine-filed records (source `automation`)
+ * can't chain — `record_created` actions never create another record.
  */
 export async function runRecordAutomations(
   userId: string,

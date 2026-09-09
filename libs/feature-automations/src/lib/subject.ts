@@ -1,4 +1,8 @@
-import { cleanMerchant, type AutomationSubject } from '@wib/domain';
+import {
+  cleanMerchant,
+  type AutomationSubject,
+  type RecordSource,
+} from '@wib/domain';
 
 /** Fields a review-expense automation is tested against. Pure. */
 export function buildReviewSubject(input: {
@@ -22,6 +26,8 @@ export function buildReviewSubject(input: {
 /** Fields a "payment or expense added" automation is tested against. Pure. */
 export function buildRecordSubject(input: {
   kind: 'payment' | 'expense';
+  /** `manual` (user added it) or `automation` (the engine auto-filed it). */
+  source: RecordSource;
   name: string;
   amountMinor: number;
   currency: string;
@@ -31,6 +37,7 @@ export function buildRecordSubject(input: {
 }): AutomationSubject {
   return {
     kind: input.kind,
+    source: input.source,
     name: input.name,
     amount: Math.abs(input.amountMinor) / 100,
     currency: input.currency,

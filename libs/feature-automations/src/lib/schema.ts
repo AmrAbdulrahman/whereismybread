@@ -68,6 +68,14 @@ export const automationFormSchema = z
     ),
     conditions: z.array(conditionSchema).min(1, 'Add at least one pattern'),
     actions: z.array(actionSchema).min(1, 'Add at least one action'),
+    /**
+     * `record_created` only: scope the rule to how the record was added.
+     * `any` (default) → no scope condition is stored.
+     */
+    recordSource: z
+      .enum(['any', 'manual', 'automation'])
+      .optional()
+      .default('any'),
   })
   .superRefine((v, ctx) => {
     const allowedActions = new Set(actionTypesForTrigger(v.trigger));

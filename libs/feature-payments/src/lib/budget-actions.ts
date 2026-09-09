@@ -186,6 +186,7 @@ export async function saveExpenseAction(
     try {
       await runRecordAutomations(userId, {
         kind: 'expense',
+        source: 'manual',
         recordId: expense.id,
         name: input.name,
         amountMinor,

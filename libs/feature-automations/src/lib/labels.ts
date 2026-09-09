@@ -11,6 +11,25 @@ export const NOTIFY_CHANNEL_LABELS: Record<NotifyChannel, string> = {
   email: 'Email only',
 };
 
+/** The `record_created` source-scope toggle (`any` = no scope). */
+export const RECORD_SOURCE_CHOICE_LABELS: Record<
+  'any' | 'manual' | 'automation',
+  string
+> = {
+  any: 'Added any way',
+  manual: 'Added manually',
+  automation: 'Added by another automation',
+};
+
+/** Compact form for the automations list card (only shown when scoped). */
+export const RECORD_SOURCE_BADGE_LABELS: Record<
+  'manual' | 'automation',
+  string
+> = {
+  manual: 'Manual only',
+  automation: 'Automation only',
+};
+
 export const TRIGGER_LABELS: Record<AutomationTrigger, string> = {
   review_expense_created: 'An expense for review is created',
   record_created: 'A payment or expense is added',

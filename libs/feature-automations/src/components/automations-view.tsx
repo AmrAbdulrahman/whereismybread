@@ -3,8 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Automation } from '@wib/db';
+import { extractRecordSource } from '@wib/domain';
 import { Button, ResponsiveModal, cn } from '@wib/ui';
-import { TRIGGER_LABELS } from '../lib/labels';
+import { RECORD_SOURCE_BADGE_LABELS, TRIGGER_LABELS } from '../lib/labels';
 import { describeActions, describeConditions } from '../lib/describe';
 import {
   deleteAutomationAction,
@@ -103,6 +104,10 @@ export function AutomationsView({
         <ul className="flex flex-col gap-3">
           {automations.map((a, i) => {
             const isOpen = expanded.has(a.id);
+            const recordSource =
+              a.trigger === 'record_created'
+                ? extractRecordSource(a.conditions).source
+                : null;
             return (
             <li
               key={a.id}
@@ -147,6 +152,11 @@ export function AutomationsView({
                         />
                         {TRIGGER_LABELS[a.trigger]}
                       </span>
+                      {recordSource ? (
+                        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                          {RECORD_SOURCE_BADGE_LABELS[recordSource]}
+                        </span>
+                      ) : null}
                       {!a.enabled ? (
                         <span className="rounded-full bg-line-strong px-1.5 py-0.5 text-[10px] font-medium text-muted">
                           Off

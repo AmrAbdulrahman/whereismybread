@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   RECURRENCES,
   actionTypesForTrigger,
+  extractRecordSource,
   fieldSpec,
   fieldsForTrigger,
   operatorsForKind,
@@ -21,6 +22,7 @@ import {
   ACTION_LABELS,
   NOTIFY_CHANNEL_LABELS,
   OPERATOR_LABELS,
+  RECORD_SOURCE_CHOICE_LABELS,
   TRIGGER_HINTS,
   TRIGGER_LABELS,
 } from '../lib/labels';
@@ -138,9 +140,20 @@ export function AutomationForm({
   const [trigger, setTrigger] = useState<AutomationTrigger>(
     initial?.trigger ?? 'review_expense_created',
   );
+  // Pull the reserved `source` scope out of a `record_created` rule's stored
+  // conditions — it's edited via the toggle below, not as a pattern row.
+  const initialSplit = initial
+    ? extractRecordSource(initial.conditions)
+    : null;
+  const [recordSource, setRecordSource] = useState<
+    'any' | 'manual' | 'automation'
+  >(initialSplit?.source ?? 'any');
   const [conditions, setConditions] = useState<ConditionRow[]>(
-    initial
-      ? initial.conditions.map((c) => ({
+    initialSplit
+      ? (initialSplit.patterns.length > 0
+          ? initialSplit.patterns
+          : [blankCondition(initial?.trigger ?? DEFAULT_TRIGGER)]
+        ).map((c) => ({
           field: c.field,
           operator: c.operator,
           value: c.value,
@@ -182,6 +195,7 @@ export function AutomationForm({
     setTrigger(t);
     setConditions([blankCondition(t)]);
     setActions([blankAction(t)]);
+    setRecordSource('any');
   };
 
   const enumOptions = (source?: string): string[] | null => {
@@ -212,6 +226,7 @@ export function AutomationForm({
     const result = await saveAutomationAction(initial?.id ?? null, {
       name,
       trigger,
+      recordSource: trigger === 'record_created' ? recordSource : 'any',
       conditions: conditions.map((c) => ({
         field: c.field,
         operator: c.operator,
@@ -352,6 +367,40 @@ export function AutomationForm({
         </div>
       </Field>
       )}
+
+      {trigger === 'record_created' ? (
+        <Field>
+          <Label>Only when it was…</Label>
+          <div className="flex flex-col gap-1.5">
+            {(['any', 'manual', 'automation'] as const).map((s) => (
+              <label
+                key={s}
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                  recordSource === s
+                    ? 'border-accent bg-accent/10'
+                    : 'border-line-strong hover:bg-surface-2',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="record-source"
+                  className="accent-accent"
+                  checked={recordSource === s}
+                  onChange={() => setRecordSource(s)}
+                />
+                <span className="font-medium text-ink">
+                  {RECORD_SOURCE_CHOICE_LABELS[s]}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted">
+            “Added by another automation” lets a rule act on payments/expenses
+            that a review-inbox rule auto-filed for you.
+          </p>
+        </Field>
+      ) : null}
 
       <Field>
         <div className="flex items-center justify-between">

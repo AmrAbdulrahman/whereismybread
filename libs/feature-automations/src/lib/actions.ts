@@ -19,6 +19,7 @@ import {
   type Notification,
   type NotificationCursor,
 } from '@wib/db';
+import { RECORD_SOURCE_FIELD } from '@wib/domain';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
@@ -54,10 +55,21 @@ export async function saveAutomationAction(
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
   }
   const v = parsed.data;
+  const conditions = v.conditions.map(toStoredCondition);
+  // `record_created` rules can be scoped to how the record was added. Stored
+  // as a normal condition so `evaluateConditions` filters on it for free;
+  // `any` stores nothing (fires for either source).
+  if (v.trigger === 'record_created' && v.recordSource !== 'any') {
+    conditions.push({
+      field: RECORD_SOURCE_FIELD,
+      operator: 'is',
+      value: v.recordSource,
+    });
+  }
   const input: AutomationInput = {
     name: v.name,
     trigger: v.trigger,
-    conditions: v.conditions.map(toStoredCondition),
+    conditions,
     actions: v.actions.map(toStoredAction),
   };
 

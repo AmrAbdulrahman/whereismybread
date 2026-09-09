@@ -1,4 +1,5 @@
 import {
+  RECORD_SOURCE_FIELD,
   fieldSpec,
   type AutomationAction,
   type AutomationCondition,
@@ -12,8 +13,10 @@ export function describeConditions(
   trigger: AutomationTrigger,
   conditions: AutomationCondition[],
 ): string {
-  if (conditions.length === 0) return 'anything';
-  return conditions.map((c) => describeCondition(trigger, c)).join(' and ');
+  // The reserved `source` scope is shown as its own badge on the card.
+  const patterns = conditions.filter((c) => c.field !== RECORD_SOURCE_FIELD);
+  if (patterns.length === 0) return 'anything';
+  return patterns.map((c) => describeCondition(trigger, c)).join(' and ');
 }
 
 function describeCondition(

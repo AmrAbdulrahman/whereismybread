@@ -18,6 +18,27 @@ export const AUTOMATION_TRIGGERS: readonly AutomationTrigger[] = [
   'record_created',
 ] as const;
 
+/**
+ * How a payment / expense came to exist — the `record_created` trigger can be
+ * scoped to one of these. `manual` = the user added it by hand (incl. triaging
+ * a bank transaction); `automation` = the engine auto-filed it from a
+ * `review_expense_created` rule's `log_expense` / `create_payment` action.
+ */
+export type RecordSource = 'manual' | 'automation';
+export const RECORD_SOURCES: readonly RecordSource[] = [
+  'manual',
+  'automation',
+] as const;
+
+/**
+ * Reserved condition field on a `record_created` rule: `{ field: 'source',
+ * operator: 'is', value: 'manual' | 'automation' }`. Absent → the rule fires
+ * for either source. Surfaced in the editor as a dedicated toggle rather than
+ * a pattern row, but stored as a normal condition so `evaluateConditions`
+ * filters on it for free.
+ */
+export const RECORD_SOURCE_FIELD = 'source';
+
 export type AutomationOperator =
   | 'contains'
   | 'not_contains'
@@ -348,6 +369,31 @@ export function conditionMatches(
     default:
       return false;
   }
+}
+
+/**
+ * Split a `record_created` rule's stored conditions into the reserved `source`
+ * scope and the real pattern rows. Safe to call for any trigger — a
+ * `review_expense_created` rule has no `source` field, so `source` is `null`
+ * and every condition is returned as a pattern.
+ */
+export function extractRecordSource(conditions: AutomationCondition[]): {
+  source: RecordSource | null;
+  patterns: AutomationCondition[];
+} {
+  let source: RecordSource | null = null;
+  const patterns: AutomationCondition[] = [];
+  for (const c of conditions ?? []) {
+    if (
+      c.field === RECORD_SOURCE_FIELD &&
+      (c.value === 'manual' || c.value === 'automation')
+    ) {
+      source = c.value;
+    } else {
+      patterns.push(c);
+    }
+  }
+  return { source, patterns };
 }
 
 /** AND across every condition. An empty list never matches. */

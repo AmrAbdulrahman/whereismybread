@@ -29,6 +29,15 @@ describe('describeConditions', () => {
     ).toBe('Merchant name contains "Pret" and Amount is less than 5');
   });
 
+  it('omits the reserved record source scope from the sentence', () => {
+    expect(
+      describeConditions('record_created', [
+        { field: 'name', operator: 'contains', value: 'Uber' },
+        { field: 'source', operator: 'is', value: 'automation' },
+      ]),
+    ).toBe('Name contains "Uber"');
+  });
+
   it('spells out a between range', () => {
     expect(
       describeConditions('review_expense_created', [

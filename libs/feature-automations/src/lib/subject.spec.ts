@@ -54,6 +54,7 @@ describe('buildRecordSubject', () => {
   it('carries kind / recurrence / account / method', () => {
     const s = buildRecordSubject({
       kind: 'payment',
+      source: 'manual',
       name: 'Spotify',
       amountMinor: 1199,
       currency: 'GBP',
@@ -63,6 +64,7 @@ describe('buildRecordSubject', () => {
     });
     expect(s).toMatchObject({
       kind: 'payment',
+      source: 'manual',
       amount: 11.99,
       recurrence: 'monthly',
       account: 'Personal',
@@ -73,11 +75,28 @@ describe('buildRecordSubject', () => {
   it('defaults optional fields to empty strings', () => {
     const s = buildRecordSubject({
       kind: 'expense',
+      source: 'automation',
       name: 'Taxi',
       amountMinor: 2200,
       currency: 'GBP',
     });
     expect(s.recurrence).toBe('');
     expect(s.account).toBe('');
+  });
+
+  it('the source scopes which record rules match', () => {
+    const base = {
+      kind: 'expense' as const,
+      name: 'Deliveroo',
+      amountMinor: 1800,
+      currency: 'GBP',
+    };
+    const rule = [{ field: 'source', operator: 'is' as const, value: 'automation' }];
+    expect(
+      evaluateConditions(rule, buildRecordSubject({ ...base, source: 'automation' })),
+    ).toBe(true);
+    expect(
+      evaluateConditions(rule, buildRecordSubject({ ...base, source: 'manual' })),
+    ).toBe(false);
   });
 });

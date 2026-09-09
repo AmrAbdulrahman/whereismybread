@@ -234,6 +234,7 @@ export async function savePaymentAction(
     try {
       await runRecordAutomations(userId, {
         kind: 'payment',
+        source: 'manual',
         recordId: created.id,
         name: input.name,
         amountMinor: input.amountMinor,

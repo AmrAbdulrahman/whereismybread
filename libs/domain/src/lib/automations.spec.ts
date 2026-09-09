@@ -4,6 +4,7 @@ import {
   applyTemplate,
   conditionMatches,
   evaluateConditions,
+  extractRecordSource,
   fieldsForTrigger,
   formatSyncSummary,
   isTerminalAction,
@@ -136,6 +137,27 @@ describe('catalogue helpers', () => {
     expect(operatorsForKind('enum')).toEqual(['is', 'is_not']);
     expect(isTerminalAction('ignore')).toBe(true);
     expect(isTerminalAction('notify')).toBe(false);
+  });
+});
+
+describe('extractRecordSource', () => {
+  it('splits the reserved source scope from the pattern rows', () => {
+    const { source, patterns } = extractRecordSource([
+      { field: 'name', operator: 'contains', value: 'Uber' },
+      { field: 'source', operator: 'is', value: 'automation' },
+    ]);
+    expect(source).toBe('automation');
+    expect(patterns).toEqual([
+      { field: 'name', operator: 'contains', value: 'Uber' },
+    ]);
+  });
+
+  it('is null when no source condition is present', () => {
+    const { source, patterns } = extractRecordSource([
+      { field: 'name', operator: 'contains', value: 'Uber' },
+    ]);
+    expect(source).toBeNull();
+    expect(patterns).toHaveLength(1);
   });
 });
 
