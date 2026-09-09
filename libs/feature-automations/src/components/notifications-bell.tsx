@@ -33,7 +33,7 @@ export function NotificationsBell({
           unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'
         }
         aria-haspopup="dialog"
-        className="fixed right-3 top-3 z-40 grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-ink shadow-sm transition-colors hover:border-accent hover:text-accent sm:right-4 sm:top-4"
+        className="fixed right-3 top-3 z-40 grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-ink shadow-sm transition-colors hover:border-accent hover:text-accent sm:right-4 sm:top-4 lg:right-[5.25rem] lg:top-[1.375rem]"
       >
         <Bell size={17} strokeWidth={2} />
         {unread > 0 ? (
