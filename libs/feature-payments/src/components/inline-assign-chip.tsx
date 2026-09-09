@@ -161,41 +161,27 @@ function AnchoredMenu({
   }, [anchorRef, width]);
 
   useEffect(() => {
-    const onDown = (e: PointerEvent) => {
+    // A click anywhere outside the menu (the backdrop, the card, a sibling
+    // chip, a link) closes it and goes no further: caught in the *capture*
+    // phase on `document` it's stopped before React's delegated handlers ever
+    // see it, so a click-away can only ever dismiss the menu.
+    const onOutsideClick = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (
-        !menuRef.current?.contains(t) &&
-        !anchorRef.current?.contains(t)
-      ) {
+      if (!menuRef.current?.contains(t) && !anchorRef.current?.contains(t)) {
+        e.stopPropagation();
+        e.preventDefault();
         onClose();
-        // The pointerdown that dismissed the menu would otherwise fall through
-        // as a `click` to whatever it landed on (the card's click-to-edit, a
-        // sibling chip, a link). Swallow that one click — wherever it is — so a
-        // click-away only ever closes the menu.
-        const swallow = (ev: Event) => {
-          ev.stopPropagation();
-          ev.preventDefault();
-        };
-        document.addEventListener('click', swallow, {
-          capture: true,
-          once: true,
-        });
-        // No click follows a pointerdown on a scrollbar or the start of a drag —
-        // drop the guard on the next tick so it can't eat an unrelated click.
-        setTimeout(() => {
-          document.removeEventListener('click', swallow, true);
-        }, 0);
       }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('click', onOutsideClick, true);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onClose, true);
     window.addEventListener('resize', onClose);
     return () => {
-      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onClose, true);
       window.removeEventListener('resize', onClose);
@@ -207,21 +193,13 @@ function AnchoredMenu({
   return createPortal(
     <>
       {/*
-       * A transparent full-screen backdrop under the menu: a click-away lands
-       * *on it* (not the card, a sibling chip or a link), so it can only ever
-       * close the menu — nothing underneath is touched. `stopPropagation`
-       * keeps the click from bubbling the React portal tree back to the card.
+       * A transparent full-screen backdrop under the menu so a click-away
+       * always lands on inert surface — never a link or a control with its own
+       * pointer handling. It stays mounted for the whole gesture; the
+       * capture-phase `click` listener above is what actually closes the menu
+       * and swallows the click.
        */}
-      <button
-        type="button"
-        aria-hidden
-        tabIndex={-1}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        className="fixed inset-0 z-40 cursor-default"
-      />
+      <div aria-hidden className="fixed inset-0 z-40 cursor-default" />
       <div
         ref={menuRef}
         onClick={(e) => e.stopPropagation()}

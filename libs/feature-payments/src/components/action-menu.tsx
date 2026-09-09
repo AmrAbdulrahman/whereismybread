@@ -125,21 +125,26 @@ function AnchoredMenu({
   }, [anchorRef, width]);
 
   useEffect(() => {
-    const onDown = (e: PointerEvent) => {
+    // A click anywhere outside the menu closes it and goes no further —
+    // caught in the *capture* phase on `document`, it's stopped before the
+    // click-to-edit card row (or React's delegated handlers) ever sees it.
+    const onOutsideClick = (e: MouseEvent) => {
       const t = e.target as Node;
       if (!menuRef.current?.contains(t) && !anchorRef.current?.contains(t)) {
+        e.stopPropagation();
+        e.preventDefault();
         onClose();
       }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('click', onOutsideClick, true);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onClose, true);
     window.addEventListener('resize', onClose);
     return () => {
-      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onClose, true);
       window.removeEventListener('resize', onClose);
@@ -151,21 +156,12 @@ function AnchoredMenu({
   return createPortal(
     <>
       {/*
-       * A transparent full-screen backdrop under the menu: a click-away lands
-       * *on it*, never on the click-to-edit card row (or a link) underneath, so
-       * dismissing the menu can't also open the edit modal. `stopPropagation`
-       * keeps the click from bubbling the React portal tree back to the card.
+       * A transparent full-screen backdrop under the menu so a click-away
+       * always lands on inert surface (never the click-to-edit card row or a
+       * link). It stays mounted for the whole gesture; the capture-phase
+       * `click` listener above is what closes the menu and swallows the click.
        */}
-      <button
-        type="button"
-        aria-hidden
-        tabIndex={-1}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        className="fixed inset-0 z-40 cursor-default"
-      />
+      <div aria-hidden className="fixed inset-0 z-40 cursor-default" />
       <div
         ref={menuRef}
         onClick={(e) => e.stopPropagation()}

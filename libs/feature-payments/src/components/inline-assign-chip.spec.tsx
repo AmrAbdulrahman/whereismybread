@@ -65,9 +65,14 @@ describe('InlineAssignChip', () => {
   it('a click-away only closes the menu — it never reaches what was clicked', async () => {
     const user = userEvent.setup();
     const onOutside = vi.fn();
+    const onOtherCard = vi.fn();
     render(
       <div onClick={onOutside}>
         <span data-testid="outside">elsewhere</span>
+        {/* Stands in for another click-to-edit card in the list. */}
+        <button type="button" data-testid="other-card" onClick={onOtherCard}>
+          another card
+        </button>
         <InlineAssignChip
           label="account"
           options={[{ id: 'a1', name: 'Joint', color: '#111' }]}
@@ -83,6 +88,14 @@ describe('InlineAssignChip', () => {
 
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(onOutside).not.toHaveBeenCalled();
+
+    // Re-open, then click straight onto another card: it closes the menu and
+    // that card's own handler never fires.
+    await user.click(screen.getByRole('button', { name: 'Add account' }));
+    expect(screen.queryByRole('listbox')).not.toBeNull();
+    await user.click(screen.getByTestId('other-card'));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(onOtherCard).not.toHaveBeenCalled();
   });
 
   it('shows the current value as a filled pill and lets it be swapped', async () => {
