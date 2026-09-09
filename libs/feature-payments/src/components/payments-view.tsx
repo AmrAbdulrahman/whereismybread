@@ -955,6 +955,7 @@ export function PaymentsView({
           <AutomationForm
             initial={automationDraft}
             lookups={automationLookups}
+            hideTrigger
             onDone={() => {
               setAutomationDraft(null);
               router.refresh();

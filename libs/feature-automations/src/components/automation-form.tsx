@@ -121,11 +121,15 @@ export interface AutomationFormInitial {
 export function AutomationForm({
   initial,
   lookups,
+  hideTrigger = false,
   onDone,
   onCancel,
 }: {
   initial?: AutomationFormInitial;
   lookups: AutomationLookups;
+  /** Hide the "When" picker — the trigger is fixed by `initial` (e.g. opened
+   * pre-filled from a payment / expense / review card). */
+  hideTrigger?: boolean;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -313,6 +317,9 @@ export function AutomationForm({
         />
       </Field>
 
+      {hideTrigger ? (
+        <p className="text-xs text-muted">{TRIGGER_HINTS[trigger]}</p>
+      ) : (
       <Field>
         <Label>When</Label>
         <div className="flex flex-col gap-1.5">
@@ -343,6 +350,7 @@ export function AutomationForm({
           ))}
         </div>
       </Field>
+      )}
 
       <Field>
         <div className="flex items-center justify-between">

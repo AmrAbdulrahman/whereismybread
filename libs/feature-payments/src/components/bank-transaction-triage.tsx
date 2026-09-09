@@ -298,6 +298,7 @@ export function BankTransactionTriage({
           <AutomationForm
             initial={automationDraft}
             lookups={automationLookups}
+            hideTrigger
             onDone={() => {
               setAutomationDraft(null);
               startTransition(() => router.refresh());
