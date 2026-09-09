@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   InlineAssignChip,
@@ -98,6 +98,21 @@ describe('InlineAssignChip', () => {
     expect(onOtherCard).not.toHaveBeenCalled();
   });
 
+  it('closes on scroll', async () => {
+    const user = userEvent.setup();
+    render(
+      <InlineAssignChip
+        label="account"
+        options={[{ id: 'a1', name: 'Joint', color: '#111' }]}
+        onPick={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add account' }));
+    expect(screen.queryByRole('listbox')).not.toBeNull();
+    fireEvent.scroll(window);
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
   it('shows the current value as a filled pill and lets it be swapped', async () => {
     const user = userEvent.setup();
     const onPick = vi.fn();
@@ -154,6 +169,20 @@ describe('InlineTagChip', () => {
     await user.click(screen.getByRole('button', { name: 'Edit tags' }));
     await user.click(screen.getByRole('button', { name: 'personal' }));
     expect(onChange).toHaveBeenCalledWith(['work', 'personal']);
+  });
+
+  it('stays open when the list scrolls, so tags can be edited while browsing', async () => {
+    const user = userEvent.setup();
+    render(
+      <InlineTagChip value={[]} suggestions={[]} onChange={() => undefined} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add tags' }));
+    expect(screen.queryByPlaceholderText(/Add tags/)).not.toBeNull();
+    await act(async () => {
+      fireEvent.scroll(window);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.queryByPlaceholderText(/Add tags/)).not.toBeNull();
   });
 
   it('reads "+ tags" when the card has none', () => {

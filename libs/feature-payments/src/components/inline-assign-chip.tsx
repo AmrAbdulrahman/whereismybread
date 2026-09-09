@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -135,30 +136,50 @@ function ValueChipButton({
 /**
  * A floating menu anchored under `anchorRef`, rendered in a portal so an
  * ancestor's `opacity` (a paid / past occurrence dims its whole card) or
- * `overflow` never bleeds into it. Closes on outside click, Esc, scroll, resize.
+ * `overflow` never bleeds into it. Closes on outside click, Esc and resize.
+ *
+ * By default a scroll also dismisses it (behind a full-screen backdrop). With
+ * `followScroll` it instead tracks the anchor as the list scrolls and drops
+ * the backdrop, so the page underneath stays scrollable and the menu rides
+ * along until the anchor leaves the viewport.
  */
 function AnchoredMenu({
   anchorRef,
   onClose,
   width = 200,
+  followScroll = false,
   children,
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   width?: number;
+  followScroll?: boolean;
   children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  useLayoutEffect(() => {
+  const place = useCallback(() => {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    // The anchor has scrolled out of view — there's nothing to pin to.
+    if (r.bottom < 0 || r.top > window.innerHeight) {
+      onClose();
+      return;
+    }
     // Keep the menu on screen — nudge left if it would overflow the right edge.
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
-    setPos({ top: r.bottom + 4, left });
-  }, [anchorRef, width]);
+    const top = r.bottom + 4;
+    // Same reference when nothing moved, so the layout effect can't re-loop.
+    setPos((prev) =>
+      prev && prev.top === top && prev.left === left ? prev : { top, left },
+    );
+  }, [anchorRef, width, onClose]);
+
+  useLayoutEffect(() => {
+    place();
+  }, [place]);
 
   useEffect(() => {
     // A click anywhere outside the menu (the backdrop, the card, a sibling
@@ -178,15 +199,23 @@ function AnchoredMenu({
     };
     document.addEventListener('click', onOutsideClick, true);
     document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onClose, true);
-    window.addEventListener('resize', onClose);
+
+    let raf = 0;
+    const onScroll = () => {
+      if (!followScroll) return onClose();
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(place);
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', followScroll ? onScroll : onClose);
     return () => {
       document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onClose, true);
-      window.removeEventListener('resize', onClose);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', followScroll ? onScroll : onClose);
+      cancelAnimationFrame(raf);
     };
-  }, [anchorRef, onClose]);
+  }, [anchorRef, onClose, place, followScroll]);
 
   if (!pos || typeof document === 'undefined') return null;
 
@@ -197,9 +226,12 @@ function AnchoredMenu({
        * always lands on inert surface — never a link or a control with its own
        * pointer handling. It stays mounted for the whole gesture; the
        * capture-phase `click` listener above is what actually closes the menu
-       * and swallows the click.
+       * and swallows the click. Skipped when the menu follows scroll, so the
+       * list underneath stays scrollable.
        */}
-      <div aria-hidden className="fixed inset-0 z-40 cursor-default" />
+      {followScroll ? null : (
+        <div aria-hidden className="fixed inset-0 z-40 cursor-default" />
+      )}
       <div
         ref={menuRef}
         onClick={(e) => e.stopPropagation()}
@@ -355,6 +387,9 @@ export function InlineTagChip({
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
           width={248}
+          // Editing tags is a multi-step task — keep the editor open and let it
+          // ride along as the user scrolls the list looking for context.
+          followScroll
         >
           <div className="p-1.5">
             <TagInput value={value} onChange={onChange} options={suggestions} />
