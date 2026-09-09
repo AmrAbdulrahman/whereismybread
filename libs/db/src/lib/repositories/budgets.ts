@@ -190,6 +190,45 @@ export async function deleteBudget(userId: string, id: string): Promise<void> {
 }
 
 /**
+ * Given a budget id an automation stored, return the id of the instance that
+ * actually applies on `date`. For a recurring monthly series that's the
+ * sibling row (same name) covering that month — materialised forward first if
+ * the month is past the latest existing instance. Non-recurring budgets and
+ * unknown ids pass straight through. `null` only if the series can't reach
+ * `date` (e.g. `date` predates the series start).
+ */
+export async function resolveBudgetForDate(
+  userId: string,
+  budgetId: string,
+  date: string,
+): Promise<string | null> {
+  const [budget] = await getDb()
+    .select()
+    .from(budgets)
+    .where(and(eq(budgets.id, budgetId), eq(budgets.userId, userId)))
+    .limit(1);
+  if (!budget) return budgetId;
+  if (!budget.recurring) return budgetId;
+  if (date >= budget.startDate && date <= budget.endDate) return budget.id;
+
+  await materializeRecurringBudgets(userId, date);
+  const siblings = await getDb()
+    .select()
+    .from(budgets)
+    .where(
+      and(
+        eq(budgets.userId, userId),
+        eq(budgets.recurring, true),
+        eq(budgets.name, budget.name),
+      ),
+    );
+  const hit = siblings.find(
+    (b) => date >= b.startDate && date <= b.endDate,
+  );
+  return hit?.id ?? null;
+}
+
+/**
  * Make sure every recurring monthly budget has an instance covering
  * `through` — walking forward month by month from whichever row is
  * currently the latest for that name, cloning its name/amount/currency/

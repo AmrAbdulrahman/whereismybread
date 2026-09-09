@@ -4,7 +4,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMoney } from '@wib/domain';
 import { cn } from '@wib/ui';
-import { FileText, Pencil, PiggyBank, Receipt, Trash2 } from '@wib/ui/icons';
+import {
+  FileText,
+  Pencil,
+  PiggyBank,
+  Receipt,
+  Trash2,
+  Zap,
+} from '@wib/ui/icons';
 import { assignExpenseAction } from '../lib/budget-actions';
 import type { ExpenseLine, OccurrenceTag } from '../lib/types';
 import { ActionMenu, type ActionMenuItem } from './action-menu';
@@ -37,6 +44,7 @@ export function ExpenseListItem({
   expense,
   onEdit,
   onDelete,
+  onCreateAutomation,
   assign,
   highlight = false,
 }: {
@@ -44,6 +52,8 @@ export function ExpenseListItem({
   onEdit: () => void;
   /** Open the delete-confirm for this expense (overflow menu). */
   onDelete?: () => void;
+  /** Open the "new automation" dialog matching this expense (overflow menu). */
+  onCreateAutomation?: () => void;
   /** Flash a ring around the row — a notification deep link landed here. */
   highlight?: boolean;
   /**
@@ -102,6 +112,13 @@ export function ExpenseListItem({
   const menuItems: ActionMenuItem[] = [
     { label: 'Edit', icon: <Pencil size={13} strokeWidth={2} />, onSelect: onEdit },
   ];
+  if (onCreateAutomation) {
+    menuItems.push({
+      label: 'Create automation',
+      icon: <Zap size={13} strokeWidth={2} />,
+      onSelect: onCreateAutomation,
+    });
+  }
   if (onDelete) {
     menuItems.push({
       label: 'Delete',

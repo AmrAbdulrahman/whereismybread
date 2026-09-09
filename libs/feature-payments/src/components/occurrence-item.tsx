@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Trash2,
   TriangleAlert,
+  Zap,
 } from '@wib/ui/icons';
 import { ActionMenu, type ActionMenuItem } from './action-menu';
 import {
@@ -73,6 +74,7 @@ export function OccurrenceItem({
   onEdit,
   onFlag,
   onDelete,
+  onCreateAutomation,
   onToggle,
   displayCurrency,
   rates,
@@ -87,6 +89,8 @@ export function OccurrenceItem({
   onFlag?: (paymentId: string, dueDate: string) => void;
   /** Open the delete-confirm for this occurrence (overflow menu). */
   onDelete?: (paymentId: string, dueDate: string) => void;
+  /** Open the "new automation" dialog matching this payment (overflow menu). */
+  onCreateAutomation?: () => void;
   /** Flash a ring around the card — a deep link from a notification landed here. */
   highlight?: boolean;
   /**
@@ -205,6 +209,13 @@ export function OccurrenceItem({
         />
       ),
       onSelect: () => onFlag(occ.paymentId, occ.dueDate),
+    });
+  }
+  if (onCreateAutomation && !skipped) {
+    menuItems.push({
+      label: 'Create automation',
+      icon: <Zap size={13} strokeWidth={2} />,
+      onSelect: onCreateAutomation,
     });
   }
   if (onDelete && !skipped) {

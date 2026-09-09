@@ -12,6 +12,7 @@ import {
   type Account,
   type Automation,
   type Bank,
+  type Budget,
   type Notification,
   type PaymentMethod,
   type Tag,
@@ -48,11 +49,29 @@ export async function getAutomationsData(
       banks: banks.map((b) => ({ id: b.id, name: b.name, color: b.color })),
       methods: methods.map((m) => ({ id: m.id, name: m.name })),
       tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
-      budgets: budgets
-        .filter((b) => !b.closedAt)
-        .map((b) => ({ id: b.id, name: b.name })),
+      // Only recurring monthly budgets — a one-off budget is a single month's
+      // envelope and the automation would keep filing into a stale, closed
+      // month. Deduped to one entry per series, anchored on the *earliest*
+      // instance id (stable as later months materialise); the engine resolves
+      // the right month's instance at fire time.
+      budgets: recurringBudgetSeries(budgets),
     },
   };
+}
+
+function recurringBudgetSeries(budgets: Budget[]): { id: string; name: string }[] {
+  const byName = new Map<string, { id: string; name: string; startDate: string }>();
+  for (const b of budgets) {
+    if (!b.recurring || b.closedAt) continue;
+    const key = b.name.toLowerCase();
+    const cur = byName.get(key);
+    if (!cur || b.startDate < cur.startDate) {
+      byName.set(key, { id: b.id, name: b.name, startDate: b.startDate });
+    }
+  }
+  return [...byName.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(({ id, name }) => ({ id, name }));
 }
 
 export interface NotificationsData {

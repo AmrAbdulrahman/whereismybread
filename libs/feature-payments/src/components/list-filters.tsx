@@ -43,12 +43,13 @@ export function listFilterCount(v: ListFilterValue): number {
   );
 }
 
-/** Count for the "Filters" button badge — includes the unpaid-only toggle. */
+/** Count for the "Filters" button badge — includes the toggle facets. */
 export function listFilterBadgeCount(
   v: ListFilterValue,
   unpaidOnly: boolean,
+  flaggedOnly = false,
 ): number {
-  return listFilterCount(v) + (unpaidOnly ? 1 : 0);
+  return listFilterCount(v) + (unpaidOnly ? 1 : 0) + (flaggedOnly ? 1 : 0);
 }
 
 /** Filters that only make sense for planned payments — a bank has no expenses. */
@@ -79,6 +80,8 @@ export interface FilterChip {
   next: ListFilterValue;
   /** True for the "Outstanding" chip — it lives outside `ListFilterValue`. */
   clearsUnpaidOnly?: boolean;
+  /** True for the "Flagged" chip — also outside `ListFilterValue`. */
+  clearsFlaggedOnly?: boolean;
 }
 
 /**
@@ -88,6 +91,7 @@ export interface FilterChip {
 export function activeFilterChips(
   value: ListFilterValue,
   unpaidOnly: boolean,
+  flaggedOnly: boolean,
   lookups: {
     accounts: { id: string; name: string }[];
     banks: { id: string; name: string }[];
@@ -105,6 +109,14 @@ export function activeFilterChips(
       label: 'Outstanding',
       next: value,
       clearsUnpaidOnly: true,
+    });
+  }
+  if (flaggedOnly) {
+    chips.push({
+      key: 'flagged',
+      label: 'Flagged',
+      next: value,
+      clearsFlaggedOnly: true,
     });
   }
   if (value.search.trim()) {
@@ -156,6 +168,8 @@ export function ListFilters({
   methods,
   unpaidOnly,
   onUnpaidOnlyChange,
+  flaggedOnly = false,
+  onFlaggedOnlyChange,
   onClearAll,
 }: {
   value: ListFilterValue;
@@ -166,6 +180,8 @@ export function ListFilters({
   methods: PaymentMethod[];
   unpaidOnly: boolean;
   onUnpaidOnlyChange: (next: boolean) => void;
+  flaggedOnly?: boolean;
+  onFlaggedOnlyChange?: (next: boolean) => void;
   /** Clears everything (incl. the outstanding toggle) — falls back to just
    * emptying the filter value. */
   onClearAll?: () => void;
@@ -262,6 +278,23 @@ export function ListFilters({
           >
             Outstanding
           </button>
+          {onFlaggedOnlyChange ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={flaggedOnly}
+              aria-label="Flagged"
+              onClick={() => onFlaggedOnlyChange(!flaggedOnly)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium',
+                flaggedOnly
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-line-strong text-muted hover:text-ink',
+              )}
+            >
+              Flagged
+            </button>
+          ) : null}
           {(Object.keys(KIND_LABELS) as ListKind[]).map((k) => {
             const on = value.kinds.includes(k);
             return (
@@ -290,14 +323,14 @@ export function ListFilters({
       {chipGroup('Bank', banks, 'bankIds')}
       {chipGroup('Tags', tags, 'tagIds')}
 
-      {count > 0 || unpaidOnly ? (
+      {count > 0 || unpaidOnly || flaggedOnly ? (
         <button
           type="button"
           onClick={() => (onClearAll ? onClearAll() : onChange(EMPTY_LIST_FILTER))}
           className="inline-flex items-center gap-1 self-start text-xs text-muted hover:text-ink"
         >
           <X size={13} />
-          Clear {count === 1 && !unpaidOnly ? 'filter' : 'filters'}
+          Clear {count === 1 && !unpaidOnly && !flaggedOnly ? 'filter' : 'filters'}
         </button>
       ) : null}
     </div>

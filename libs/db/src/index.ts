@@ -176,6 +176,7 @@ export {
   setBudgetClosed,
   deleteBudget,
   materializeRecurringBudgets,
+  resolveBudgetForDate,
   type BudgetInput,
   type BudgetExpense,
   type BudgetExpenseAttachment,

@@ -27,7 +27,7 @@ export function AddFab({
   ];
 
   return (
-    <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end gap-2.5 lg:bottom-auto lg:right-5 lg:top-3 lg:z-40 lg:flex-col-reverse">
+    <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end gap-2.5 lg:bottom-auto lg:right-5 lg:top-3 lg:z-40 lg:flex-col-reverse">
       {open ? (
         <>
           <button

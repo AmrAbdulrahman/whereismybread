@@ -4,9 +4,11 @@ import { requireUserId } from '@wib/auth/server';
 import type { FormState } from '@wib/auth';
 import {
   fetchBranding,
+  getBankTransactionsByIds,
   markBankTransactionCategorized,
   markBankTransactionIgnored,
   markBankTransactionsIgnored,
+  markOccurrence,
   updateBankTransactionEnrichment,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
@@ -74,6 +76,24 @@ export async function categorizeBankTransactionAction(
     result.type,
     result.id,
   );
+
+  // A synced transaction is money that already moved — so the first instance
+  // of a payment made out of it starts life already ticked off.
+  if (result.type === 'payment') {
+    const [txn] = await getBankTransactionsByIds(userId, [transactionId]).catch(
+      () => [],
+    );
+    if (txn) {
+      const dueDate = new Date(txn.occurredAt).toISOString().slice(0, 10);
+      if (dueDate <= new Date().toISOString().slice(0, 10)) {
+        await markOccurrence(userId, {
+          paymentId: result.id,
+          dueDate,
+          status: 'paid',
+        }).catch(() => undefined);
+      }
+    }
+  }
 
   revalidatePath('/integrations');
   revalidatePath('/plan');

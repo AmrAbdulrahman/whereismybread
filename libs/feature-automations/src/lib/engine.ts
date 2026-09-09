@@ -18,6 +18,8 @@ import {
   listPendingBankTransactions,
   markBankTransactionCategorized,
   markBankTransactionIgnored,
+  markOccurrence,
+  resolveBudgetForDate,
   setExpenseAccount,
   setPaymentAccount,
   setPaymentMethod,
@@ -334,8 +336,13 @@ async function applyReviewTerminal(
   if (!url) url = null;
 
   if (action.type === 'log_expense') {
+    // The stored budget id is one month's instance of a recurring series —
+    // swap in the instance that actually covers this expense's date.
+    const budgetId = action.budgetId
+      ? await resolveBudgetForDate(userId, action.budgetId, date)
+      : null;
     const expense = await createExpense(userId, {
-      budgetId: action.budgetId ?? null,
+      budgetId,
       accountId,
       bankId: action.bankId ?? txn.bankId ?? null,
       name,
@@ -383,6 +390,12 @@ async function applyReviewTerminal(
     tagIds,
   });
   await markBankTransactionCategorized(userId, txn.id, 'payment', payment.id);
+  // The transaction already happened — tick off the occurrence it maps to.
+  await markOccurrence(userId, {
+    paymentId: payment.id,
+    dueDate: date,
+    status: 'paid',
+  }).catch(() => undefined);
 }
 
 const ENRICH_TYPES = new Set([

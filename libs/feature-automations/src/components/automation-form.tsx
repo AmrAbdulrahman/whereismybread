@@ -110,7 +110,8 @@ function blankAction(trigger: AutomationTrigger): ActionRow {
 }
 
 export interface AutomationFormInitial {
-  id: string;
+  /** Omitted for a pre-filled *new* automation (e.g. "create from this card"). */
+  id?: string;
   name: string;
   trigger: AutomationTrigger;
   conditions: Automation['conditions'];
@@ -691,6 +692,11 @@ export function AutomationForm({
                         </option>
                       ))}
                     </select>
+                    <p className="text-[11px] text-muted">
+                      {lookups.budgets.length > 0
+                        ? 'Only recurring monthly budgets — each run files into that month’s envelope.'
+                        : 'No recurring monthly budgets yet. A one-off budget can’t be used here — it would go stale next month.'}
+                    </p>
                   </>
                 ) : null}
               </div>
@@ -704,7 +710,11 @@ export function AutomationForm({
           Cancel
         </Button>
         <Button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : initial ? 'Save changes' : 'Create automation'}
+          {busy
+            ? 'Saving…'
+            : initial?.id
+              ? 'Save changes'
+              : 'Create automation'}
         </Button>
       </div>
     </form>

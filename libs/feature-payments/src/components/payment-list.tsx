@@ -169,6 +169,7 @@ export function PaymentList({
   reviewTransactions = [],
   filter = EMPTY_LIST_FILTER,
   unpaidOnly = false,
+  flaggedOnly = false,
   stickyTop = 0,
   goTodayRef,
   hideOccurrence,
@@ -177,6 +178,7 @@ export function PaymentList({
   onEdit,
   onFlag,
   onDelete,
+  onCreateAutomation,
   onEditBudget,
   onEditExpense,
   onDeleteExpense,
@@ -198,6 +200,8 @@ export function PaymentList({
   filter?: ListFilterValue;
   /** Hide paid occurrences; days left with nothing to show drop out entirely. */
   unpaidOnly?: boolean;
+  /** Show only flagged occurrences (and, like unpaid-only, drop expenses). */
+  flaggedOnly?: boolean;
   /** Px offset for the sticky month headers — the height of the sticky panel. */
   stickyTop?: number;
   /**
@@ -214,6 +218,8 @@ export function PaymentList({
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
   onDelete?: (paymentId: string, dueDate: string) => void;
+  /** Open the "new automation" dialog pre-filled to match this row. */
+  onCreateAutomation?: (name: string, amountMinor: number) => void;
   onEditBudget: (budget: BudgetSummary) => void;
   onEditExpense: (expense: ExpenseLine) => void;
   onDeleteExpense?: (expense: ExpenseLine) => void;
@@ -675,12 +681,15 @@ export function PaymentList({
   // filter narrows further. "Unpaid only" is about outstanding payments —
   // expenses are records of money already spent and budget lines aren't a
   // payment at all, so both drop out entirely under it.
+  // "Flagged only" is a payments concept too — expenses and budget lines
+  // can't be flagged, so they drop out under it just like unpaid-only.
+  const hideNonPayments = unpaidOnly || flaggedOnly;
   const showBudgetLines =
-    !unpaidOnly && !attrFilterActive && wantKind('budgeted');
+    !hideNonPayments && !attrFilterActive && wantKind('budgeted');
   const showBudgeted =
-    !unpaidOnly && !expenseIncompatibleFilter && wantKind('budgeted');
+    !hideNonPayments && !expenseIncompatibleFilter && wantKind('budgeted');
   const showUnbudgeted =
-    !unpaidOnly && !expenseIncompatibleFilter && wantKind('unbudgeted');
+    !hideNonPayments && !expenseIncompatibleFilter && wantKind('unbudgeted');
   const showBudgetsAndExpenses =
     showBudgetLines || showBudgeted || showUnbudgeted;
   const expensesByDate = new Map<string, ExpenseLine[]>();
@@ -725,6 +734,9 @@ export function PaymentList({
           matchesFilter(o) &&
           o.status !== 'skipped' &&
           (!unpaidOnly || !isPaid(o)) &&
+          (!flaggedOnly ||
+            o.instanceFlagNote != null ||
+            o.seriesFlagNote != null) &&
           !hideOccurrence?.(o),
       ),
     }));
@@ -733,10 +745,16 @@ export function PaymentList({
     const lastMatch = nonEmpty[nonEmpty.length - 1]?.date;
     // With an attribute filter on, keep the emptied-out day headers that sit
     // *between* matches — so the list keeps its shape and you can see which
-    // days had activity that's now filtered out. (Unpaid-only still prunes
-    // them; empty days there are just noise.)
+    // days had activity that's now filtered out. A text search is different:
+    // it's a hunt for specific rows, so show only the days that actually
+    // match. (Unpaid-only also prunes; empty days there are just noise.)
     const base =
-      filterActive && !unpaidOnly && firstMatch && lastMatch
+      filterActive &&
+      !unpaidOnly &&
+      !flaggedOnly &&
+      !searchActive &&
+      firstMatch &&
+      lastMatch
         ? filteredGroups.filter(
             (g) =>
               g.occurrences.length > 0 ||
@@ -954,7 +972,7 @@ export function PaymentList({
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, [board.today, stickyTop, monthKeys]);
+  }, [board.today, todayMonth, stickyTop, monthKeys]);
 
   // On first load, land on the earliest day this month that still needs
   // action (an unpaid payment or a transaction to review) rather than the
@@ -1072,7 +1090,7 @@ export function PaymentList({
           type="button"
           onClick={goToday}
           aria-label="Jump to today"
-          className="fixed bottom-[calc(9.5rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-2.5 pr-3.5 text-xs font-semibold text-ink shadow-lg active:scale-95 sm:hidden"
+          className="fixed bottom-[calc(8.25rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-2.5 pr-3.5 text-xs font-semibold text-ink shadow-lg active:scale-95 sm:hidden"
         >
           {todayDir === 'up' ? (
             <ArrowUp size={15} strokeWidth={2.5} className="text-accent" />
@@ -1176,6 +1194,14 @@ export function PaymentList({
         const hasIncome = incomeMinor > 0;
         const leftMinor = incomeMinor - totalMinor;
         const risk = riskFor(totalMinor, incomeMinor);
+        // This figure ignores budget reserves (they get their own row + the
+        // page summary counts them). Say so when a budget overlaps the month,
+        // so it doesn't look like it contradicts the "left after budgets"
+        // figure up top.
+        const monthHasBudget = budgets.some(
+          (b) =>
+            !b.closedAt && b.startDate <= monthEnd && b.endDate >= monthStart,
+        );
         const spendPct = hasIncome ? (totalMinor / incomeMinor) * 100 : 0;
 
         return (
@@ -1241,6 +1267,12 @@ export function PaymentList({
                         : `${formatMoney(
                             money(-leftMinor, displayCurrency),
                           )} over`}
+                      {monthHasBudget ? (
+                        <span className="font-normal text-muted">
+                          {' '}
+                          before budgets
+                        </span>
+                      ) : null}
                       {' · '}
                       {risk.label}
                     </span>
@@ -1529,6 +1561,15 @@ export function PaymentList({
                                 onEdit={onEdit}
                                 onFlag={onFlag}
                                 onDelete={onDelete}
+                                onCreateAutomation={
+                                  onCreateAutomation
+                                    ? () =>
+                                        onCreateAutomation(
+                                          occ.name,
+                                          occ.amount.minorUnits,
+                                        )
+                                    : undefined
+                                }
                                 highlight={highlightOccurrence?.(occ)}
                                 onToggle={(paid) => setLocalPaid(occ.key, paid)}
                                 displayCurrency={displayCurrency}
@@ -1547,6 +1588,15 @@ export function PaymentList({
                             onDelete={
                               onDeleteExpense
                                 ? () => onDeleteExpense(e)
+                                : undefined
+                            }
+                            onCreateAutomation={
+                              onCreateAutomation
+                                ? () =>
+                                    onCreateAutomation(
+                                      e.name,
+                                      e.amount.minorUnits,
+                                    )
                                 : undefined
                             }
                             assign={assignChips}

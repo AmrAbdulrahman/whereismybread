@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type {
   Account,
@@ -25,6 +25,11 @@ import {
   useToast,
 } from '@wib/ui';
 import { CalendarDays, List, Plus, SlidersHorizontal, X } from '@wib/ui/icons';
+import {
+  AutomationForm,
+  type AutomationFormInitial,
+  type AutomationLookups,
+} from '@wib/feature-automations';
 import { deletePaymentAction, type EditScope } from '../lib/actions';
 import { deleteExpenseAction } from '../lib/budget-actions';
 import { applyOverride } from '../lib/apply-override';
@@ -159,8 +164,9 @@ export function PaymentsView({
   const [listFilter, setListFilter] =
     useState<ListFilterValue>(EMPTY_LIST_FILTER);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
-  const filterBadge = listFilterBadgeCount(listFilter, unpaidOnly);
-  const filterChips = activeFilterChips(listFilter, unpaidOnly, {
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const filterBadge = listFilterBadgeCount(listFilter, unpaidOnly, flaggedOnly);
+  const filterChips = activeFilterChips(listFilter, unpaidOnly, flaggedOnly, {
     accounts,
     banks,
     tags,
@@ -169,6 +175,7 @@ export function PaymentsView({
   const clearAllFilters = () => {
     setListFilter(EMPTY_LIST_FILTER);
     setUnpaidOnly(false);
+    setFlaggedOnly(false);
     // The list was showing a filtered slice; drop the reader back at today
     // once it re-renders unfiltered.
     requestAnimationFrame(() =>
@@ -360,6 +367,56 @@ export function PaymentsView({
     (highlight.date == null || o.dueDate === highlight.date);
   const highlightExpense = (id: string) =>
     highlight != null && id === highlight.recordId;
+
+  // "Create automation" from a card's ⋮ menu — opens the automation dialog
+  // pre-filled with conditions that match this row (name + amount). The
+  // lookups the form needs are all already on this page.
+  const automationLookups: AutomationLookups = useMemo(() => {
+    // Recurring monthly series only, one entry each (earliest instance id).
+    const byName = new Map<
+      string,
+      { id: string; name: string; startDate: string }
+    >();
+    for (const b of budgets) {
+      if (!b.recurring || b.closedAt) continue;
+      const key = b.name.toLowerCase();
+      const cur = byName.get(key);
+      if (!cur || b.startDate < cur.startDate) {
+        byName.set(key, { id: b.id, name: b.name, startDate: b.startDate });
+      }
+    }
+    return {
+      accounts: accounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        color: a.color,
+      })),
+      banks: banks.map((b) => ({ id: b.id, name: b.name, color: b.color })),
+      methods: methods.map((m) => ({ id: m.id, name: m.name })),
+      tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+      budgets: [...byName.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(({ id, name }) => ({ id, name })),
+    };
+  }, [accounts, banks, methods, tags, budgets]);
+
+  const [automationDraft, setAutomationDraft] =
+    useState<AutomationFormInitial | null>(null);
+  const openCreateAutomation = (name: string, amountMinor: number) => {
+    setAutomationDraft({
+      name: `Auto-file ${name}`.slice(0, 80),
+      trigger: 'review_expense_created',
+      conditions: [
+        { field: 'name', operator: 'contains', value: name },
+        {
+          field: 'amount',
+          operator: 'equals',
+          value: (Math.abs(amountMinor) / 100).toFixed(2),
+        },
+      ],
+      actions: [],
+    });
+  };
 
   // A push (bank sync finished, an automation fired) refreshes the board in
   // the background so the new payment / triaged transaction just appears.
@@ -624,6 +681,8 @@ export function PaymentsView({
       methods={methods}
       unpaidOnly={unpaidOnly}
       onUnpaidOnlyChange={setUnpaidOnly}
+      flaggedOnly={flaggedOnly}
+      onFlaggedOnlyChange={setFlaggedOnly}
       onClearAll={clearAllFilters}
     />
   );
@@ -736,6 +795,9 @@ export function PaymentsView({
                 {formatMoney(money(scopeTotalLeftMinor, board.displayCurrency))}{' '}
                 left
                 {scopeOpenBudgets.length > 0 ? (
+                  <span className="font-normal text-muted"> after budgets</span>
+                ) : null}
+                {scopeOpenBudgets.length > 0 ? (
                   <span className="text-muted">
                     {' '}
                     ({formatMoney(
@@ -818,6 +880,7 @@ export function PaymentsView({
                 onClick={() => {
                   setListFilter(chip.next);
                   if (chip.clearsUnpaidOnly) setUnpaidOnly(false);
+                  if (chip.clearsFlaggedOnly) setFlaggedOnly(false);
                 }}
                 className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-accent"
               >
@@ -846,6 +909,7 @@ export function PaymentsView({
           reviewTransactions={visibleReview}
           filter={listFilter}
           unpaidOnly={unpaidOnly}
+          flaggedOnly={flaggedOnly}
           stickyTop={panelH}
           goTodayRef={goTodayRef}
           hideOccurrence={isOccurrenceHidden}
@@ -859,6 +923,7 @@ export function PaymentsView({
           onDeleteExpense={(e) =>
             setDeleteTarget({ kind: 'expense', id: e.id, name: e.name })
           }
+          onCreateAutomation={openCreateAutomation}
           onAddExpense={(date) =>
             setExpenseSheet({ mode: 'new', date, budgetId: null })
           }
@@ -906,6 +971,24 @@ export function PaymentsView({
           router.refresh();
         }}
       />
+
+      <ResponsiveModal
+        open={automationDraft != null}
+        onOpenChange={(o) => !o && setAutomationDraft(null)}
+        title="New automation"
+      >
+        {automationDraft ? (
+          <AutomationForm
+            initial={automationDraft}
+            lookups={automationLookups}
+            onDone={() => {
+              setAutomationDraft(null);
+              router.refresh();
+            }}
+            onCancel={() => setAutomationDraft(null)}
+          />
+        ) : null}
+      </ResponsiveModal>
 
       <TransactionTriageModal
         sheet={reviewSheet}
