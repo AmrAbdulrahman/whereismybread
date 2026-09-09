@@ -180,6 +180,7 @@ export function PaymentsView({
     setListFilter(EMPTY_LIST_FILTER);
     setUnpaidOnly(false);
     setFlaggedOnly(false);
+    setFiltersOpen(false);
     // The list was showing a filtered slice; drop the reader back at today
     // once it re-renders unfiltered.
     requestAnimationFrame(() =>
