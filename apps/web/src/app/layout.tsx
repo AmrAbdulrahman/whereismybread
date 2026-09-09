@@ -33,11 +33,15 @@ const plexMono = IBM_Plex_Mono({
 });
 
 /**
- * iOS PWA launch images. `[basename, cssWidth, cssHeight, dpr]` — the curated
- * set in `apps/web/public/splash/` (bread mark on brand purple), one
- * `<basename>_portrait.png` + `<basename>_landscape.png` per device family.
- * Media queries match iOS's natural (portrait) device metrics + orientation.
- * The in-app `<SplashScreen>` takes over once the webview loads.
+ * iOS PWA launch images. `[basename, cssWidth, cssHeight, dpr]` — the set in
+ * `apps/web/public/splash/`, one `<basename>_portrait.png` +
+ * `<basename>_landscape.png` per device family. Media queries match iOS's
+ * natural (portrait) device metrics + orientation.
+ *
+ * Each image mirrors the in-app `<SplashScreen>` (gradient, bread mark, lockup,
+ * slogan, loader bar), so the handoff when the webview loads is seamless.
+ * Regenerate with `node scripts/gen-splash-assets.mjs` — keep this table in
+ * sync with `DEVICES` there.
  */
 const APPLE_SPLASH: [string, number, number, number][] = [
   ['iPhone_17_Pro_Max__iPhone_16_Pro_Max', 440, 956, 3],
