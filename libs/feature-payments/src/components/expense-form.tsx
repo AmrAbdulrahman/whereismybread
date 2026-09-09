@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
-import type { Account, Bank, Expense, Tag } from '@wib/db';
+import type { Account, Bank, BoardProvider, Expense, Tag } from '@wib/db';
 import {
   AmountField,
   Button,
@@ -95,6 +95,7 @@ export function ExpenseForm({
   accounts: initialAccounts = [],
   banks: initialBanks = [],
   tags = [],
+  providers,
   budgetId = null,
   date,
   initial,
@@ -108,6 +109,8 @@ export function ExpenseForm({
   accounts?: Account[];
   banks?: Bank[];
   tags?: Tag[];
+  /** Reusable providers, from the page bundle — lets the picker render with no fetch. */
+  providers?: BoardProvider[];
   /** Which budget to preselect (e.g. the one "Add expense" was opened from). */
   budgetId?: string | null;
   /** The date to preselect (e.g. from a day separator's quick-add). */
@@ -287,6 +290,8 @@ export function ExpenseForm({
         render={({ field }) => (
           <ProviderPicker
             value={(field.value as string | null) ?? null}
+            providers={providers}
+            tags={tags.map((t) => ({ name: t.name, color: t.color }))}
             onChange={(providerId, defaultTagNames) => {
               field.onChange(providerId);
               mergeProviderTags(defaultTagNames);

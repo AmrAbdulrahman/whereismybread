@@ -33,12 +33,30 @@ export type PaymentWithTags = Payment & {
   brandColor: string | null;
 };
 
+/**
+ * A provider as the forms' `<ProviderPicker>` consumes it (structurally a
+ * `LabelItem<ProviderMark>` from `@wib/feature-providers` — kept as a plain
+ * shape here since `@wib/db` can't import a feature lib).
+ */
+export interface BoardProvider {
+  id: string;
+  name: string;
+  color: string;
+  usageCount: number;
+  mark: {
+    url: string | null;
+    logoUrl: string | null;
+    defaultTags: string[];
+  };
+}
+
 export interface BoardBundle {
   methods: PaymentMethod[];
   accounts: Account[];
   banks: Bank[];
   recipientMethods: RecipientMethod[];
   tags: Tag[];
+  providers: BoardProvider[];
   payments: PaymentWithTags[];
   events: PaymentEvent[];
   incomes: MonthIncome[];
@@ -96,6 +114,7 @@ export async function getBoardBundle(
       banks: unknown;
       recipient_methods: unknown;
       tags: unknown;
+      providers: unknown;
       payments: unknown;
       events: unknown;
       incomes: unknown;
@@ -125,6 +144,28 @@ export async function getBoardBundle(
         select jsonb_agg(to_jsonb(t) order by lower(t.name))
         from tags t where t.user_id = ${userId}
       ), '[]'::jsonb) as tags,
+      coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', pr.id,
+            'name', pr.name,
+            'color', coalesce(pr.color, '#6321d6'),
+            'usageCount', 0,
+            'mark', jsonb_build_object(
+              'url', pr.url,
+              'logoUrl', pr.logo_url,
+              'defaultTags', coalesce((
+                select jsonb_agg(tg.name order by lower(tg.name))
+                from provider_tags ptg
+                join tags tg on tg.id = ptg.tag_id
+                where ptg.provider_id = pr.id
+              ), '[]'::jsonb)
+            )
+          )
+          order by pr.sort_order, lower(pr.name)
+        )
+        from providers pr where pr.user_id = ${userId}
+      ), '[]'::jsonb) as providers,
       coalesce((
         select jsonb_agg(
           to_jsonb(p) || jsonb_build_object(
@@ -266,6 +307,11 @@ export async function getBoardBundle(
     banks: camelRows<Bank>(row?.banks),
     recipientMethods: camelRows<RecipientMethod>(row?.recipient_methods),
     tags: camelRows<Tag>(row?.tags),
+    // `providers` rows are already shaped by `jsonb_build_object` (camelCase,
+    // nested `mark`) — pass through untouched.
+    providers: Array.isArray(row?.providers)
+      ? (row.providers as BoardProvider[])
+      : [],
     payments: camelRows<PaymentWithTags>(row?.payments),
     events: camelRows<PaymentEvent>(row?.events),
     incomes: camelRows<MonthIncome>(row?.incomes),

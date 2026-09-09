@@ -38,40 +38,58 @@ function ProviderIcon({ row }: { row: ProviderRow }) {
 /**
  * Pick a reusable provider — or create one on the fly. Replaces the old
  * free-text "Provider website" field on the payment / expense / triage forms.
- * Self-contained: loads the user's providers + tag palette itself. Emits the
- * chosen `providerId` (or `null`) plus the provider's default tag names, so the
- * parent can merge them into its own tag field.
+ * Emits the chosen `providerId` (or `null`) plus the provider's default tag
+ * names, so the parent can merge them into its own tag field.
+ *
+ * Pass `providers` + `tags` from the already-loaded page bundle to render
+ * instantly with no round trip (the common case). Omit them and the picker
+ * loads its own list once on mount (fallback for callers without the bundle).
  */
 export function ProviderPicker({
   value,
   onChange,
+  providers: providersProp,
+  tags: tagsProp,
   label = 'Provider',
 }: {
   value: string | null;
   onChange: (providerId: string | null, defaultTagNames: string[]) => void;
+  providers?: ProviderRow[];
+  tags?: TagOption[];
   label?: string;
 }) {
-  const [providers, setProviders] = useState<ProviderRow[]>([]);
-  const [tags, setTags] = useState<TagOption[]>([]);
-  const [loading, setLoading] = useState(true);
+  const seeded = providersProp != null;
+  const [fetchedProviders, setFetchedProviders] = useState<ProviderRow[]>([]);
+  const [fetchedTags, setFetchedTags] = useState<TagOption[]>([]);
+  const [loading, setLoading] = useState(!seeded);
+  const [locallyCreated, setLocallyCreated] = useState<ProviderRow[]>([]);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  const providers = [
+    ...(providersProp ?? fetchedProviders).filter(
+      (p) => !locallyCreated.some((c) => c.id === p.id),
+    ),
+    ...locallyCreated,
+  ];
+  const tags = tagsProp ?? fetchedTags;
+
   useEffect(() => {
+    if (seeded) return;
     let alive = true;
     providerPickerDataAction()
       .then((d) => {
         if (!alive) return;
-        setProviders(d.providers);
-        setTags(d.tags);
+        setFetchedProviders(d.providers);
+        setFetchedTags(d.tags);
       })
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [seeded]);
 
   const selected = useMemo(
     () => providers.find((p) => p.id === value) ?? null,
@@ -201,7 +219,7 @@ export function ProviderPicker({
           tags={tags}
           onCancel={() => setCreating(false)}
           onSaved={(row) => {
-            setProviders((prev) => [
+            setLocallyCreated((prev) => [
               ...prev.filter((p) => p.id !== row.id),
               row,
             ]);

@@ -284,6 +284,7 @@ export function ChecklistView({
             banks={context.banks}
             recipientMethods={context.recipientMethods}
             tags={context.tags}
+            providers={context.providers}
             defaultCurrency={defaultCurrency}
             today={today}
             usedCurrencies={usedCurrencies}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Account, PaymentMethod, Tag } from '@wib/db';
+import type { Account, BoardProvider, PaymentMethod, Tag } from '@wib/db';
 import {
   Button,
   Field,
@@ -27,6 +27,7 @@ export function EnrichTransactionModal({
   accounts,
   methods,
   tags,
+  providers,
   onDone,
 }: {
   open: boolean;
@@ -35,6 +36,7 @@ export function EnrichTransactionModal({
   accounts: Account[];
   methods: PaymentMethod[];
   tags: Tag[];
+  providers?: BoardProvider[];
   onDone: () => void;
 }) {
   const [name, setName] = useState('');
@@ -127,6 +129,8 @@ export function EnrichTransactionModal({
 
         <ProviderPicker
           value={providerId}
+          providers={providers}
+          tags={tags.map((t) => ({ name: t.name, color: t.color }))}
           onChange={(id, defaultTagNames) => {
             setProviderId(id);
             if (defaultTagNames.length > 0)

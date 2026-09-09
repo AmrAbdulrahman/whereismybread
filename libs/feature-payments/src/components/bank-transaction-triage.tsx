@@ -283,6 +283,7 @@ export function BankTransactionTriage({
         accounts={context.accounts}
         methods={context.methods}
         tags={context.tags}
+        providers={context.providers}
         onDone={() => {
           setEnrichId(null);
           startTransition(() => router.refresh());

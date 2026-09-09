@@ -166,6 +166,7 @@ export {
 export {
   getBoardBundle,
   type BoardBundle,
+  type BoardProvider,
   type PaymentWithTags,
 } from './lib/repositories/board-bundle';
 

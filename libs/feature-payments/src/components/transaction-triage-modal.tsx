@@ -107,6 +107,7 @@ export function TransactionTriageModal({
               accounts={context.accounts}
               banks={context.banks}
               tags={context.tags}
+              providers={context.providers}
               date={txn.occurredAt.slice(0, 10)}
               prefill={{
                 name: txn.displayName || txn.description,
@@ -128,6 +129,7 @@ export function TransactionTriageModal({
               banks={context.banks}
               recipientMethods={context.recipientMethods}
               tags={context.tags}
+              providers={context.providers}
               defaultCurrency={defaultCurrency}
               today={today}
               rates={rates}

@@ -6,6 +6,7 @@ import { Controller, useForm } from 'react-hook-form';
 import type {
   Account,
   Bank,
+  BoardProvider,
   Payment,
   PaymentMethod,
   RecipientMethod,
@@ -95,6 +96,8 @@ export interface PaymentFormProps {
   banks: Bank[];
   recipientMethods: RecipientMethod[];
   tags: Tag[];
+  /** Reusable providers, from the page bundle — lets the picker render with no fetch. */
+  providers?: BoardProvider[];
   /**
    * Budgets to offer as a category label (chip on the plan card). Optional —
    * omit and the picker is hidden, but any existing assignment round-trips.
@@ -132,6 +135,7 @@ export function PaymentForm({
   banks: initialBanks,
   recipientMethods: initialRecipientMethods,
   tags,
+  providers,
   budgets = [],
   defaultCurrency,
   today,
@@ -423,6 +427,8 @@ export function PaymentForm({
         render={({ field }) => (
           <ProviderPicker
             value={(field.value as string | null) ?? null}
+            providers={providers}
+            tags={tags.map((t) => ({ name: t.name, color: t.color }))}
             onChange={(providerId, defaultTagNames) => {
               field.onChange(providerId);
               mergeProviderTags(defaultTagNames);

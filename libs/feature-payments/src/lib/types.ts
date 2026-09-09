@@ -1,6 +1,7 @@
 import type {
   Account,
   Bank,
+  BoardProvider,
   PaymentMethod,
   PaymentOverrides,
   RecipientMethod,
@@ -8,13 +9,14 @@ import type {
 } from '@wib/db';
 import type { Money, PaymentMethodKind, RateMap } from '@wib/domain';
 
-/** The lookup lists a payment form needs — methods, accounts, banks, tags. */
+/** The lookup lists a payment form needs — methods, accounts, banks, tags, providers. */
 export interface PaymentsContext {
   methods: PaymentMethod[];
   accounts: Account[];
   banks: Bank[];
   recipientMethods: RecipientMethod[];
   tags: Tag[];
+  providers: BoardProvider[];
 }
 
 export interface OccurrenceTag {

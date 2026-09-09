@@ -144,6 +144,7 @@ export async function getBoardData(opts?: {
     banks: bundle.banks,
     recipientMethods: bundle.recipientMethods,
     tags: bundle.tags,
+    providers: bundle.providers,
   };
   return { context, board };
 }

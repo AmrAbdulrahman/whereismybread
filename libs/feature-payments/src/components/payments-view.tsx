@@ -66,6 +66,7 @@ import type {
   EditablePayment,
   ExpenseLine,
   PaymentBoard,
+  PaymentsContext,
 } from '../lib/types';
 
 type View = 'list' | 'calendar';
@@ -109,6 +110,7 @@ export function PaymentsView({
   banks,
   recipientMethods,
   tags,
+  providers,
   defaultCurrency,
   view: viewProp,
   month,
@@ -123,6 +125,7 @@ export function PaymentsView({
   banks: Bank[];
   recipientMethods: RecipientMethod[];
   tags: Tag[];
+  providers: PaymentsContext['providers'];
   defaultCurrency: string;
   view: View;
   month: IsoDate;
@@ -211,6 +214,7 @@ export function PaymentsView({
     banks,
     recipientMethods,
     tags,
+    providers,
   };
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Desktop: the filter panel expands inline under the header so the list keeps
@@ -535,6 +539,7 @@ export function PaymentsView({
           banks={banks}
           recipientMethods={recipientMethods}
           tags={tags}
+          providers={providers}
           budgets={budgetAssignOptions(budgets)}
           defaultCurrency={defaultCurrency}
           today={board.today}
@@ -614,6 +619,7 @@ export function PaymentsView({
           accounts={accounts}
           banks={banks}
           tags={tags}
+          providers={providers}
           budgetId={expenseSheet.mode === 'new' ? expenseSheet.budgetId : null}
           date={
             expenseSheet.mode === 'new'
@@ -830,6 +836,7 @@ export function PaymentsView({
         accounts={accounts}
         methods={methods}
         tags={tags}
+        providers={providers}
         onDone={() => {
           setReviewDetailsId(null);
           router.refresh();

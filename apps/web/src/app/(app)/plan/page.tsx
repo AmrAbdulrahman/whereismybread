@@ -42,6 +42,7 @@ export default async function CalendarPage({
       banks={context.banks}
       recipientMethods={context.recipientMethods}
       tags={context.tags}
+      providers={context.providers}
       defaultCurrency={user.defaultCurrency}
       view={view}
       month={month}
