@@ -72,26 +72,37 @@ export function ExpenseListItem({
   const showAssign = assign != null;
 
   // Optimistic inline assign — reflect the pick now, save + refresh in the
-  // background, drop the override once the server list catches up.
-  const [optAccountId, setOptAccountId] = useState<string | null>(null);
-  const [optAccountColor, setOptAccountColor] = useState<string | null>(null);
-  const [optAccountName, setOptAccountName] = useState<string | null>(null);
-  const [optBudgetId, setOptBudgetId] = useState<string | null>(null);
-  const [optBudgetColor, setOptBudgetColor] = useState<string | null>(null);
-  const [optBudgetName, setOptBudgetName] = useState<string | null>(null);
+  // background, drop the override once the server list catches up. `undefined`
+  // = no override, `null` = optimistically cleared, an object = (re)assigned.
+  const [optAccount, setOptAccount] = useState<AssignOption | null | undefined>(
+    undefined,
+  );
+  const [optBudget, setOptBudget] = useState<AssignOption | null | undefined>(
+    undefined,
+  );
   const [optTags, setOptTags] = useState<OccurrenceTag[] | null>(null);
 
-  const accountId = optAccountId ?? expense.accountId;
-  const accountName = optAccountId ? optAccountName : expense.accountName;
-  const accountColor = optAccountId ? optAccountColor : expense.accountColor;
-  const budgetId = optBudgetId ?? expense.budgetId;
-  const budgetName = optBudgetId ? optBudgetName : expense.budgetName;
-  const budgetColor = optBudgetId ? optBudgetColor : expense.budgetColor;
+  const serverAccount: AssignOption | null = expense.accountId
+    ? {
+        id: expense.accountId,
+        name: expense.accountName ?? '',
+        color: expense.accountColor ?? 'var(--color-muted)',
+      }
+    : null;
+  const serverBudget: AssignOption | null = expense.budgetId
+    ? {
+        id: expense.budgetId,
+        name: expense.budgetName ?? '',
+        color: expense.budgetColor ?? 'var(--color-muted)',
+      }
+    : null;
+  const account = optAccount === undefined ? serverAccount : optAccount;
+  const budget = optBudget === undefined ? serverBudget : optBudget;
   const tags = optTags ?? expense.tags;
   const tagSig = expense.tags.map((t) => t.id).join(',');
 
-  useEffect(() => setOptAccountId(null), [expense.accountId]);
-  useEffect(() => setOptBudgetId(null), [expense.budgetId]);
+  useEffect(() => setOptAccount(undefined), [expense.accountId]);
+  useEffect(() => setOptBudget(undefined), [expense.budgetId]);
   useEffect(() => setOptTags(null), [tagSig]);
 
   const save = (patch: {
@@ -103,8 +114,8 @@ export function ExpenseListItem({
   };
 
   const hasMeta =
-    budgetId != null ||
-    accountId != null ||
+    budget != null ||
+    account != null ||
     expense.bankId != null ||
     tags.length > 0 ||
     showAssign;
@@ -193,50 +204,56 @@ export function ExpenseListItem({
         </span>
         {hasMeta ? (
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
-            {accountId ? (
-              <span className="flex items-center gap-1">
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: accountColor ?? undefined }}
-                />
-                <span className="truncate">{accountName}</span>
-              </span>
-            ) : showAssign && assign ? (
+            {showAssign && assign ? (
               <InlineAssignChip
                 label="account"
                 options={assign.accounts}
+                current={account}
                 onPick={(id) => {
                   const a = assign.accounts.find((x) => x.id === id);
-                  setOptAccountId(id);
-                  setOptAccountName(a?.name ?? null);
-                  setOptAccountColor(a?.color ?? null);
+                  setOptAccount(a ?? null);
                   save({ accountId: id });
                 }}
+                onClear={() => {
+                  setOptAccount(null);
+                  save({ accountId: null });
+                }}
               />
+            ) : account ? (
+              <span className="flex items-center gap-1">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: account.color }}
+                />
+                <span className="truncate">{account.name}</span>
+              </span>
             ) : null}
-            {budgetId ? (
+            {showAssign && assign ? (
+              <InlineAssignChip
+                label="budget"
+                icon={<PiggyBank size={10} strokeWidth={2.5} />}
+                options={assign.budgets}
+                current={budget}
+                onPick={(id) => {
+                  const b = assign.budgets.find((x) => x.id === id);
+                  setOptBudget(b ?? null);
+                  save({ budgetId: id });
+                }}
+                onClear={() => {
+                  setOptBudget(null);
+                  save({ budgetId: null });
+                }}
+              />
+            ) : budget ? (
               <span className="flex items-center gap-1">
                 <PiggyBank
                   size={12}
                   strokeWidth={2}
                   className="shrink-0"
-                  style={{ color: budgetColor ?? undefined }}
+                  style={{ color: budget.color }}
                 />
-                <span className="truncate">{budgetName}</span>
+                <span className="truncate">{budget.name}</span>
               </span>
-            ) : showAssign && assign ? (
-              <InlineAssignChip
-                label="budget"
-                icon={<PiggyBank size={10} strokeWidth={2.5} />}
-                options={assign.budgets}
-                onPick={(id) => {
-                  const b = assign.budgets.find((x) => x.id === id);
-                  setOptBudgetId(id);
-                  setOptBudgetName(b?.name ?? null);
-                  setOptBudgetColor(b?.color ?? null);
-                  save({ budgetId: id });
-                }}
-              />
             ) : null}
             {expense.bankId ? (
               <span className="flex items-center gap-1">

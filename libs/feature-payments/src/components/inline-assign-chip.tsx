@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { cn, TagInput } from '@wib/ui';
-import { Plus } from '@wib/ui/icons';
+import { Check, Plus, X } from '@wib/ui/icons';
 import type { BudgetSummary } from '../lib/types';
 
 export interface AssignOption {
@@ -36,15 +36,21 @@ export function budgetAssignOptions(budgets: BudgetSummary[]): AssignOption[] {
     .map((b) => ({ id: b.id, name: b.name, color: b.color }));
 }
 
-/** The dashed "+ x" trigger pill shared by the assign + tag chips. */
+/**
+ * The dashed "+ x" trigger pill shared by the assign + tag chips. An empty
+ * `label` renders just the "+" (with an explicit `ariaLabel`) — used by the
+ * tag chip once a card already has tags.
+ */
 function ChipButton({
   label,
+  ariaLabel,
   icon,
   open,
   onToggle,
   buttonRef,
 }: {
   label: string;
+  ariaLabel?: string;
   icon?: ReactNode;
   open: boolean;
   onToggle: () => void;
@@ -56,7 +62,7 @@ function ChipButton({
       type="button"
       aria-haspopup="listbox"
       aria-expanded={open}
-      aria-label={`Add ${label}`}
+      aria-label={ariaLabel ?? `Add ${label}`}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
@@ -73,6 +79,55 @@ function ChipButton({
       <Plus size={10} strokeWidth={2.75} />
       {icon}
       {label}
+    </button>
+  );
+}
+
+/**
+ * The filled colour pill an assign chip shows once it *has* a value — visually
+ * identical to a plain read-only chip, but it's a button that reopens the same
+ * picker so the account / budget can be swapped inline.
+ */
+function ValueChipButton({
+  value,
+  icon,
+  ariaLabel,
+  open,
+  onToggle,
+  buttonRef,
+}: {
+  value: AssignOption;
+  icon?: ReactNode;
+  ariaLabel: string;
+  open: boolean;
+  onToggle: () => void;
+  buttonRef: React.Ref<HTMLButtonElement>;
+}) {
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-label={ariaLabel}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={cn(
+        'relative inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-[filter] hover:brightness-95',
+        "max-sm:before:absolute max-sm:before:-inset-2 max-sm:before:content-['']",
+        open && 'brightness-95',
+      )}
+      style={{ background: `${value.color}22`, color: value.color }}
+    >
+      {icon ?? (
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ background: value.color }}
+        />
+      )}
+      {value.name}
     </button>
   );
 }
@@ -163,61 +218,107 @@ function AnchoredMenu({
 }
 
 /**
- * A light dashed "+ account" / "+ budget" pill for a plan card that has none.
- * Clicking opens a small menu to assign one inline — no edit modal. `onPick`
- * is fire-and-forget: the caller updates its own view optimistically and saves
- * in the background. Renders nothing when there are no options.
+ * The inline account / budget chip on a plan or expense card. With no `current`
+ * value it's a dashed "+ account" / "+ budget" pill; with one it's the filled
+ * colour pill — either way clicking opens a small menu to (re)assign inline, no
+ * edit modal. `onPick` / `onClear` are fire-and-forget: the caller updates its
+ * own view optimistically and saves in the background. Renders nothing when
+ * there's nothing to pick and nothing set.
  */
 export function InlineAssignChip({
   label,
   icon,
   options,
+  current,
   onPick,
+  onClear,
 }: {
-  /** The noun — the chip reads "+ {label}". */
+  /** The noun — the empty chip reads "+ {label}". */
   label: string;
   icon?: ReactNode;
   options: AssignOption[];
+  /** The currently-assigned option, shown as a filled pill. */
+  current?: AssignOption | null;
   onPick: (id: string) => void;
+  /** When given, the menu offers a "Remove {label}" row. */
+  onClear?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
 
-  if (options.length === 0) return null;
+  if (options.length === 0 && !current) return null;
 
   return (
     <span className="inline-flex">
-      <ChipButton
-        label={label}
-        icon={icon}
-        open={open}
-        onToggle={() => setOpen((v) => !v)}
-        buttonRef={btnRef}
-      />
+      {current ? (
+        <ValueChipButton
+          value={current}
+          icon={icon}
+          ariaLabel={`Change ${label}`}
+          open={open}
+          onToggle={() => setOpen((v) => !v)}
+          buttonRef={btnRef}
+        />
+      ) : (
+        <ChipButton
+          label={label}
+          icon={icon}
+          open={open}
+          onToggle={() => setOpen((v) => !v)}
+          buttonRef={btnRef}
+        />
+      )}
       {open ? (
         <AnchoredMenu anchorRef={btnRef} onClose={() => setOpen(false)}>
           <div role="listbox" className="max-h-56 overflow-auto">
-            {options.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                role="option"
-                aria-selected={false}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpen(false);
-                  onPick(o.id);
-                }}
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs text-ink-soft hover:bg-surface-2"
-              >
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: o.color }}
-                />
-                <span className="truncate">{o.name}</span>
-              </button>
-            ))}
+            {options.map((o) => {
+              const selected = current?.id === o.id;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpen(false);
+                    if (!selected) onPick(o.id);
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs hover:bg-surface-2',
+                    selected ? 'font-medium text-ink' : 'text-ink-soft',
+                  )}
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: o.color }}
+                  />
+                  <span className="flex-1 truncate">{o.name}</span>
+                  {selected ? (
+                    <Check
+                      size={13}
+                      strokeWidth={2.5}
+                      className="shrink-0 text-accent"
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
+          {current && onClear ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+                onClear();
+              }}
+              className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-line px-2 py-1.5 text-left text-xs text-muted hover:bg-surface-2 hover:text-ink"
+            >
+              <X size={13} strokeWidth={2.5} className="shrink-0" />
+              Remove {label}
+            </button>
+          ) : null}
         </AnchoredMenu>
       ) : null}
     </span>
@@ -225,10 +326,12 @@ export function InlineAssignChip({
 }
 
 /**
- * A "+ tag" pill that opens a multi-select (the shared `<TagInput>` — free
+ * The "add tags" pill that opens a multi-select (the shared `<TagInput>` — free
  * text + suggestions, create-on-the-fly). `onChange` fires on every edit with
  * the full tag-name list; the caller saves in the background. Always renders
- * (unlike the assign chips) since you can always coin a new tag.
+ * (unlike the assign chips) since you can always coin a new tag — it sits after
+ * any existing tag chips, reading "+ tags" when there are none and a bare "+"
+ * once the card already has some.
  */
 export function InlineTagChip({
   value,
@@ -245,7 +348,8 @@ export function InlineTagChip({
   return (
     <span className="inline-flex">
       <ChipButton
-        label="tag"
+        label={value.length > 0 ? '' : 'tags'}
+        ariaLabel={value.length > 0 ? 'Edit tags' : 'Add tags'}
         open={open}
         onToggle={() => setOpen((v) => !v)}
         buttonRef={btnRef}
