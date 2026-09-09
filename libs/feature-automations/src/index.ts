@@ -6,6 +6,7 @@ export {
   type AutomationFormInitial,
 } from './components/automation-form';
 export { NotificationsView } from './components/notifications-view';
+export { PushNudge } from './components/push-nudge';
 
 export {
   saveAutomationAction,

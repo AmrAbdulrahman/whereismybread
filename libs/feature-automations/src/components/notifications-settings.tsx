@@ -1,31 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Spinner, useToast } from '@wib/ui';
-import {
-  deletePushSubscriptionAction,
-  savePushSubscriptionAction,
-  updateNotificationPrefsAction,
-} from '../lib/actions';
-
-/** VAPID public key (base64url) → the byte array `pushManager.subscribe` wants. */
-function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const normalized = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(normalized);
-  const out = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
-  return out;
-}
-
-type PushState =
-  | 'loading'
-  | 'unsupported'
-  | 'ios-needs-install'
-  | 'denied'
-  | 'off'
-  | 'on';
+import { updateNotificationPrefsAction } from '../lib/actions';
+import { usePush } from './use-push';
 
 function Row({
   title,
@@ -81,100 +60,36 @@ export function NotificationsSettings({
 }) {
   const { toast } = useToast();
   const router = useRouter();
-  const [push, setPush] = useState<PushState>('loading');
-  const [busy, setBusy] = useState(false);
+  const { state: push, busy, enable, disable } = usePush(vapidPublicKey);
 
   const [notifyEmail, setNotifyEmail] = useState(initialEmail);
   const [notifySyncSummary, setNotifySyncSummary] = useState(initialSync);
   const [, startTransition] = useTransition();
 
-  const configured = vapidPublicKey.length > 0;
-
-  const refreshPushState = useCallback(async () => {
-    if (!configured) return setPush('unsupported');
-    const hasSW = 'serviceWorker' in navigator;
-    const hasPush = 'PushManager' in window;
-    if (!hasSW || !hasPush) {
-      // iOS < 16.4, or (16.4+) Safari in a normal tab — push there only works
-      // once the app is installed to the Home Screen.
-      const iOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-      return setPush(iOS ? 'ios-needs-install' : 'unsupported');
-    }
-    if (Notification.permission === 'denied') return setPush('denied');
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const sub = await reg?.pushManager.getSubscription();
-      setPush(sub ? 'on' : 'off');
-    } catch {
-      setPush('off');
-    }
-  }, [configured]);
-
-  useEffect(() => {
-    void refreshPushState();
-  }, [refreshPushState]);
-
-  const enablePush = async () => {
-    setBusy(true);
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        setPush(permission === 'denied' ? 'denied' : 'off');
-        return;
-      }
-      const reg =
-        (await navigator.serviceWorker.getRegistration()) ??
-        (await navigator.serviceWorker.register('/sw.js'));
-      await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
-      const json = sub.toJSON();
-      const res = await savePushSubscriptionAction({
-        endpoint: sub.endpoint,
-        p256dh: json.keys?.p256dh ?? '',
-        auth: json.keys?.auth ?? '',
-        userAgent: navigator.userAgent.slice(0, 500),
-      });
-      if (!res.ok) {
-        await sub.unsubscribe().catch(() => undefined);
-        throw new Error(res.error ?? 'Could not save subscription');
-      }
-      setPush('on');
+  const onEnable = async () => {
+    const res = await enable();
+    if (res.ok) {
       toast({
         title: 'Push notifications on',
         description: 'This device will get alerts even when the tab is closed.',
         tone: 'success',
       });
-    } catch (err) {
+    } else if (res.error && res.error !== 'Notification permission was not granted.') {
       toast({
         title: 'Could not enable push',
-        description: err instanceof Error ? err.message : 'Please try again.',
+        description: res.error,
         tone: 'danger',
       });
-      void refreshPushState();
-    } finally {
-      setBusy(false);
     }
   };
 
-  const disablePush = async () => {
-    setBusy(true);
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const sub = await reg?.pushManager.getSubscription();
-      if (sub) {
-        await deletePushSubscriptionAction(sub.endpoint);
-        await sub.unsubscribe().catch(() => undefined);
-      }
-      setPush('off');
-      toast({ title: 'Push notifications off for this device' });
-    } catch {
-      toast({ title: 'Could not turn push off', tone: 'danger' });
-    } finally {
-      setBusy(false);
-    }
+  const onDisable = async () => {
+    const res = await disable();
+    toast(
+      res.ok
+        ? { title: 'Push notifications off for this device' }
+        : { title: 'Could not turn push off', tone: 'danger' },
+    );
   };
 
   const savePrefs = (patch: {
@@ -189,14 +104,13 @@ export function NotificationsSettings({
   };
 
   const pushControl = () => {
-    if (push === 'loading')
-      return <Spinner />;
+    if (push === 'loading') return <Spinner />;
     if (push === 'on' || push === 'off')
       return (
         <button
           type="button"
           disabled={busy}
-          onClick={push === 'on' ? disablePush : enablePush}
+          onClick={push === 'on' ? onDisable : onEnable}
           className="rounded-full border border-line-strong px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
         >
           {busy ? '…' : push === 'on' ? 'Turn off' : 'Turn on'}
@@ -208,7 +122,7 @@ export function NotificationsSettings({
   const pushHint = (): string => {
     switch (push) {
       case 'unsupported':
-        return configured
+        return vapidPublicKey.length > 0
           ? 'This browser does not support push notifications.'
           : 'Push notifications are not configured for this deployment.';
       case 'ios-needs-install':
@@ -224,11 +138,7 @@ export function NotificationsSettings({
 
   return (
     <div className="flex flex-col gap-5">
-      <Row
-        title="Push notifications"
-        hint={pushHint()}
-        control={pushControl()}
-      />
+      <Row title="Push notifications" hint={pushHint()} control={pushControl()} />
       <Row
         title="Email"
         hint="Also email me when an automation’s “Send notification” action fires."
