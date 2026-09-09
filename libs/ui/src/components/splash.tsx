@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BreadSlice } from '../icons/brand';
 import { SLOGAN } from './wordmark';
 
 /**
  * The boot splash — brand purple, shown before the app has hydrated so a cold
- * (or installed-PWA) launch never flashes a bare page. It is server-rendered as
- * the first child of `<body>`; `<SplashAutoHide>` fades it out on hydration and
- * `SPLASH_HIDE_SCRIPT` is the no-JS / slow-hydration fallback.
+ * (or installed-PWA) launch never flashes a bare page.
+ *
+ * It is rendered by React (SSR'd, so it paints immediately) and then hidden
+ * with CSS once hydrated — the node is never unmounted or removed. An earlier
+ * version called `el.remove()` from an effect; that corrupts React's view of
+ * `<body>` and blows up the next reconcile with "removeChild ... not a child of
+ * this node" (it surfaced as a hard crash on `/insights`). Leave the DOM alone.
  *
  * Always purple in both themes — it matches the brand sheet and the native
  * PWA splash (manifest `background_color`).
@@ -20,8 +24,9 @@ export const SPLASH_CSS = `
 #${SPLASH_ELEMENT_ID}{position:fixed;inset:0;z-index:2147483647;display:flex;
 flex-direction:column;align-items:center;justify-content:center;gap:22px;
 background:#6b3dff;background:linear-gradient(180deg,#7c53ff 0%,#6b3dff 60%,#5a2fe0 100%);
-color:#fff;opacity:1;transition:opacity .32s ease}
-#${SPLASH_ELEMENT_ID}.wib-splash-hide{opacity:0;pointer-events:none}
+color:#fff;opacity:1;transition:opacity .3s ease}
+#${SPLASH_ELEMENT_ID}[data-hiding]{opacity:0;pointer-events:none;visibility:hidden;
+transition:opacity .3s ease,visibility 0s linear .3s}
 #${SPLASH_ELEMENT_ID} .wib-splash-word{display:flex;flex-direction:column;align-items:center;
 font-family:var(--font-fredoka),'Fredoka',ui-sans-serif,system-ui,sans-serif;
 line-height:1;letter-spacing:-.01em}
@@ -40,17 +45,35 @@ background:#fff;animation:wib-splash-slide 1.1s ease-in-out infinite}
 `.trim();
 
 /**
- * Fallback: hide the splash on `load` even if React never hydrates, and hard
- * cap it so a broken bundle can't trap the user behind it.
+ * Fallback for a bundle that never hydrates: fade the splash on `load` so it
+ * can't trap the user. Only ever adds an attribute (CSS-driven fade) — it never
+ * removes the node, so it can't race React. Inline this in `<head>`.
  */
 export const SPLASH_HIDE_SCRIPT = `(function(){var id=${JSON.stringify(
   SPLASH_ELEMENT_ID,
-)};function h(){var e=document.getElementById(id);if(e)e.classList.add('wib-splash-hide');}
-window.addEventListener('load',function(){setTimeout(h,150)});setTimeout(h,4000);})();`;
+)};function h(){var e=document.getElementById(id);if(e)e.setAttribute('data-hiding','');}
+window.addEventListener('load',function(){setTimeout(h,4000)});})();`;
 
+/**
+ * Renders the splash and fades it out (CSS only) once hydrated. The node stays
+ * mounted — `[data-hiding]` makes it `opacity:0; visibility:hidden;
+ * pointer-events:none`, i.e. fully inert. Put it as the first child of `<body>`
+ * in the root layout.
+ */
 export function SplashScreen() {
+  const [hiding, setHiding] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setHiding(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
-    <div id={SPLASH_ELEMENT_ID} aria-hidden="true">
+    <div
+      id={SPLASH_ELEMENT_ID}
+      aria-hidden="true"
+      {...(hiding ? { 'data-hiding': '' } : {})}
+    >
       <BreadSlice size={96} />
       <span className="wib-splash-word">
         <span>Where Is My</span>
@@ -62,22 +85,4 @@ export function SplashScreen() {
       </span>
     </div>
   );
-}
-
-/** Fades the splash out once the app is interactive, then removes it. */
-export function SplashAutoHide() {
-  useEffect(() => {
-    const el = document.getElementById(SPLASH_ELEMENT_ID);
-    if (!el) return;
-    const raf = requestAnimationFrame(() => el.classList.add('wib-splash-hide'));
-    const done = () => el.remove();
-    el.addEventListener('transitionend', done, { once: true });
-    const fallback = setTimeout(done, 800);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(fallback);
-      el.removeEventListener('transitionend', done);
-    };
-  }, []);
-  return null;
 }

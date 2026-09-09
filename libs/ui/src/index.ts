@@ -76,7 +76,6 @@ export { BreadMark, BreadSlice } from './icons/brand';
 export { Wordmark, SLOGAN } from './components/wordmark';
 export {
   SplashScreen,
-  SplashAutoHide,
   SPLASH_CSS,
   SPLASH_HIDE_SCRIPT,
   SPLASH_ELEMENT_ID,

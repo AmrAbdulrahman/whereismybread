@@ -5,7 +5,6 @@ import { Fredoka, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import {
   SPLASH_CSS,
   SPLASH_HIDE_SCRIPT,
-  SplashAutoHide,
   SplashScreen,
   THEME_INIT_SCRIPT,
   ToastProvider,
@@ -137,7 +136,6 @@ export default function RootLayout({
       </head>
       <body>
         <SplashScreen />
-        <SplashAutoHide />
         <ToastProvider>
           {children}
           <UpdatePrompt />
