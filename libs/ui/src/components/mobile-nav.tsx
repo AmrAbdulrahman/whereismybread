@@ -107,6 +107,7 @@ export function MobileNav({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="bottom"
+          swipeToClose
           className="max-h-[85dvh] overflow-y-auto p-4 pb-6"
         >
           <div className="mb-3 flex items-center justify-between">
