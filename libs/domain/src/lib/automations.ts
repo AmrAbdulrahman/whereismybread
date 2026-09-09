@@ -396,13 +396,15 @@ export function extractRecordSource(conditions: AutomationCondition[]): {
   return { source, patterns };
 }
 
-/** AND across every condition. An empty list never matches. */
+/**
+ * AND across every condition. An empty list matches everything — an
+ * unconditional rule that fires for any subject ("any record").
+ */
 export function evaluateConditions(
   conditions: AutomationCondition[],
   subject: AutomationSubject,
 ): boolean {
-  if (!conditions || conditions.length === 0) return false;
-  return conditions.every((c) => conditionMatches(c, subject));
+  return (conditions ?? []).every((c) => conditionMatches(c, subject));
 }
 
 // --- Bank-sync summary ----------------------------------------------------

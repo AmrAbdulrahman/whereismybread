@@ -15,7 +15,8 @@ export function describeConditions(
 ): string {
   // The reserved `source` scope is shown as its own badge on the card.
   const patterns = conditions.filter((c) => c.field !== RECORD_SOURCE_FIELD);
-  if (patterns.length === 0) return 'anything';
+  if (patterns.length === 0)
+    return trigger === 'record_created' ? 'any record' : 'any transaction';
   return patterns.map((c) => describeCondition(trigger, c)).join(' and ');
 }
 

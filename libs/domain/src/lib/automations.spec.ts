@@ -97,8 +97,8 @@ describe('evaluateConditions', () => {
     ).toBe(false);
   });
 
-  it('an empty condition list never matches', () => {
-    expect(evaluateConditions([], sub)).toBe(false);
+  it('an empty condition list matches everything (an "any" rule)', () => {
+    expect(evaluateConditions([], sub)).toBe(true);
   });
 });
 

@@ -66,7 +66,8 @@ export const automationFormSchema = z
     trigger: z.enum(
       AUTOMATION_TRIGGERS as unknown as [AutomationTrigger, ...AutomationTrigger[]],
     ),
-    conditions: z.array(conditionSchema).min(1, 'Add at least one pattern'),
+    // May be empty — an unconditional "runs for anything" rule.
+    conditions: z.array(conditionSchema),
     actions: z.array(actionSchema).min(1, 'Add at least one action'),
     /**
      * `record_created` only: scope the rule to how the record was added.

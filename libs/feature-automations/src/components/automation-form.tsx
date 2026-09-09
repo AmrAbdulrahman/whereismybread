@@ -404,7 +404,9 @@ export function AutomationForm({
 
       <Field>
         <div className="flex items-center justify-between">
-          <Label>If all of these match</Label>
+          <Label>
+            {conditions.length === 0 ? 'For' : 'If all of these match'}
+          </Label>
           <button
             type="button"
             className="text-xs font-medium text-accent hover:underline"
@@ -498,9 +500,7 @@ export function AutomationForm({
                   aria-label="Remove pattern"
                   className="justify-self-end text-xs text-muted hover:text-danger"
                   onClick={() =>
-                    setConditions((cs) =>
-                      cs.length > 1 ? cs.filter((_, j) => j !== i) : cs,
-                    )
+                    setConditions((cs) => cs.filter((_, j) => j !== i))
                   }
                 >
                   Remove
@@ -508,6 +508,13 @@ export function AutomationForm({
               </div>
             );
           })}
+          {conditions.length === 0 ? (
+            <p className="rounded-md border border-dashed border-line px-3 py-2 text-xs text-muted">
+              Runs for{' '}
+              {trigger === 'record_created' ? 'any record' : 'any transaction'} —
+              add a pattern to narrow it down.
+            </p>
+          ) : null}
         </div>
       </Field>
 
@@ -658,6 +665,10 @@ export function AutomationForm({
                       placeholder="Title (optional — defaults to the rule name)"
                       value={a.title}
                       onChange={(e) => setAct(i, { title: e.target.value })}
+                    />
+                    <TemplateChips
+                      trigger={trigger}
+                      onInsert={(tok) => setAct(i, { title: a.title + tok })}
                     />
                     <Input
                       aria-label="Notification message"
