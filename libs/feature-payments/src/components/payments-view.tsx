@@ -169,6 +169,11 @@ export function PaymentsView({
   const clearAllFilters = () => {
     setListFilter(EMPTY_LIST_FILTER);
     setUnpaidOnly(false);
+    // The list was showing a filtered slice; drop the reader back at today
+    // once it re-renders unfiltered.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => goTodayRef.current?.()),
+    );
   };
 
   // Per-day "needs review" transactions, with optimistic removal on triage.
@@ -317,6 +322,44 @@ export function PaymentsView({
     const qs = next.toString();
     window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
   }, [params, pathname, board.editable, board.overrides]);
+
+  // Deep link from a push notification: `?focus=<paymentId>&on=<YYYY-MM-DD>`
+  // scrolls to that occurrence and flashes its card (no modal), then strips
+  // the params.
+  const [highlight, setHighlight] = useState<{
+    recordId: string;
+    date: string | null;
+  } | null>(null);
+  const focusLinkDone = useRef(false);
+  useEffect(() => {
+    if (focusLinkDone.current) return;
+    const focusId = params.get('focus');
+    if (!focusId) return;
+    focusLinkDone.current = true;
+    const on = params.get('on');
+    setHighlight({ recordId: focusId, date: on });
+    if (on) {
+      requestAnimationFrame(() =>
+        document
+          .querySelector(`[data-day="${on}"]`)
+          ?.scrollIntoView({ block: 'center' }),
+      );
+    }
+    const clear = setTimeout(() => setHighlight(null), 3500);
+    const next = new URLSearchParams(params);
+    next.delete('focus');
+    next.delete('on');
+    const qs = next.toString();
+    window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
+    return () => clearTimeout(clear);
+  }, [params, pathname]);
+
+  const highlightOccurrence = (o: { paymentId: string; dueDate: string }) =>
+    highlight != null &&
+    o.paymentId === highlight.recordId &&
+    (highlight.date == null || o.dueDate === highlight.date);
+  const highlightExpense = (id: string) =>
+    highlight != null && id === highlight.recordId;
 
   // A push (bank sync finished, an automation fired) refreshes the board in
   // the background so the new payment / triaged transaction just appears.
@@ -581,6 +624,7 @@ export function PaymentsView({
       methods={methods}
       unpaidOnly={unpaidOnly}
       onUnpaidOnlyChange={setUnpaidOnly}
+      onClearAll={clearAllFilters}
     />
   );
 
@@ -717,15 +761,7 @@ export function PaymentsView({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            {view === 'list' ? (
-              <button
-                type="button"
-                onClick={() => goTodayRef.current?.()}
-                className="inline-flex h-9 items-center rounded-md border border-line-strong px-2.5 text-[13px] font-medium text-muted hover:text-ink sm:hidden"
-              >
-                Today
-              </button>
-            ) : null}
+            {/* Mobile "Today" lives in a FAB now (see PaymentList). */}
             <SyncButton targets={syncTargets} />
             <button
               type="button"
@@ -813,6 +849,8 @@ export function PaymentsView({
           stickyTop={panelH}
           goTodayRef={goTodayRef}
           hideOccurrence={isOccurrenceHidden}
+          highlightOccurrence={highlightOccurrence}
+          highlightExpense={highlightExpense}
           onEdit={openEdit}
           onFlag={openFlag}
           onDelete={openDelete}
@@ -837,6 +875,7 @@ export function PaymentsView({
           month={calMonth}
           onMonthChange={changeMonth}
           hideOccurrence={isOccurrenceHidden}
+          highlightOccurrence={highlightOccurrence}
           onEdit={openEdit}
           onFlag={openFlag}
           onDelete={openDelete}

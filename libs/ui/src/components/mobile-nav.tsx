@@ -120,13 +120,13 @@ export function MobileNav({
               <X size={18} />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-col">
             {overflow.map((entry, i) => {
               if (isSeparator(entry)) {
                 return (
                   <div
                     key={`sep-${i}`}
-                    className="col-span-3 my-1 h-px bg-line"
+                    className="my-1.5 h-px bg-line"
                     role="separator"
                   />
                 );
@@ -137,11 +137,11 @@ export function MobileNav({
                   <span
                     key={entry.href}
                     aria-disabled
-                    className="flex flex-col items-center gap-1.5 rounded-xl border border-line/60 px-2 py-3 text-center text-xs font-medium text-muted/50"
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-muted/50"
                   >
-                    <Icon size={20} strokeWidth={2} />
+                    <Icon size={18} strokeWidth={2} className="shrink-0" />
                     {entry.label}
-                    <span className="rounded-full bg-surface-2 px-1.5 text-[9px] text-muted">
+                    <span className="ml-auto rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
                       Soon
                     </span>
                   </span>
@@ -154,18 +154,16 @@ export function MobileNav({
                   href={entry.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-center text-xs font-medium',
+                    'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors',
                     active
-                      ? 'border-accent bg-accent/10 text-accent'
-                      : 'border-line text-ink-soft hover:bg-surface-2',
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-ink-soft hover:bg-surface-2',
                   )}
                   aria-current={active ? 'page' : undefined}
                 >
-                  <Icon size={20} strokeWidth={2} />
-                  <span className="flex items-center gap-1">
-                    {entry.label}
-                    <NavBadge count={entry.badge ?? 0} />
-                  </span>
+                  <Icon size={18} strokeWidth={2} className="shrink-0" />
+                  {entry.label}
+                  <NavBadge count={entry.badge ?? 0} />
                 </Link>
               );
             })}

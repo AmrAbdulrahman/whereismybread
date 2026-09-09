@@ -90,121 +90,161 @@ export function AutomationsView({
           </p>
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {automations.map((a, i) => (
             <li
               key={a.id}
               className={cn(
-                'rounded-xl border border-line bg-surface p-3',
-                !a.enabled && 'opacity-60',
+                'overflow-hidden rounded-xl border bg-surface shadow-sm transition-colors',
+                a.enabled ? 'border-line-strong' : 'border-line',
               )}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-ink">
-                    {a.name}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {TRIGGER_LABELS[a.trigger]}
-                  </p>
-                  <p className="mt-1.5 text-xs text-ink-soft">
-                    <span className="text-muted">If </span>
-                    {describeConditions(a.trigger, a.conditions)}
-                  </p>
-                  <ul className="mt-1 flex flex-col gap-0.5">
-                    {describeActions(a.actions, lookups).map((line, k) => (
-                      <li
-                        key={k}
-                        className="flex gap-1.5 text-xs text-ink-soft"
-                      >
-                        <span className="select-none text-muted">→</span>
-                        <span className="min-w-0">
-                          {line.label}
-                          {line.detail ? (
-                            <span className="text-muted"> · {line.detail}</span>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-1.5 text-[11px] text-muted">
-                    {lastRunLabel(a)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={a.enabled}
-                    aria-label={`${a.enabled ? 'Disable' : 'Enable'} ${a.name}`}
-                    disabled={pending}
-                    onClick={async () => {
-                      await toggleAutomationAction(a.id, !a.enabled);
-                      refresh();
-                    }}
+              {/* Header: name + trigger, and the on/off switch */}
+              <div className="flex items-start justify-between gap-3 px-3.5 py-3">
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <p
                     className={cn(
-                      'relative h-5 w-9 rounded-full transition-colors',
-                      a.enabled ? 'bg-accent' : 'bg-line-strong',
+                      'truncate text-sm font-semibold',
+                      a.enabled ? 'text-ink' : 'text-ink-soft',
                     )}
                   >
+                    {a.name}
+                  </p>
+                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
                     <span
                       className={cn(
-                        'absolute top-0.5 h-4 w-4 rounded-full bg-ground transition-all',
-                        a.enabled ? 'left-4' : 'left-0.5',
+                        'h-1.5 w-1.5 rounded-full',
+                        a.trigger === 'review_expense_created'
+                          ? 'bg-teal'
+                          : 'bg-accent',
                       )}
                     />
-                  </button>
-                  <div className="flex items-center gap-0.5 text-muted">
-                    <button
-                      type="button"
-                      aria-label="Move up"
-                      disabled={i === 0 || pending}
-                      onClick={() => void move(i, -1)}
-                      className="rounded p-0.5 hover:text-ink disabled:opacity-30"
-                    >
-                      <ChevronUp />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Move down"
-                      disabled={i === automations.length - 1 || pending}
-                      onClick={() => void move(i, 1)}
-                      className="rounded p-0.5 hover:text-ink disabled:opacity-30"
-                    >
-                      <ChevronDown />
-                    </button>
-                  </div>
+                    {TRIGGER_LABELS[a.trigger]}
+                  </span>
                 </div>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-3 border-t border-line pt-2 text-xs">
                 <button
                   type="button"
-                  className="font-medium text-accent hover:underline"
-                  onClick={() => setSheet({ mode: 'edit', item: a })}
-                >
-                  Edit
-                </button>
-                {a.trigger === 'review_expense_created' ? (
-                  <button
-                    type="button"
-                    className="font-medium text-ink-soft hover:underline"
-                    disabled={pending}
-                    onClick={() => void runNow(a.id)}
-                  >
-                    Run on existing
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="font-medium text-muted hover:text-danger hover:underline"
+                  role="switch"
+                  aria-checked={a.enabled}
+                  aria-label={`${a.enabled ? 'Disable' : 'Enable'} ${a.name}`}
                   disabled={pending}
                   onClick={async () => {
-                    await deleteAutomationAction(a.id);
+                    await toggleAutomationAction(a.id, !a.enabled);
                     refresh();
                   }}
+                  className={cn(
+                    'relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors',
+                    a.enabled ? 'bg-accent' : 'bg-line-strong',
+                  )}
                 >
-                  Delete
+                  <span
+                    className={cn(
+                      'absolute top-0.5 h-4 w-4 rounded-full bg-ground transition-all',
+                      a.enabled ? 'left-4' : 'left-0.5',
+                    )}
+                  />
                 </button>
+              </div>
+
+              {/* If — the match conditions */}
+              <div
+                className={cn(
+                  'border-t border-line px-3.5 py-2.5',
+                  !a.enabled && 'opacity-60',
+                )}
+              >
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  If
+                </p>
+                <p className="text-xs text-ink-soft">
+                  {describeConditions(a.trigger, a.conditions)}
+                </p>
+              </div>
+
+              {/* Then — the actions it runs */}
+              <div
+                className={cn(
+                  'border-t border-line px-3.5 py-2.5',
+                  !a.enabled && 'opacity-60',
+                )}
+              >
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Then
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {describeActions(a.actions, lookups).map((line, k) => (
+                    <li
+                      key={k}
+                      className="flex items-start gap-2 text-xs text-ink-soft"
+                    >
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                      <span className="min-w-0">
+                        <span className="font-medium text-ink">
+                          {line.label}
+                        </span>
+                        {line.detail ? (
+                          <span className="text-muted"> · {line.detail}</span>
+                        ) : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Footer: last run + controls */}
+              <div className="flex items-center justify-between gap-2 border-t border-line bg-surface-2/40 px-3.5 py-2">
+                <span className="truncate text-[11px] text-muted">
+                  {lastRunLabel(a)}
+                </span>
+                <div className="flex shrink-0 items-center gap-1 text-xs">
+                  <button
+                    type="button"
+                    aria-label="Move up"
+                    disabled={i === 0 || pending}
+                    onClick={() => void move(i, -1)}
+                    className="rounded p-1 text-muted hover:text-ink disabled:opacity-30"
+                  >
+                    <ChevronUp />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move down"
+                    disabled={i === automations.length - 1 || pending}
+                    onClick={() => void move(i, 1)}
+                    className="rounded p-1 text-muted hover:text-ink disabled:opacity-30"
+                  >
+                    <ChevronDown />
+                  </button>
+                  <span className="mx-1 h-4 w-px bg-line" />
+                  <button
+                    type="button"
+                    className="rounded px-1.5 py-1 font-medium text-accent hover:underline"
+                    onClick={() => setSheet({ mode: 'edit', item: a })}
+                  >
+                    Edit
+                  </button>
+                  {a.trigger === 'review_expense_created' ? (
+                    <button
+                      type="button"
+                      className="rounded px-1.5 py-1 font-medium text-ink-soft hover:underline"
+                      disabled={pending}
+                      onClick={() => void runNow(a.id)}
+                    >
+                      Run
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="rounded px-1.5 py-1 font-medium text-muted hover:text-danger hover:underline"
+                    disabled={pending}
+                    onClick={async () => {
+                      await deleteAutomationAction(a.id);
+                      refresh();
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </li>
           ))}

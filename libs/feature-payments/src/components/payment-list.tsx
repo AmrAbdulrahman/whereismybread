@@ -14,7 +14,7 @@ import {
 } from '@wib/domain';
 import type { Account, Tag } from '@wib/db';
 import { cn, Progress, Spinner } from '@wib/ui';
-import { Check, ChevronDown, Pencil } from '@wib/ui/icons';
+import { ArrowDown, ArrowUp, Check, ChevronDown, Pencil } from '@wib/ui/icons';
 import { loadListWindowAction } from '../lib/actions';
 import { riskFor, sumInDisplay } from '../lib/risk';
 import type {
@@ -172,6 +172,8 @@ export function PaymentList({
   stickyTop = 0,
   goTodayRef,
   hideOccurrence,
+  highlightOccurrence,
+  highlightExpense,
   onEdit,
   onFlag,
   onDelete,
@@ -205,6 +207,10 @@ export function PaymentList({
   goTodayRef?: { current: (() => void) | null };
   /** Hide an occurrence client-side — an optimistically-deleted row. */
   hideOccurrence?: (occ: BoardOccurrence) => boolean;
+  /** Briefly flash an occurrence — a push-notification deep link landed on it. */
+  highlightOccurrence?: (occ: BoardOccurrence) => boolean;
+  /** Same, for a recorded expense row. */
+  highlightExpense?: (id: string) => boolean;
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
   onDelete?: (paymentId: string, dueDate: string) => void;
@@ -219,6 +225,10 @@ export function PaymentList({
 }) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const filterActive = listFilterCount(filter) > 0;
+  // While a text search is running the list is a cross-month subset, so the
+  // per-month / per-day roll-ups would be a partial figure dressed up as the
+  // real one — hide them entirely until the search clears.
+  const searchActive = filter.search.trim().length > 0;
 
   // Per-day expansion. Past days default to `compact` (only what still needs
   // action — unpaid payments + transactions to review); today and future
@@ -684,20 +694,23 @@ export function PaymentList({
     else expensesByDate.set(e.date, [e]);
   }
 
-  // Uncategorized imported transactions, bucketed by their day. They always
-  // show (independent of every filter and the "Show" kinds) — an inbox nudge
-  // that vanishes once triaged — and never touch a single total.
+  // Uncategorized imported transactions, bucketed by their day — an inbox
+  // nudge that vanishes once triaged, and never touches a total. Independent
+  // of the "Show" kinds, but a filter/search is a deliberate "show me only X"
+  // so the review rows step aside while one is on.
+  const showReview = !filterActive;
   const reviewByDate = new Map<string, BankTransactionRow[]>();
-  for (const txn of reviewTransactions) {
+  for (const txn of showReview ? reviewTransactions : []) {
     const d = txn.occurredAt.slice(0, 10);
     if (d < board.window.from || d > board.window.to) continue;
     const arr = reviewByDate.get(d);
     if (arr) arr.push(txn);
     else reviewByDate.set(d, [txn]);
   }
-  const reviewOutsideWindow =
-    reviewTransactions.length -
-    [...reviewByDate.values()].reduce((n, a) => n + a.length, 0);
+  const reviewOutsideWindow = showReview
+    ? reviewTransactions.length -
+      [...reviewByDate.values()].reduce((n, a) => n + a.length, 0)
+    : 0;
 
   // Show everything that isn't skipped — paid occurrences stay in place with
   // their checkbox ticked (earlier this month, or in months scrolled back in),
@@ -903,6 +916,46 @@ export function PaymentList({
     };
   });
 
+  // Which way the mobile "Today" FAB points: `up` when today has scrolled off
+  // the top, `down` when it's still below the fold, `null` when it's on screen
+  // (the FAB hides). Tracked off scroll so the arrow flips live.
+  const [todayDir, setTodayDir] = useState<'up' | 'down' | null>(null);
+  useEffect(() => {
+    const compute = () => {
+      const el =
+        document.querySelector<HTMLElement>(`[data-day="${board.today}"]`) ??
+        document.querySelector<HTMLElement>('[data-plan-today]');
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        if (r.bottom <= stickyTop + 8) return setTodayDir('up');
+        if (r.top >= vh - 8) return setTodayDir('down');
+        return setTodayDir(null);
+      }
+      // Today's month isn't even rendered — point toward it by month order.
+      const order = monthKeys ? monthKeys.split(',') : [];
+      const first = order[0];
+      const last = order[order.length - 1];
+      if (!first || !last) return setTodayDir(null);
+      if (todayMonth < first) return setTodayDir('up');
+      if (todayMonth > last) return setTodayDir('down');
+      return setTodayDir(null);
+    };
+    compute();
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(compute);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [board.today, stickyTop, monthKeys]);
+
   // On first load, land on the earliest day this month that still needs
   // action (an unpaid payment or a transaction to review) rather than the
   // very top of the month. Runs once, and only if the user hasn't already
@@ -969,7 +1022,7 @@ export function PaymentList({
     return (
       <div className="flex flex-col gap-4">
         {filterActive ? null : <TodayMarker />}
-        {reviewTransactions.length > 0 ? (
+        {showReview && reviewTransactions.length > 0 ? (
           <p className="rounded-lg border border-warn/40 bg-warn/[0.06] px-3 py-2 text-xs text-ink-soft">
             {reviewTransactions.length} imported transaction
             {reviewTransactions.length === 1 ? '' : 's'} to review — open{' '}
@@ -1012,6 +1065,23 @@ export function PaymentList({
 
   return (
     <div className={cn('flex flex-col gap-8', showMinimap && 'sm:pr-16')}>
+      {/* Mobile "jump to today" FAB — stacked just above the add-FAB. The
+          arrow points the way you'd have to scroll to reach today. */}
+      {todayDir ? (
+        <button
+          type="button"
+          onClick={goToday}
+          aria-label="Jump to today"
+          className="fixed bottom-[calc(9.5rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-2.5 pr-3.5 text-xs font-semibold text-ink shadow-lg active:scale-95 sm:hidden"
+        >
+          {todayDir === 'up' ? (
+            <ArrowUp size={15} strokeWidth={2.5} className="text-accent" />
+          ) : (
+            <ArrowDown size={15} strokeWidth={2.5} className="text-accent" />
+          )}
+          Today
+        </button>
+      ) : null}
       {showMinimap ? (
         <ListMinimap
           fromKey={minimapFrom}
@@ -1139,11 +1209,13 @@ export function PaymentList({
                 >
                   {monthLabel(mo.key)}
                 </h3>
-                <span className="font-mono text-sm font-semibold tabular-nums text-ink">
-                  {formatMoney(money(totalMinor, displayCurrency))}
-                </span>
+                {searchActive ? null : (
+                  <span className="font-mono text-sm font-semibold tabular-nums text-ink">
+                    {formatMoney(money(totalMinor, displayCurrency))}
+                  </span>
+                )}
               </div>
-              {hasIncome ? (
+              {searchActive ? null : hasIncome ? (
                 <>
                   <Progress value={spendPct} indicatorClassName={risk.bar} />
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
@@ -1418,18 +1490,20 @@ export function PaymentList({
                         /^(Tomorrow|Yesterday|in \d|\d+ days ago)/.test(
                           group.relativeLabel,
                         ) ? (
-                          <span>{group.relativeLabel}</span>
+                          <span className="hidden sm:inline">
+                            {group.relativeLabel}
+                          </span>
                         ) : null}
                         {showBudgetsAndExpenses ? (
                           <button
                             type="button"
                             onClick={() => onAddExpense(group.date)}
-                            className="font-medium text-ink-soft hover:text-ink hover:underline"
+                            className="hidden font-medium text-ink-soft hover:text-ink hover:underline sm:inline"
                           >
                             + expense
                           </button>
                         ) : null}
-                        {dayTotalMinor > 0 ? (
+                        {!searchActive && dayTotalMinor > 0 ? (
                           <span className="font-mono tabular-nums">
                             {formatMoney(money(dayTotalMinor, displayCurrency))}
                           </span>
@@ -1455,6 +1529,7 @@ export function PaymentList({
                                 onEdit={onEdit}
                                 onFlag={onFlag}
                                 onDelete={onDelete}
+                                highlight={highlightOccurrence?.(occ)}
                                 onToggle={(paid) => setLocalPaid(occ.key, paid)}
                                 displayCurrency={displayCurrency}
                                 rates={rates}
@@ -1467,6 +1542,7 @@ export function PaymentList({
                           <ExpenseListItem
                             key={e.id}
                             expense={e}
+                            highlight={highlightExpense?.(e.id)}
                             onEdit={() => onEditExpense(e)}
                             onDelete={
                               onDeleteExpense

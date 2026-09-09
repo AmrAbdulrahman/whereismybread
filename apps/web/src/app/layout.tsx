@@ -51,10 +51,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f4f1fa' },
-    { media: '(prefers-color-scheme: dark)', color: '#0e0c14' },
-  ],
+  // `theme-color` (status-bar / notch fill) is managed by THEME_INIT_SCRIPT and
+  // `applyTheme` so it tracks the in-app light/dark toggle, not just the OS —
+  // a `prefers-color-scheme`-scoped tag here would go stale on manual toggle.
   width: 'device-width',
   initialScale: 1,
   // Let the app paint under the notch / home indicator when installed.

@@ -548,13 +548,53 @@ export async function runReviewExpenseAutomations(
 }
 
 /**
+ * The concise "one new transaction" notice: `£12.40 paid at Pret`, plus a deep
+ * link — to the plan card when an automation auto-filed it, to the review
+ * inbox when it's still waiting. `null` if the row vanished.
+ */
+async function singleTxnNotice(
+  userId: string,
+  txnId: string,
+): Promise<NotificationInput | null> {
+  const [t] = await getBankTransactionsByIds(userId, [txnId]).catch(() => []);
+  if (!t) return null;
+
+  const merchant = t.nameOverride?.trim() || cleanMerchant(t.description);
+  const outgoing = t.amountMinor < 0;
+  const amount = formatMoney(money(Math.abs(t.amountMinor), t.currency));
+  const at = `${amount} ${outgoing ? 'paid at' : 'received from'} ${merchant}`;
+  const on = t.occurredAt.toISOString().slice(0, 10);
+
+  if (t.status === 'categorized' && t.resultId) {
+    const isPayment = t.resultType === 'payment';
+    return {
+      title: isPayment ? 'Planned payment created' : 'Expense logged',
+      body: at,
+      href: `/plan?focus=${t.resultId}&on=${on}`,
+    };
+  }
+  return {
+    title: 'New transaction to review',
+    body: `${at} — needs a quick review`,
+    href: REVIEW_HREF,
+  };
+}
+
+/**
  * Leave the "bank sync finished" notification once a connection's sync has
  * imported new rows and the review automations above have run. In-app + push;
  * gated on the user's `notify_sync_summary` preference. Never throws.
  */
 export async function notifySyncComplete(
   userId: string,
-  input: { bankName: string | null; pulled: number; outcome: ReviewAutomationOutcome },
+  input: {
+    bankName: string | null;
+    pulled: number;
+    outcome: ReviewAutomationOutcome;
+    /** Set when the sync brought in exactly one row — powers the concise
+     * "£X paid at <merchant>" notification + a deep link to that item. */
+    singleTxnId?: string;
+  },
 ): Promise<void> {
   const { pulled, outcome } = input;
   if (pulled <= 0) return;
@@ -573,6 +613,23 @@ export async function notifySyncComplete(
     outcome.expensesCreated === 0
   ) {
     return;
+  }
+
+  // One transaction, one message: skip the tally, say what it was, and link
+  // straight to it.
+  if (input.singleTxnId && outcome.candidates === 1) {
+    try {
+      const user = await findUserById(userId).catch(() => null);
+      if (user && user.notifySyncSummary === false) return;
+      const notice = await singleTxnNotice(userId, input.singleTxnId);
+      if (notice) {
+        await createNotifications(userId, [notice]);
+        await sendPushToUser(userId, [notice]);
+        return;
+      }
+    } catch (err) {
+      console.error('[automations] single-txn notification failed', err);
+    }
   }
 
   const summary: SyncSummary = {

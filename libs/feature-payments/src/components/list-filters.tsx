@@ -156,6 +156,7 @@ export function ListFilters({
   methods,
   unpaidOnly,
   onUnpaidOnlyChange,
+  onClearAll,
 }: {
   value: ListFilterValue;
   onChange: (next: ListFilterValue) => void;
@@ -165,6 +166,9 @@ export function ListFilters({
   methods: PaymentMethod[];
   unpaidOnly: boolean;
   onUnpaidOnlyChange: (next: boolean) => void;
+  /** Clears everything (incl. the outstanding toggle) — falls back to just
+   * emptying the filter value. */
+  onClearAll?: () => void;
 }) {
   const count = listFilterCount(value);
 
@@ -286,14 +290,14 @@ export function ListFilters({
       {chipGroup('Bank', banks, 'bankIds')}
       {chipGroup('Tags', tags, 'tagIds')}
 
-      {count > 0 ? (
+      {count > 0 || unpaidOnly ? (
         <button
           type="button"
-          onClick={() => onChange(EMPTY_LIST_FILTER)}
+          onClick={() => (onClearAll ? onClearAll() : onChange(EMPTY_LIST_FILTER))}
           className="inline-flex items-center gap-1 self-start text-xs text-muted hover:text-ink"
         >
           <X size={13} />
-          Clear {count === 1 ? 'filter' : 'filters'}
+          Clear {count === 1 && !unpaidOnly ? 'filter' : 'filters'}
         </button>
       ) : null}
     </div>

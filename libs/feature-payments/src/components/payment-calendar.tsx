@@ -37,6 +37,7 @@ export function PaymentCalendar({
   month,
   onMonthChange,
   hideOccurrence,
+  highlightOccurrence,
   onEdit,
   onFlag,
   onDelete,
@@ -46,6 +47,8 @@ export function PaymentCalendar({
   onMonthChange: (month: IsoDate) => void;
   /** Hide an occurrence client-side — an optimistically-deleted row. */
   hideOccurrence?: (occ: BoardOccurrence) => boolean;
+  /** Briefly flash an occurrence — a push-notification deep link landed on it. */
+  highlightOccurrence?: (occ: BoardOccurrence) => boolean;
   onEdit: (paymentId: string, dueDate: string) => void;
   onFlag: (paymentId: string, dueDate: string) => void;
   onDelete?: (paymentId: string, dueDate: string) => void;
@@ -215,6 +218,7 @@ export function PaymentCalendar({
                     onEdit={onEdit}
                     onFlag={onFlag}
                     onDelete={onDelete}
+                    highlight={highlightOccurrence?.(occ)}
                     displayCurrency={board.displayCurrency}
                     rates={board.rates}
                     today={board.today}

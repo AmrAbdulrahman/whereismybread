@@ -79,6 +79,7 @@ export function OccurrenceItem({
   today,
   compact = false,
   assign,
+  highlight = false,
 }: {
   occ: BoardOccurrence;
   onEdit?: (paymentId: string, dueDate: string) => void;
@@ -86,6 +87,8 @@ export function OccurrenceItem({
   onFlag?: (paymentId: string, dueDate: string) => void;
   /** Open the delete-confirm for this occurrence (overflow menu). */
   onDelete?: (paymentId: string, dueDate: string) => void;
+  /** Flash a ring around the card — a deep link from a notification landed here. */
+  highlight?: boolean;
   /**
    * Enables the inline "+ account" / "+ budget" / "+ tag" chips — picking one
    * assigns it to the whole series without the edit modal, applied immediately
@@ -231,12 +234,14 @@ export function OccurrenceItem({
     <div
       onClick={onCardClick}
       className={cn(
-        'rounded-xl border border-line bg-surface transition-opacity duration-300',
+        'rounded-xl border border-line bg-surface transition-all duration-300',
         dueStyle?.card,
         edgeColor && 'border-l-[3px]',
         skipped && 'opacity-60',
         paid && 'opacity-45',
         clickToEdit && 'cursor-pointer',
+        highlight &&
+          'ring-2 ring-accent ring-offset-2 ring-offset-ground animate-pulse',
       )}
       style={edgeColor ? { borderLeftColor: edgeColor } : undefined}
     >

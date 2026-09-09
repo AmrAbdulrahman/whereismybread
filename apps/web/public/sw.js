@@ -49,21 +49,27 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/notifications';
+  const target =
+    (event.notification.data && event.notification.data.url) || '/notifications';
+  const targetUrl = new URL(target, self.location.origin);
 
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
+        // Already on the exact deep link (query included) → just focus.
         for (const client of clients) {
-          const clientUrl = new URL(client.url);
-          if (clientUrl.pathname === target && 'focus' in client) {
+          if (client.url === targetUrl.href && 'focus' in client) {
             return client.focus();
           }
         }
+        // Otherwise steer an open tab to it (honours ?focus=… deep links even
+        // when a /plan tab is already open), else open a new one.
         for (const client of clients) {
           if ('focus' in client) {
-            client.navigate(target);
+            if ('navigate' in client) {
+              return client.navigate(target).then((c) => (c || client).focus());
+            }
             return client.focus();
           }
         }

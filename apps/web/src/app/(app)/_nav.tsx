@@ -16,6 +16,13 @@ const navItems = (unreadNotifications: number): NavEntry[] => [
     icon: icons.checklist,
   },
   {
+    href: '/notifications',
+    label: 'Notifications',
+    shortLabel: 'Alerts',
+    icon: icons.notifications,
+    badge: unreadNotifications,
+  },
+  {
     href: '/integrations',
     label: 'Integrations',
     shortLabel: 'Integr.',
@@ -26,13 +33,6 @@ const navItems = (unreadNotifications: number): NavEntry[] => [
     label: 'Automations',
     shortLabel: 'Auto',
     icon: icons.automations,
-  },
-  {
-    href: '/notifications',
-    label: 'Notifications',
-    shortLabel: 'Alerts',
-    icon: icons.notifications,
-    badge: unreadNotifications,
   },
 
   { separator: true },

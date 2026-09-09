@@ -1,5 +1,7 @@
 import {
+  ArrowDown,
   ArrowLeftRight,
+  ArrowUp,
   Banknote,
   Bell,
   Bitcoin,
@@ -96,7 +98,9 @@ export function iconFor(name: IconName): LucideIcon {
 
 export type { LucideIcon };
 export {
+  ArrowDown,
   ArrowLeftRight,
+  ArrowUp,
   Banknote,
   Bell,
   Bitcoin,

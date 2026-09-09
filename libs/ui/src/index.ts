@@ -31,6 +31,7 @@ export { ToastProvider, useToast, type ToastOptions } from './components/toast';
 export { Spinner } from './components/spinner';
 export { ThemeToggle } from './components/theme-toggle';
 export {
+  THEME_COLORS,
   THEME_INIT_SCRIPT,
   THEME_STORAGE_KEY,
   applyTheme,

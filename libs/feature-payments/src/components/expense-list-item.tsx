@@ -38,11 +38,14 @@ export function ExpenseListItem({
   onEdit,
   onDelete,
   assign,
+  highlight = false,
 }: {
   expense: ExpenseLine;
   onEdit: () => void;
   /** Open the delete-confirm for this expense (overflow menu). */
   onDelete?: () => void;
+  /** Flash a ring around the row — a notification deep link landed here. */
+  highlight?: boolean;
   /**
    * Enables the inline "+ account" / "+ budget" / "+ tag" chips — picking one
    * assigns it immediately in the UI and saves in the background. `tags` is
@@ -136,8 +139,10 @@ export function ExpenseListItem({
         }
       }}
       className={cn(
-        'flex cursor-pointer items-center gap-2.5 rounded-lg border border-dashed px-3 py-2 text-left transition-colors',
+        'flex cursor-pointer items-center gap-2.5 rounded-lg border border-dashed px-3 py-2 text-left transition-all',
         'border-line-strong bg-surface/60 hover:border-accent/60',
+        highlight &&
+          'animate-pulse ring-2 ring-accent ring-offset-2 ring-offset-ground',
       )}
     >
       {expense.logoUrl ? (

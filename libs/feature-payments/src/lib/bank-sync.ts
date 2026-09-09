@@ -302,6 +302,8 @@ export async function syncConnection(
         bankName: connection.aspspName || null,
         pulled: newTransactionIds.length,
         outcome,
+        singleTxnId:
+          newTransactionIds.length === 1 ? newTransactionIds[0] : undefined,
       });
     } catch (err) {
       console.error('[bank-sync] automations failed', err);
