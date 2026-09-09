@@ -59,6 +59,49 @@ export async function listNotifications(
     .limit(Math.min(opts.limit ?? 100, 200));
 }
 
+/** Opaque paging key — a batch insert gives rows an identical timestamp, so
+ * the id is part of the cursor to keep the order total. */
+export interface NotificationCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface NotificationsPage {
+  items: Notification[];
+  nextCursor: NotificationCursor | null;
+}
+
+/** One page of the user's notifications, newest first, for the bell's
+ * infinite-scroll list. Pass the previous page's `nextCursor` to continue. */
+export async function listNotificationsPage(
+  userId: string,
+  opts: { limit?: number; cursor?: NotificationCursor | null } = {},
+): Promise<NotificationsPage> {
+  const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
+  const conds = [eq(notifications.userId, userId)];
+  if (opts.cursor) {
+    conds.push(
+      sql`(${notifications.createdAt}, ${notifications.id}) < (${new Date(
+        opts.cursor.createdAt,
+      )}::timestamptz, ${opts.cursor.id}::uuid)`,
+    );
+  }
+  const rows = await getDb()
+    .select()
+    .from(notifications)
+    .where(and(...conds))
+    .orderBy(desc(notifications.createdAt), desc(notifications.id))
+    .limit(limit + 1);
+
+  const items = rows.slice(0, limit);
+  const last = items.at(-1);
+  const nextCursor =
+    rows.length > limit && last
+      ? { createdAt: new Date(last.createdAt).toISOString(), id: last.id }
+      : null;
+  return { items, nextCursor };
+}
+
 export async function countUnreadNotifications(
   userId: string,
 ): Promise<number> {

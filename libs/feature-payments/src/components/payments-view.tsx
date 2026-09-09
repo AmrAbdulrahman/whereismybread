@@ -9,13 +9,7 @@ import type {
   RecipientMethod,
   Tag,
 } from '@wib/db';
-import {
-  endOfMonth,
-  formatMoney,
-  money,
-  startOfMonth,
-  type IsoDate,
-} from '@wib/domain';
+import { endOfMonth, startOfMonth, type IsoDate } from '@wib/domain';
 import {
   Button,
   ResponsiveModal,
@@ -67,7 +61,6 @@ import {
   ignoreBankTransactionAction,
 } from '../lib/bank-transaction-actions';
 import type { BankTransactionRow, SyncTarget } from '../lib/bank-sync-queries';
-import { riskFor, sumInDisplay } from '../lib/risk';
 import type {
   BudgetSummary,
   EditablePayment,
@@ -525,65 +518,11 @@ export function PaymentsView({
       startDate: b.startDate,
     }));
 
-  // Header stats follow whatever month the calendar is showing; the list has
-  // no single month, so it stays on the current one.
+  // The board's risk / "left" figures are shown per-month in the list headers
+  // now, not as a page-level summary. This only picks the month a new budget
+  // should default to — whatever month is currently in view.
   const scopeStart =
     view === 'calendar' ? startOfMonth(calMonth) : startOfMonth(board.today);
-  const scopeEnd = endOfMonth(scopeStart);
-  const inScope = board.occurrences.filter(
-    (o) =>
-      o.status !== 'skipped' &&
-      o.dueDate >= scopeStart &&
-      o.dueDate <= scopeEnd,
-  );
-  const scopeBudgets = budgets.filter(
-    (b) => b.startDate <= scopeEnd && b.endDate >= scopeStart,
-  );
-  const scopeOpenBudgets = scopeBudgets.filter((b) => !b.closedAt);
-  const scopeClosedBudgets = scopeBudgets.filter((b) => b.closedAt);
-  // An open budget's whole reserved amount counts toward the month like a
-  // payment would. A closed budget only commits what it actually spent — its
-  // unspent remainder is released back into "left". An expense tied to a
-  // budget doesn't count separately (its budget already does) — only
-  // unbudgeted ones add on top, same as a one-time payment.
-  const scopeUnbudgetedExpenses = expenses.filter(
-    (e) => !e.budgetId && e.date >= scopeStart && e.date <= scopeEnd,
-  );
-  const scopeExtra = [
-    ...scopeOpenBudgets.map((b) => b.limit),
-    ...scopeClosedBudgets.map((b) => money(b.spentMinor, b.limit.currency)),
-    ...scopeUnbudgetedExpenses.map((e) => e.amount),
-  ];
-  const scopeIncomeMinor =
-    board.incomeByMonth[scopeStart.slice(0, 7)] ?? board.defaultIncomeMinor;
-  // Everything committed this month — payments due, budgets reserved,
-  // unbudgeted expenses already spent — converted into one currency. Powers
-  // both the "due this month" headline and the risk line below it.
-  const scopeSpentDisplayMinor = sumInDisplay(
-    [...inScope.map((o) => o.amount), ...scopeExtra],
-    board.displayCurrency,
-    board.rates,
-  );
-  const scopeRisk = riskFor(scopeSpentDisplayMinor, scopeIncomeMinor);
-  // "Left" comes in two layers: the conservative figure treats every budget's
-  // full reserved amount as already spent; the (larger, friendlier) headline
-  // adds back whatever's still unspent in those budgets — money that's set
-  // aside, but not gone yet.
-  const scopeLeftMinor = scopeIncomeMinor - scopeSpentDisplayMinor;
-  const scopeBudgetsRemainingMinor = sumInDisplay(
-    scopeOpenBudgets.map((b) => money(b.remainingMinor, b.limit.currency)),
-    board.displayCurrency,
-    board.rates,
-  );
-  const scopeTotalLeftMinor = scopeLeftMinor + scopeBudgetsRemainingMinor;
-  const isThisMonth = scopeStart === startOfMonth(board.today);
-  const scopeMonthLabel = new Intl.DateTimeFormat('en-GB', {
-    month: 'long',
-    ...(scopeStart.slice(0, 4) === board.today.slice(0, 4)
-      ? {}
-      : { year: 'numeric' }),
-    timeZone: 'UTC',
-  }).format(new Date(`${scopeStart}T00:00:00Z`));
 
   const formModal = (
     <ResponsiveModal
@@ -734,7 +673,7 @@ export function PaymentsView({
     <div className="flex flex-col gap-5">
       <div
         ref={panelRef}
-        className="sticky top-0 z-30 -mx-4 flex flex-col gap-2.5 border-b border-line/60 bg-ground/95 px-4 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:gap-3 sm:px-6 sm:pt-4 lg:pr-20"
+        className="sticky top-0 z-30 -mx-4 flex flex-col gap-2.5 border-b border-line/60 bg-ground/95 px-4 pr-14 pb-3 pt-3 backdrop-blur sm:-mx-6 sm:gap-3 sm:px-6 sm:pr-16 sm:pt-4 lg:pr-20"
       >
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
@@ -742,53 +681,6 @@ export function PaymentsView({
               <span className="sm:hidden">Payments</span>
               <span className="hidden sm:inline">Upcoming payments</span>
             </h1>
-            <p className="mt-0.5 text-[13px] text-ink-soft sm:mt-1 sm:text-sm">
-              {formatMoney(
-                money(scopeSpentDisplayMinor, board.displayCurrency),
-              )}{' '}
-              due {isThisMonth ? 'this month' : `in ${scopeMonthLabel}`}
-              {' · '}
-              {inScope.length} scheduled
-            </p>
-            {scopeRisk.level !== 'none' ? (
-              <p
-                className={cn(
-                  'mt-1 flex items-center gap-1.5 text-xs font-medium',
-                  scopeRisk.text,
-                )}
-              >
-                <span
-                  className={cn('h-1.5 w-1.5 rounded-full', scopeRisk.bar)}
-                />
-                {formatMoney(money(scopeTotalLeftMinor, board.displayCurrency))}{' '}
-                left
-                {scopeOpenBudgets.length > 0 ? (
-                  <span className="font-normal text-muted"> after budgets</span>
-                ) : null}
-                {scopeOpenBudgets.length > 0 ? (
-                  <span className="text-muted">
-                    {' '}
-                    ({formatMoney(
-                      money(scopeLeftMinor, board.displayCurrency),
-                    )}{' '}
-                    left +{' '}
-                    {formatMoney(
-                      money(scopeBudgetsRemainingMinor, board.displayCurrency),
-                    )}{' '}
-                    budgets)
-                  </span>
-                ) : null}
-                <span className="hidden sm:inline">
-                  {' '}
-                  of{' '}
-                  {formatMoney(
-                    money(scopeIncomeMinor, board.displayCurrency),
-                  )}{' '}
-                  income
-                </span>{' '}
-                · {scopeRisk.label}
-              </p>
-            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {/* Mobile "Today" lives in a FAB now (see PaymentList). */}

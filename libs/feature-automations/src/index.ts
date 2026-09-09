@@ -6,6 +6,7 @@ export {
   type AutomationFormInitial,
 } from './components/automation-form';
 export { NotificationsView } from './components/notifications-view';
+export { NotificationsBell } from './components/notifications-bell';
 export { PushNudge } from './components/push-nudge';
 
 export {
@@ -15,10 +16,12 @@ export {
   reorderAutomationsAction,
   runAutomationNowAction,
   markNotificationsReadAction,
+  loadNotificationsAction,
   savePushSubscriptionAction,
   deletePushSubscriptionAction,
   updateNotificationPrefsAction,
   type SaveAutomationResult,
+  type NotificationsPageResult,
 } from './lib/actions';
 
 export { NotificationsSettings } from './components/notifications-settings';

@@ -28,6 +28,7 @@ import { BankTransactionRow as BankTransactionRowComponent } from './bank-transa
 import type { BankTransactionRow } from '../lib/bank-sync-queries';
 import { BudgetMonthGroup } from './budget-month-group';
 import { ExpenseListItem } from './expense-list-item';
+import { InfoHint } from './info-hint';
 import { budgetAssignOptions } from './inline-assign-chip';
 import {
   EMPTY_LIST_FILTER,
@@ -1178,33 +1179,50 @@ export function PaymentList({
           displayCurrency,
           rates,
         );
+        // An open budget reserves its whole limit; a closed one only commits
+        // what it actually spent (the rest is released). `…Unspent` is what's
+        // still sitting in the account, earmarked but not gone.
+        const budgetReservedMinor = sumInDisplay(
+          monthBudgets.map((b) =>
+            b.closedAt ? money(b.spentMinor, b.limit.currency) : b.limit,
+          ),
+          displayCurrency,
+          rates,
+        );
+        const budgetUnspentMinor = sumInDisplay(
+          monthBudgets
+            .filter((b) => !b.closedAt)
+            .map((b) => money(b.remainingMinor, b.limit.currency)),
+          displayCurrency,
+          rates,
+        );
         const {
           paidMinor,
           remainingMinor: paymentsRemainingMinor,
           totalMinor: paymentsTotalMinor,
         } = monthTotals(occs, displayCurrency, rates);
-        // Budgets get their own sticky display and are excluded here — this
-        // total is payments due plus unbudgeted expenses (money already
-        // spent outside any budget), not the reserved budget amounts.
+        // Payments due + unbudgeted expenses (spent outside any budget) — used
+        // for the paid / still-due split and the per-day figures.
         const totalMinor = paymentsTotalMinor + unbudgetedExpensesMinor;
         const remainingMinor = paymentsRemainingMinor + unbudgetedExpensesMinor;
         const paidPct = totalMinor > 0 ? (paidMinor / totalMinor) * 100 : 0;
+        // Everything committed this month, budget reserves included — the
+        // headline "£X due", and what risk is judged against.
+        const dueThisMonthMinor = totalMinor + budgetReservedMinor;
 
         const incomeMinor =
           board.incomeByMonth[mo.key] ?? board.defaultIncomeMinor;
         const isIncomeOverride = board.overriddenIncomeMonths.includes(mo.key);
         const hasIncome = incomeMinor > 0;
-        const leftMinor = incomeMinor - totalMinor;
-        const risk = riskFor(totalMinor, incomeMinor);
-        // This figure ignores budget reserves (they get their own row + the
-        // page summary counts them). Say so when a budget overlaps the month,
-        // so it doesn't look like it contradicts the "left after budgets"
-        // figure up top.
-        const monthHasBudget = budgets.some(
-          (b) =>
-            !b.closedAt && b.startDate <= monthEnd && b.endDate >= monthStart,
-        );
-        const spendPct = hasIncome ? (totalMinor / incomeMinor) * 100 : 0;
+        // "Left" in two layers: `leftMinor` treats every budget's full reserve
+        // as spent; `bankCashMinor` adds the unspent budget money back — it's
+        // still in the account, so it's what your bank + cash should total.
+        const leftMinor = incomeMinor - dueThisMonthMinor;
+        const bankCashMinor = leftMinor + budgetUnspentMinor;
+        const risk = riskFor(dueThisMonthMinor, incomeMinor);
+        const spendPct = hasIncome
+          ? (dueThisMonthMinor / incomeMinor) * 100
+          : 0;
 
         return (
           <section
@@ -1239,45 +1257,54 @@ export function PaymentList({
                 </h3>
                 {searchActive ? null : (
                   <span className="font-mono text-sm font-semibold tabular-nums text-ink">
-                    {formatMoney(money(totalMinor, displayCurrency))}
+                    {formatMoney(money(dueThisMonthMinor, displayCurrency))}
+                    <span className="ml-1 font-sans text-[11px] font-normal text-muted">
+                      due
+                    </span>
                   </span>
                 )}
               </div>
               {searchActive ? null : hasIncome ? (
                 <>
                   <Progress value={spendPct} indicatorClassName={risk.bar} />
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setEditingMonth(mo.key)}
-                      className="inline-flex items-center gap-1.5 text-ink-soft hover:text-ink"
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 font-medium tabular-nums',
+                        risk.text,
+                      )}
                     >
-                      <span>
-                        Income{' '}
-                        <span className="font-medium tabular-nums text-ink">
-                          {formatMoney(money(incomeMinor, displayCurrency))}
-                        </span>
-                        {isIncomeOverride ? (
-                          <span className="ml-1 text-muted">· custom</span>
-                        ) : null}
-                      </span>
-                      <Pencil size={12} className="opacity-60" />
-                    </button>
-                    <span className={cn('font-medium tabular-nums', risk.text)}>
                       {leftMinor >= 0
                         ? `${formatMoney(money(leftMinor, displayCurrency))} left`
                         : `${formatMoney(
                             money(-leftMinor, displayCurrency),
                           )} over`}
-                      {monthHasBudget ? (
-                        <span className="font-normal text-muted">
-                          {' '}
-                          before budgets
-                        </span>
-                      ) : null}
-                      {' · '}
-                      {risk.label}
+                      <InfoHint label="What “left” means">
+                        This should stay the same if all your spending is
+                        planned or budgeted.
+                      </InfoHint>
                     </span>
+                    {budgetUnspentMinor > 0 ? (
+                      <span className="text-muted">
+                        (excluding{' '}
+                        {formatMoney(money(budgetUnspentMinor, displayCurrency))}{' '}
+                        budgets)
+                      </span>
+                    ) : null}
+                    <span className="inline-flex items-center gap-1 text-muted">
+                      · total{' '}
+                      <span className="tabular-nums">
+                        {formatMoney(money(bankCashMinor, displayCurrency))}
+                      </span>
+                      <InfoHint label="What “total” means">
+                        This should be the sum of the money in your bank + cash.
+                      </InfoHint>
+                    </span>
+                    {risk.label ? (
+                      <span className={cn('font-medium', risk.text)}>
+                        · {risk.label}
+                      </span>
+                    ) : null}
                   </div>
                   {totalMinor > 0 ? (
                     <div className="flex items-center justify-between text-xs text-muted">
@@ -1290,6 +1317,17 @@ export function PaymentList({
                       </span>
                     </div>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setEditingMonth(mo.key)}
+                    className="inline-flex items-center gap-1.5 self-start text-xs text-muted hover:text-ink"
+                  >
+                    <Pencil size={11} className="opacity-70" />
+                    Income {formatMoney(money(incomeMinor, displayCurrency))}
+                    {isIncomeOverride ? (
+                      <span className="text-muted"> · custom</span>
+                    ) : null}
+                  </button>
                 </>
               ) : totalMinor > 0 ? (
                 <>

@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import { AppShell, icons, type NavEntry } from '@wib/ui';
 import { UserMenu } from './_user-menu';
 
-const navItems = (unreadNotifications: number): NavEntry[] => [
+// Notifications live in the sticky bell (top-right), not the nav.
+const navItems: NavEntry[] = [
   { href: '/plan', label: 'Payments', icon: icons.calendar },
   { href: '/insights', label: 'Insights', icon: icons.insights },
   {
@@ -14,13 +15,6 @@ const navItems = (unreadNotifications: number): NavEntry[] => [
     label: 'Checklist',
     shortLabel: 'Checks',
     icon: icons.checklist,
-  },
-  {
-    href: '/notifications',
-    label: 'Notifications',
-    shortLabel: 'Alerts',
-    icon: icons.notifications,
-    badge: unreadNotifications,
   },
   {
     href: '/integrations',
@@ -71,17 +65,15 @@ export function AppNav({
   children,
   userName,
   userEmail,
-  unreadNotifications = 0,
 }: {
   children: ReactNode;
   userName: string | null;
   userEmail: string;
-  unreadNotifications?: number;
 }) {
   const pathname = usePathname();
   return (
     <AppShell
-      navItems={navItems(unreadNotifications)}
+      navItems={navItems}
       currentPath={pathname}
       linkComponent={Link}
       footerSlot={<UserMenu name={userName} email={userEmail} />}

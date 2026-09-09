@@ -7,6 +7,7 @@ import {
   deleteAutomation,
   deletePushSubscription,
   getAutomation,
+  listNotificationsPage,
   markNotificationsRead,
   reorderAutomations,
   savePushSubscription,
@@ -15,6 +16,8 @@ import {
   updateUserNotificationPrefs,
   type Automation,
   type AutomationInput,
+  type Notification,
+  type NotificationCursor,
 } from '@wib/db';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -126,6 +129,25 @@ export async function markNotificationsReadAction(
   revalidatePath('/notifications');
   revalidatePath('/automations');
   return { ok: true };
+}
+
+export interface NotificationsPageResult {
+  items: Notification[];
+  nextCursor: NotificationCursor | null;
+}
+
+/** One page of the current user's notifications for the bell's infinite list. */
+export async function loadNotificationsAction(
+  cursor?: NotificationCursor | null,
+): Promise<NotificationsPageResult> {
+  const userId = await requireUserId();
+  const safe =
+    cursor &&
+    typeof cursor.createdAt === 'string' &&
+    typeof cursor.id === 'string'
+      ? { createdAt: cursor.createdAt, id: cursor.id }
+      : null;
+  return listNotificationsPage(userId, { limit: 20, cursor: safe });
 }
 
 // --- Notification preferences + Web Push ----------------------------------

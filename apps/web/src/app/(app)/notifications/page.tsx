@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@wib/auth/server';
-import { clientEnv } from '@wib/config';
-import { NotificationsView, PushNudge } from '@wib/feature-automations';
+import { NotificationsView } from '@wib/feature-automations';
 import { getNotificationsData } from '@wib/feature-automations/server';
 
 export const metadata = { title: 'Notifications' };
@@ -29,10 +28,6 @@ export default async function NotificationsPage() {
           them read.
         </p>
       </header>
-      <PushNudge
-        vapidPublicKey={clientEnv.VAPID_PUBLIC_KEY}
-        relevant={notifications.length > 0}
-      />
       <NotificationsView notifications={notifications} />
     </div>
   );

@@ -113,6 +113,23 @@ function AnchoredMenu({
         !anchorRef.current?.contains(t)
       ) {
         onClose();
+        // The pointerdown that dismissed the menu would otherwise fall through
+        // as a `click` to whatever it landed on (the card's click-to-edit, a
+        // sibling chip, a link). Swallow that one click — wherever it is — so a
+        // click-away only ever closes the menu.
+        const swallow = (ev: Event) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        document.addEventListener('click', swallow, {
+          capture: true,
+          once: true,
+        });
+        // No click follows a pointerdown on a scrollbar or the start of a drag —
+        // drop the guard on the next tick so it can't eat an unrelated click.
+        setTimeout(() => {
+          document.removeEventListener('click', swallow, true);
+        }, 0);
       }
     };
     const onKey = (e: KeyboardEvent) => {

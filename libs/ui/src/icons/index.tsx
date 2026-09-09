@@ -24,6 +24,7 @@ import {
   Handshake,
   House,
   ImagePlus,
+  Info,
   Landmark,
   Layers,
   Link,
@@ -88,6 +89,7 @@ export const icons = {
   transactions: ArrowLeftRight,
   automations: Zap,
   notifications: Bell,
+  close: X,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;
@@ -123,6 +125,7 @@ export {
   Handshake,
   House,
   ImagePlus,
+  Info,
   Landmark,
   Layers,
   Link,

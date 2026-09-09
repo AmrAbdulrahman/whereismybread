@@ -262,9 +262,12 @@ export {
   createNotification,
   createNotifications,
   listNotifications,
+  listNotificationsPage,
   countUnreadNotifications,
   markNotificationsRead,
   type NotificationInput,
+  type NotificationCursor,
+  type NotificationsPage,
 } from './lib/repositories/notifications';
 
 export type {

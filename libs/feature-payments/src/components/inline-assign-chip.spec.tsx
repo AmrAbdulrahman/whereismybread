@@ -61,6 +61,29 @@ describe('InlineAssignChip', () => {
     await user.click(screen.getByRole('option', { name: 'Personal' }));
     expect(onPick).toHaveBeenCalledWith('a2');
   });
+
+  it('a click-away only closes the menu — it never reaches what was clicked', async () => {
+    const user = userEvent.setup();
+    const onOutside = vi.fn();
+    render(
+      <div onClick={onOutside}>
+        <span data-testid="outside">elsewhere</span>
+        <InlineAssignChip
+          label="account"
+          options={[{ id: 'a1', name: 'Joint', color: '#111' }]}
+          onPick={() => undefined}
+        />
+      </div>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add account' }));
+    expect(screen.queryByRole('listbox')).not.toBeNull();
+
+    onOutside.mockClear();
+    await user.click(screen.getByTestId('outside'));
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(onOutside).not.toHaveBeenCalled();
+  });
 });
 
 describe('InlineTagChip', () => {
