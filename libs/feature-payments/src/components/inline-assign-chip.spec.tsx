@@ -84,6 +84,46 @@ describe('InlineAssignChip', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(onOutside).not.toHaveBeenCalled();
   });
+
+  it('shows the current value as a filled pill and lets it be swapped', async () => {
+    const user = userEvent.setup();
+    const onPick = vi.fn();
+    render(
+      <InlineAssignChip
+        label="account"
+        current={{ id: 'a1', name: 'Joint', color: '#111' }}
+        options={[
+          { id: 'a1', name: 'Joint', color: '#111' },
+          { id: 'a2', name: 'Personal', color: '#222' },
+        ]}
+        onPick={onPick}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Change account' }));
+    // The already-selected option is inert.
+    await user.click(screen.getByRole('option', { name: 'Joint' }));
+    expect(onPick).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Change account' }));
+    await user.click(screen.getByRole('option', { name: 'Personal' }));
+    expect(onPick).toHaveBeenCalledWith('a2');
+  });
+
+  it('offers a remove row only when onClear is given and a value is set', async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    render(
+      <InlineAssignChip
+        label="budget"
+        current={{ id: 'b1', name: 'Groceries', color: '#111' }}
+        options={[{ id: 'b1', name: 'Groceries', color: '#111' }]}
+        onPick={() => undefined}
+        onClear={onClear}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Change budget' }));
+    await user.click(screen.getByRole('button', { name: 'Remove budget' }));
+    expect(onClear).toHaveBeenCalled();
+  });
 });
 
 describe('InlineTagChip', () => {
@@ -97,8 +137,18 @@ describe('InlineTagChip', () => {
         onChange={onChange}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Add tag' }));
+    // With tags already present the trigger is a bare "+" ("Edit tags").
+    await user.click(screen.getByRole('button', { name: 'Edit tags' }));
     await user.click(screen.getByRole('button', { name: 'personal' }));
     expect(onChange).toHaveBeenCalledWith(['work', 'personal']);
+  });
+
+  it('reads "+ tags" when the card has none', () => {
+    render(
+      <InlineTagChip value={[]} suggestions={[]} onChange={() => undefined} />,
+    );
+    expect(screen.getByRole('button', { name: 'Add tags' }).textContent).toBe(
+      'tags',
+    );
   });
 });

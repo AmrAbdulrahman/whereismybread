@@ -130,15 +130,21 @@ export function OccurrenceItem({
 
   // Inline assign is optimistic: reflect the pick straight away, save + refresh
   // in the background, then drop the override once the server board catches up.
-  const [optAccount, setOptAccount] = useState<OccurrenceAccount | null>(null);
-  const [optBudget, setOptBudget] = useState<OccurrenceBudget | null>(null);
+  // `undefined` = no override (show the server value), `null` = optimistically
+  // cleared, an object = optimistically (re)assigned.
+  const [optAccount, setOptAccount] = useState<OccurrenceAccount | null | undefined>(
+    undefined,
+  );
+  const [optBudget, setOptBudget] = useState<OccurrenceBudget | null | undefined>(
+    undefined,
+  );
   const [optTags, setOptTags] = useState<OccurrenceTag[] | null>(null);
-  const account = optAccount ?? occ.account;
-  const budget = optBudget ?? occ.budget;
+  const account = optAccount === undefined ? occ.account : optAccount;
+  const budget = optBudget === undefined ? occ.budget : optBudget;
   const tags = optTags ?? occ.tags;
   const tagSig = occ.tags.map((t) => t.id).join(',');
-  useEffect(() => setOptAccount(null), [occ.account?.id]);
-  useEffect(() => setOptBudget(null), [occ.budget?.id]);
+  useEffect(() => setOptAccount(undefined), [occ.account?.id]);
+  useEffect(() => setOptBudget(undefined), [occ.budget?.id]);
   useEffect(() => setOptTags(null), [tagSig]);
 
   const assignPayment = (patch: {
@@ -373,7 +379,22 @@ export function OccurrenceItem({
               fee
             </span>
           ) : null}
-          {account ? (
+          {showAssign && assign ? (
+            <InlineAssignChip
+              label="account"
+              options={assign.accounts}
+              current={account}
+              onPick={(id) => {
+                const a = assign.accounts.find((x) => x.id === id);
+                if (a) setOptAccount(a);
+                assignPayment({ accountId: id });
+              }}
+              onClear={() => {
+                setOptAccount(null);
+                assignPayment({ accountId: null });
+              }}
+            />
+          ) : account ? (
             <span
               className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
               style={{
@@ -387,18 +408,24 @@ export function OccurrenceItem({
               />
               {account.name}
             </span>
-          ) : showAssign && assign ? (
+          ) : null}
+          {showAssign && assign ? (
             <InlineAssignChip
-              label="account"
-              options={assign.accounts}
+              label="budget"
+              icon={<PiggyBank size={10} strokeWidth={2.5} />}
+              options={assign.budgets}
+              current={budget}
               onPick={(id) => {
-                const a = assign.accounts.find((x) => x.id === id);
-                if (a) setOptAccount(a);
-                assignPayment({ accountId: id });
+                const b = assign.budgets.find((x) => x.id === id);
+                if (b) setOptBudget(b);
+                assignPayment({ budgetId: id });
+              }}
+              onClear={() => {
+                setOptBudget(null);
+                assignPayment({ budgetId: null });
               }}
             />
-          ) : null}
-          {budget ? (
+          ) : budget ? (
             <span
               className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
               style={{
@@ -409,17 +436,6 @@ export function OccurrenceItem({
               <PiggyBank size={11} strokeWidth={2} className="shrink-0" />
               {budget.name}
             </span>
-          ) : showAssign && assign ? (
-            <InlineAssignChip
-              label="budget"
-              icon={<PiggyBank size={10} strokeWidth={2.5} />}
-              options={assign.budgets}
-              onPick={(id) => {
-                const b = assign.budgets.find((x) => x.id === id);
-                if (b) setOptBudget(b);
-                assignPayment({ budgetId: id });
-              }}
-            />
           ) : null}
           {tags.map((t) => (
             <span
