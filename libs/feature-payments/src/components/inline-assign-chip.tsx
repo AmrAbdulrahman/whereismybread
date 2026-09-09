@@ -136,24 +136,23 @@ function ValueChipButton({
 /**
  * A floating menu anchored under `anchorRef`, rendered in a portal so an
  * ancestor's `opacity` (a paid / past occurrence dims its whole card) or
- * `overflow` never bleeds into it. Closes on outside click, Esc and resize.
+ * `overflow` never bleeds into it.
  *
- * By default a scroll also dismisses it (behind a full-screen backdrop). With
- * `followScroll` it instead tracks the anchor as the list scrolls and drops
- * the backdrop, so the page underneath stays scrollable and the menu rides
- * along until the anchor leaves the viewport.
+ * It rides along with the anchor as the list scrolls (re-anchoring on every
+ * scroll / resize, rAF-throttled) rather than dismissing, so the page stays
+ * scrollable underneath. It closes on a click-away (caught in the capture
+ * phase so it can't also trigger the card underneath), on Esc, and once the
+ * anchor scrolls out of the viewport.
  */
 function AnchoredMenu({
   anchorRef,
   onClose,
   width = 200,
-  followScroll = false,
   children,
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   width?: number;
-  followScroll?: boolean;
   children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -182,10 +181,10 @@ function AnchoredMenu({
   }, [place]);
 
   useEffect(() => {
-    // A click anywhere outside the menu (the backdrop, the card, a sibling
-    // chip, a link) closes it and goes no further: caught in the *capture*
-    // phase on `document` it's stopped before React's delegated handlers ever
-    // see it, so a click-away can only ever dismiss the menu.
+    // A click anywhere outside the menu (the card, a sibling chip, a link)
+    // closes it and goes no further: caught in the *capture* phase on
+    // `document` it's stopped before React's delegated handlers ever see it,
+    // so a click-away can only ever dismiss the menu.
     const onOutsideClick = (e: MouseEvent) => {
       const t = e.target as Node;
       if (!menuRef.current?.contains(t) && !anchorRef.current?.contains(t)) {
@@ -201,46 +200,32 @@ function AnchoredMenu({
     document.addEventListener('keydown', onKey);
 
     let raf = 0;
-    const onScroll = () => {
-      if (!followScroll) return onClose();
+    const reanchor = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(place);
     };
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', followScroll ? onScroll : onClose);
+    window.addEventListener('scroll', reanchor, true);
+    window.addEventListener('resize', reanchor);
     return () => {
       document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', followScroll ? onScroll : onClose);
+      window.removeEventListener('scroll', reanchor, true);
+      window.removeEventListener('resize', reanchor);
       cancelAnimationFrame(raf);
     };
-  }, [anchorRef, onClose, place, followScroll]);
+  }, [anchorRef, onClose, place]);
 
   if (!pos || typeof document === 'undefined') return null;
 
   return createPortal(
-    <>
-      {/*
-       * A transparent full-screen backdrop under the menu so a click-away
-       * always lands on inert surface — never a link or a control with its own
-       * pointer handling. It stays mounted for the whole gesture; the
-       * capture-phase `click` listener above is what actually closes the menu
-       * and swallows the click. Skipped when the menu follows scroll, so the
-       * list underneath stays scrollable.
-       */}
-      {followScroll ? null : (
-        <div aria-hidden className="fixed inset-0 z-40 cursor-default" />
-      )}
-      <div
-        ref={menuRef}
-        onClick={(e) => e.stopPropagation()}
-        style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
-        className="z-50 rounded-lg border border-line-strong bg-surface p-1 shadow-xl"
-      >
-        {children}
-      </div>
-    </>,
+    <div
+      ref={menuRef}
+      onClick={(e) => e.stopPropagation()}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
+      className="z-50 rounded-lg border border-line-strong bg-surface p-1 shadow-xl"
+    >
+      {children}
+    </div>,
     document.body,
   );
 }
@@ -387,9 +372,6 @@ export function InlineTagChip({
           anchorRef={btnRef}
           onClose={() => setOpen(false)}
           width={248}
-          // Editing tags is a multi-step task — keep the editor open and let it
-          // ride along as the user scrolls the list looking for context.
-          followScroll
         >
           <div className="p-1.5">
             <TagInput value={value} onChange={onChange} options={suggestions} />

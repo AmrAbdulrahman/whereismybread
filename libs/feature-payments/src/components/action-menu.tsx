@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -95,8 +96,11 @@ export function ActionMenu({
 }
 
 /**
- * A menu anchored under `anchorRef`, portalled to `<body>`. Closes on outside
- * click, Esc, scroll and resize. (Mirrors the one in `inline-assign-chip`.)
+ * A menu anchored under `anchorRef`, portalled to `<body>`. Rides along with
+ * the anchor as the list scrolls (re-anchoring on every scroll / resize,
+ * rAF-throttled) rather than dismissing. Closes on a click-away (caught in the
+ * capture phase so it can't also open the click-to-edit card row), on Esc, and
+ * once the anchor scrolls out of the viewport. (Mirrors `inline-assign-chip`.)
  */
 function AnchoredMenu({
   anchorRef,
@@ -112,17 +116,30 @@ function AnchoredMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  useLayoutEffect(() => {
+  const place = useCallback(() => {
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    // The anchor has scrolled out of view — there's nothing to pin to.
+    if (r.bottom < 0 || r.top > window.innerHeight) {
+      onClose();
+      return;
+    }
     // Right-align the menu to the button, nudged onto the screen.
     const left = Math.max(
       8,
       Math.min(r.right - width, window.innerWidth - width - 8),
     );
-    setPos({ top: r.bottom + 4, left });
-  }, [anchorRef, width]);
+    const top = r.bottom + 4;
+    // Same reference when nothing moved, so the layout effect can't re-loop.
+    setPos((prev) =>
+      prev && prev.top === top && prev.left === left ? prev : { top, left },
+    );
+  }, [anchorRef, width, onClose]);
+
+  useLayoutEffect(() => {
+    place();
+  }, [place]);
 
   useEffect(() => {
     // A click anywhere outside the menu closes it and goes no further —
@@ -141,36 +158,34 @@ function AnchoredMenu({
     };
     document.addEventListener('click', onOutsideClick, true);
     document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onClose, true);
-    window.addEventListener('resize', onClose);
+
+    let raf = 0;
+    const reanchor = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(place);
+    };
+    window.addEventListener('scroll', reanchor, true);
+    window.addEventListener('resize', reanchor);
     return () => {
       document.removeEventListener('click', onOutsideClick, true);
       document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onClose, true);
-      window.removeEventListener('resize', onClose);
+      window.removeEventListener('scroll', reanchor, true);
+      window.removeEventListener('resize', reanchor);
+      cancelAnimationFrame(raf);
     };
-  }, [anchorRef, onClose]);
+  }, [anchorRef, onClose, place]);
 
   if (!pos || typeof document === 'undefined') return null;
 
   return createPortal(
-    <>
-      {/*
-       * A transparent full-screen backdrop under the menu so a click-away
-       * always lands on inert surface (never the click-to-edit card row or a
-       * link). It stays mounted for the whole gesture; the capture-phase
-       * `click` listener above is what closes the menu and swallows the click.
-       */}
-      <div aria-hidden className="fixed inset-0 z-40 cursor-default" />
-      <div
-        ref={menuRef}
-        onClick={(e) => e.stopPropagation()}
-        style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
-        className="z-50 rounded-lg border border-line-strong bg-surface p-1 shadow-xl"
-      >
-        {children}
-      </div>
-    </>,
+    <div
+      ref={menuRef}
+      onClick={(e) => e.stopPropagation()}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
+      className="z-50 rounded-lg border border-line-strong bg-surface p-1 shadow-xl"
+    >
+      {children}
+    </div>,
     document.body,
   );
 }

@@ -98,7 +98,7 @@ describe('InlineAssignChip', () => {
     expect(onOtherCard).not.toHaveBeenCalled();
   });
 
-  it('closes on scroll', async () => {
+  it('rides along on scroll instead of closing', async () => {
     const user = userEvent.setup();
     render(
       <InlineAssignChip
@@ -109,8 +109,11 @@ describe('InlineAssignChip', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Add account' }));
     expect(screen.queryByRole('listbox')).not.toBeNull();
-    fireEvent.scroll(window);
-    expect(screen.queryByRole('listbox')).toBeNull();
+    await act(async () => {
+      fireEvent.scroll(window);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.queryByRole('listbox')).not.toBeNull();
   });
 
   it('shows the current value as a filled pill and lets it be swapped', async () => {
