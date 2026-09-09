@@ -37,6 +37,16 @@ export function AutomationsView({
     { mode: 'closed' } | { mode: 'new' } | { mode: 'edit'; item: Automation }
   >({ mode: 'closed' });
   const [note, setNote] = useState<string>();
+  // Cards start collapsed — the header (name + trigger + on/off) is enough to
+  // scan the list; expand one to see its conditions / actions / controls.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const refresh = () => startTransition(() => router.refresh());
 
@@ -91,7 +101,9 @@ export function AutomationsView({
         </div>
       ) : (
         <ul className="flex flex-col gap-3">
-          {automations.map((a, i) => (
+          {automations.map((a, i) => {
+            const isOpen = expanded.has(a.id);
+            return (
             <li
               key={a.id}
               className={cn(
@@ -99,36 +111,58 @@ export function AutomationsView({
                 a.enabled ? 'border-line-strong' : 'border-line',
               )}
             >
-              {/* Header: name + trigger, and the on/off switch */}
-              <div className="flex items-start justify-between gap-3 px-3.5 py-3">
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  <p
+              {/* Header: click to expand/collapse. Name + trigger + on/off. */}
+              <div className="flex items-start gap-2 px-3 py-3 sm:px-3.5">
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${a.name}`}
+                  onClick={() => toggleExpanded(a.id)}
+                  className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                >
+                  <ChevronDown
                     className={cn(
-                      'truncate text-sm font-semibold',
-                      a.enabled ? 'text-ink' : 'text-ink-soft',
+                      'mt-0.5 shrink-0 text-muted transition-transform',
+                      isOpen && 'rotate-180',
                     )}
-                  >
-                    {a.name}
-                  </p>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                  />
+                  <span className="flex min-w-0 flex-col gap-1.5">
                     <span
                       className={cn(
-                        'h-1.5 w-1.5 rounded-full',
-                        a.trigger === 'review_expense_created'
-                          ? 'bg-teal'
-                          : 'bg-accent',
+                        'truncate text-sm font-semibold',
+                        a.enabled ? 'text-ink' : 'text-ink-soft',
                       )}
-                    />
-                    {TRIGGER_LABELS[a.trigger]}
+                    >
+                      {a.name}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 rounded-full',
+                            a.trigger === 'review_expense_created'
+                              ? 'bg-teal'
+                              : 'bg-accent',
+                          )}
+                        />
+                        {TRIGGER_LABELS[a.trigger]}
+                      </span>
+                      {!a.enabled ? (
+                        <span className="rounded-full bg-line-strong px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                          Off
+                        </span>
+                      ) : null}
+                    </span>
                   </span>
-                </div>
+                </button>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={a.enabled}
                   aria-label={`${a.enabled ? 'Disable' : 'Enable'} ${a.name}`}
                   disabled={pending}
-                  onClick={async () => {
+                  onClick={async (e) => {
+                    e.stopPropagation();
                     await toggleAutomationAction(a.id, !a.enabled);
                     refresh();
                   }}
@@ -146,6 +180,8 @@ export function AutomationsView({
                 </button>
               </div>
 
+              {isOpen ? (
+                <>
               {/* If — the match conditions */}
               <div
                 className={cn(
@@ -246,8 +282,11 @@ export function AutomationsView({
                   </button>
                 </div>
               </div>
+                </>
+              ) : null}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
@@ -274,9 +313,16 @@ export function AutomationsView({
   );
 }
 
-function ChevronUp() {
+function ChevronUp({ className }: { className?: string }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className={className}
+    >
       <path
         d="m6 15 6-6 6 6"
         stroke="currentColor"
@@ -287,9 +333,16 @@ function ChevronUp() {
     </svg>
   );
 }
-function ChevronDown() {
+function ChevronDown({ className }: { className?: string }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className={className}
+    >
       <path
         d="m6 9 6 6 6-6"
         stroke="currentColor"
