@@ -205,14 +205,32 @@ function AnchoredMenu({
   if (!pos || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      ref={menuRef}
-      onClick={(e) => e.stopPropagation()}
-      style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
-      className="z-50 rounded-lg border border-line-strong bg-surface p-1 shadow-xl"
-    >
-      {children}
-    </div>,
+    <>
+      {/*
+       * A transparent full-screen backdrop under the menu: a click-away lands
+       * *on it* (not the card, a sibling chip or a link), so it can only ever
+       * close the menu — nothing underneath is touched. `stopPropagation`
+       * keeps the click from bubbling the React portal tree back to the card.
+       */}
+      <button
+        type="button"
+        aria-hidden
+        tabIndex={-1}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        className="fixed inset-0 z-40 cursor-default"
+      />
+      <div
+        ref={menuRef}
+        onClick={(e) => e.stopPropagation()}
+        style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
+        className="z-50 rounded-lg border border-line-strong bg-surface p-1 shadow-xl"
+      >
+        {children}
+      </div>
+    </>,
     document.body,
   );
 }
