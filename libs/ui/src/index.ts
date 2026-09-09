@@ -72,5 +72,12 @@ export {
 } from './components/app-shell';
 
 export { icons, iconFor, type IconName, type LucideIcon } from './icons';
-export { BreadMark } from './icons/brand';
-export { Wordmark } from './components/wordmark';
+export { BreadMark, BreadSlice } from './icons/brand';
+export { Wordmark, SLOGAN } from './components/wordmark';
+export {
+  SplashScreen,
+  SplashAutoHide,
+  SPLASH_CSS,
+  SPLASH_HIDE_SCRIPT,
+  SPLASH_ELEMENT_ID,
+} from './components/splash';
