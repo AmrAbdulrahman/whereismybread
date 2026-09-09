@@ -571,7 +571,9 @@ export function PaymentList({
   // up — not just the ~4 months the server pre-loaded. Cascades in `loadFuture`
   // batches (each bump of `loadTick` re-runs this) and still stops early on
   // `futureExhausted` when the schedule genuinely ends before then.
-  const filterHorizon = endOfMonth(addMonths(`${board.today.slice(0, 7)}-01`, 12));
+  const filterHorizon = endOfMonth(
+    addMonths(`${board.today.slice(0, 7)}-01`, 12),
+  );
 
   // Keep the list filled. Future: top it up whenever it's shorter than the
   // viewport. Past: prime one batch on mount so the top isn't a dead end (you
@@ -789,17 +791,6 @@ export function PaymentList({
   // (which carries a "Today" badge of its own).
   const todayHasOwnGroup = upcoming.some((g) => g.date === board.today);
 
-  const dayNeedsAction = (g: DayGroup): boolean =>
-    (reviewByDate.get(g.date)?.length ?? 0) > 0 ||
-    g.occurrences.some((o) => !isPaid(o));
-  // The earliest day this calendar month that still needs the user to act —
-  // the list auto-scrolls here on load (see the effect below).
-  const firstActionDate =
-    upcoming.find(
-      (g) =>
-        g.date.slice(0, 7) === board.today.slice(0, 7) && dayNeedsAction(g),
-    )?.date ?? null;
-
   // Bucket the day groups by calendar month, in order.
   const monthsByKey = new Map<string, { key: string; groups: DayGroup[] }>();
   for (const group of upcoming) {
@@ -912,8 +903,10 @@ export function PaymentList({
     stickyTop + (monthHeaderH[dateOrKey.slice(0, 7)] ?? 0) + 8;
 
   // "Today" jumps to today's own day section, or the "Today" divider when the
-  // day has nothing of its own — not just the top of the month.
-  const goToday = () => {
+  // day has nothing of its own — not just the top of the month. `smooth` is on
+  // for a user tap; the on-load reposition passes `false` so the page just
+  // opens at today without an animated scroll.
+  const goToday = ({ smooth = true }: { smooth?: boolean } = {}) => {
     const el =
       document.querySelector<HTMLElement>(`[data-day="${board.today}"]`) ??
       document.querySelector<HTMLElement>('[data-plan-today]');
@@ -922,7 +915,10 @@ export function PaymentList({
         window.scrollY +
         el.getBoundingClientRect().top -
         dayScrollOffset(board.today);
-      window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+      window.scrollTo({
+        top: Math.max(0, y),
+        behavior: smooth ? 'smooth' : 'auto',
+      });
       return;
     }
     jumpToMonth(todayMonth);
@@ -977,31 +973,24 @@ export function PaymentList({
     };
   }, [board.today, todayMonth, stickyTop, monthKeys]);
 
-  // On first load, land on the earliest day this month that still needs
-  // action (an unpaid payment or a transaction to review) rather than the
-  // very top of the month. Runs once, and only if the user hasn't already
-  // scrolled — and waits for the sticky panel to be measured so the day
-  // header isn't left tucked under it.
+  // Land on today every time the page opens — this component remounts on each
+  // navigation to /plan, so a reader returning to Payments always finds the
+  // list back at today rather than wherever they last scrolled to. Runs once
+  // per mount, skips if the user has already scrolled (e.g. a browser back that
+  // restored their position), and waits for today's month header to be measured
+  // so the day doesn't land tucked behind the sticky panel.
   const didAutoScroll = useRef(false);
   useEffect(() => {
-    if (didAutoScroll.current || !firstActionDate || stickyTop === 0) return;
+    if (didAutoScroll.current || stickyTop === 0) return;
     if (window.scrollY > 4) {
       didAutoScroll.current = true;
       return;
     }
-    // Wait until the target month's sticky header has been measured, so the
-    // day doesn't land tucked behind it.
-    if (monthHeaderH[firstActionDate.slice(0, 7)] == null) return;
-    const el = document.querySelector<HTMLElement>(
-      `[data-day="${firstActionDate}"]`,
-    );
-    if (!el) return;
+    if (monthHeaderH[todayMonth] == null) return;
     didAutoScroll.current = true;
-    const offset =
-      stickyTop + (monthHeaderH[firstActionDate.slice(0, 7)] ?? 0) + 8;
-    const y = window.scrollY + el.getBoundingClientRect().top - offset;
-    window.scrollTo({ top: Math.max(0, y) });
-  }, [firstActionDate, stickyTop, monthKeys, monthHeaderH]);
+    goToday({ smooth: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount; goToday is stable enough for this
+  }, [stickyTop, monthKeys, monthHeaderH, todayMonth]);
 
   useEffect(() => {
     const order = monthKeys ? monthKeys.split(',') : [];
@@ -1091,7 +1080,7 @@ export function PaymentList({
       {todayDir ? (
         <button
           type="button"
-          onClick={goToday}
+          onClick={() => goToday()}
           aria-label="Jump to today"
           className="fixed bottom-[calc(8.25rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-2.5 pr-3.5 text-xs font-semibold text-ink shadow-lg active:scale-95 sm:hidden"
         >
@@ -1287,7 +1276,9 @@ export function PaymentList({
                     {budgetUnspentMinor > 0 ? (
                       <span className="text-muted">
                         (excluding{' '}
-                        {formatMoney(money(budgetUnspentMinor, displayCurrency))}{' '}
+                        {formatMoney(
+                          money(budgetUnspentMinor, displayCurrency),
+                        )}{' '}
                         budgets)
                       </span>
                     ) : null}

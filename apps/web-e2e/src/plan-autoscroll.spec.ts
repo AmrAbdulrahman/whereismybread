@@ -8,8 +8,10 @@ test.skip(
 );
 
 const now = new Date();
+const pad = (n: number) => String(n).padStart(2, '0');
 const day = (d: number) =>
-  `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(d)}`;
+const todayIso = day(now.getUTCDate());
 
 async function signUp(page: import('@playwright/test').Page) {
   const email = `e2e+autoscroll-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
@@ -37,37 +39,38 @@ async function addMonthly(
   await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
 }
 
-test('the plan lands on the first day of the month that still needs action', async ({
-  page,
-}) => {
+// Today gets its own dated section when a payment falls on it, otherwise it's
+// the "Today" divider between the days before and after.
+const todayAnchor = (page: import('@playwright/test').Page) =>
+  page.locator(`[data-plan-today], [data-day="${todayIso}"]`).first();
+
+test('the plan lands on today every time it opens', async ({ page }) => {
   await signUp(page);
+  // Bills on the 1st and 28th, so there is content both above and below
+  // today for most of the month.
   await addMonthly(page, 'Early bill', '20', 1);
   await addMonthly(page, 'Late bill', '30', 28);
 
-  // Tick the 1st off, so the 28th is the first day still needing action.
-  await page
-    .getByRole('button', { name: /Mark Early bill paid/ })
-    .first()
-    .click();
-  await expect(
-    page.getByRole('button', { name: /Mark Early bill unpaid/ }).first(),
-  ).toBeVisible();
-
   await page.reload();
   await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Edit Late bill' }).first(),
-  ).toBeVisible();
 
-  // The list scrolled down (past the paid 1st) and the 28th's section is
-  // pulled up near the top rather than sitting below the fold.
-  await expect(page.locator(`[data-day="${day(28)}"]`)).toBeInViewport();
-  const scrolledY = Number(await page.evaluate('window.scrollY'));
-  const lateTop = Number(
-    await page.evaluate(
-      `document.querySelector('[data-day="${day(28)}"]').getBoundingClientRect().top`,
-    ),
-  );
-  expect(scrolledY).toBeGreaterThan(0);
-  expect(lateTop).toBeLessThan(220);
+  // The list opened scrolled to today rather than the top of the month —
+  // the 1st's row is only reachable by scrolling back up.
+  await expect(todayAnchor(page)).toBeInViewport();
+
+  // Navigate away and back: the list is once again parked at today, not
+  // wherever it was left.
+  const insights = page.getByRole('link', { name: 'Insights', exact: true });
+  const payments = page.getByRole('link', { name: 'Payments', exact: true });
+  /* eslint-disable playwright/no-conditional-expect -- nav layout varies by viewport */
+  // eslint-disable-next-line playwright/no-conditional-in-test
+  if (await insights.isVisible()) {
+    await insights.click();
+    await expect(page).toHaveURL(/\/insights/);
+    await payments.click();
+    await expect(page).toHaveURL(/\/plan/);
+    await expect(page.getByRole('button', { name: 'Calendar' })).toBeVisible();
+    await expect(todayAnchor(page)).toBeInViewport();
+  }
+  /* eslint-enable playwright/no-conditional-expect */
 });
