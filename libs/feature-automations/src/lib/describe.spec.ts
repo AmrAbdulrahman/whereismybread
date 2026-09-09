@@ -7,7 +7,15 @@ const lookups: AutomationLookups = {
   banks: [{ id: 'b1', name: 'Monzo', color: '#000' }],
   methods: [{ id: 'm1', name: 'Amex' }],
   tags: [],
-  providers: [{ id: 'pr1', name: 'Pret', logoUrl: null, color: null }],
+  providers: [
+    {
+      id: 'pr1',
+      name: 'Pret',
+      color: '#000',
+      usageCount: 0,
+      mark: { url: null, logoUrl: null, defaultTags: [] },
+    },
+  ],
   budgets: [{ id: 'bd1', name: 'Groceries' }],
 };
 

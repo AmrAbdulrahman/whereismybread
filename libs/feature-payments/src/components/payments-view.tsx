@@ -372,8 +372,16 @@ export function PaymentsView({
   // automation dialog pre-filled to match that row (name + amount). All the
   // lookups the form needs are already on this page.
   const automationLookups: AutomationLookups = useMemo(
-    () => buildAutomationLookups({ accounts, banks, methods, tags, budgets }),
-    [accounts, banks, methods, tags, budgets],
+    () =>
+      buildAutomationLookups({
+        accounts,
+        banks,
+        methods,
+        tags,
+        providers,
+        budgets,
+      }),
+    [accounts, banks, methods, tags, providers, budgets],
   );
 
   const [automationDraft, setAutomationDraft] =

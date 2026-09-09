@@ -77,6 +77,7 @@ export function BankTransactionTriage({
         banks: context.banks,
         methods: context.methods,
         tags: context.tags,
+        providers: context.providers,
         budgets,
       }),
     [context, budgets],

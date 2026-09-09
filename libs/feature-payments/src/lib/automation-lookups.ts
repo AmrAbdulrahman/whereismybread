@@ -1,8 +1,9 @@
-import type { Account, Bank, PaymentMethod, Provider, Tag } from '@wib/db';
+import type { Account, Bank, PaymentMethod, Tag } from '@wib/db';
 import type {
   AutomationFormInitial,
   AutomationLookups,
 } from '@wib/feature-automations';
+import type { ProviderRow } from '@wib/feature-providers';
 import type { BudgetSummary } from './types';
 
 /**
@@ -19,7 +20,7 @@ export function buildAutomationLookups(input: {
   banks: Pick<Bank, 'id' | 'name' | 'color'>[];
   methods: Pick<PaymentMethod, 'id' | 'name'>[];
   tags: Pick<Tag, 'id' | 'name' | 'color'>[];
-  providers?: Pick<Provider, 'id' | 'name' | 'logoUrl' | 'color'>[];
+  providers?: ProviderRow[];
   budgets: BudgetSummary[];
 }): AutomationLookups {
   const byName = new Map<
@@ -43,12 +44,7 @@ export function buildAutomationLookups(input: {
     banks: input.banks.map((b) => ({ id: b.id, name: b.name, color: b.color })),
     methods: input.methods.map((m) => ({ id: m.id, name: m.name })),
     tags: input.tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
-    providers: (input.providers ?? []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      logoUrl: p.logoUrl,
-      color: p.color,
-    })),
+    providers: input.providers ?? [],
     budgets: [...byName.values()]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(({ id, name }) => ({ id, name })),

@@ -14,6 +14,7 @@ import {
   type NotifyChannel,
 } from '@wib/domain';
 import type { Automation } from '@wib/db';
+import { ProviderPicker } from '@wib/feature-providers';
 import { Button, Field, Input, Label, TagInput, cn } from '@wib/ui';
 import {
   ACTION_HINTS,
@@ -548,23 +549,38 @@ export function AutomationForm({
                   </>
                 ) : null}
                 {needsProvider ? (
-                  <select
-                    aria-label="Provider"
-                    className={selectCls}
-                    value={a.providerId}
-                    onChange={(e) => setAct(i, { providerId: e.target.value })}
-                  >
-                    <option value="">
-                      {a.type === 'set_provider'
-                        ? 'Choose a provider…'
-                        : 'No provider'}
-                    </option>
-                    {lookups.providers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <ProviderPicker
+                    value={a.providerId || null}
+                    providers={lookups.providers}
+                    tags={lookups.tags.map((t) => ({
+                      name: t.name,
+                      color: t.color,
+                    }))}
+                    label={
+                      a.type === 'set_provider'
+                        ? 'Provider'
+                        : 'Provider (optional)'
+                    }
+                    onChange={(id, defaultTagNames) => {
+                      const patch: Partial<ActionRow> = {
+                        providerId: id ?? '',
+                      };
+                      // log_expense has its own tags field — mirror the
+                      // payment/expense forms and merge the provider's defaults.
+                      if (a.type === 'log_expense' && defaultTagNames.length) {
+                        const lower = new Set(
+                          a.tags.map((t) => t.toLowerCase()),
+                        );
+                        patch.tags = [
+                          ...a.tags,
+                          ...defaultTagNames.filter(
+                            (n) => !lower.has(n.toLowerCase()),
+                          ),
+                        ];
+                      }
+                      setAct(i, patch);
+                    }}
+                  />
                 ) : null}
                 {a.type === 'notify' ? (
                   <>

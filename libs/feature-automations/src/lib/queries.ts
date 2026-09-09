@@ -8,24 +8,26 @@ import {
   listBudgets,
   listNotifications,
   listPaymentMethods,
-  listProviders,
+  listProvidersWithUsage,
   listTags,
+  tagsByIds,
   type Account,
   type Automation,
   type Bank,
   type Budget,
   type Notification,
   type PaymentMethod,
-  type Provider,
   type Tag,
 } from '@wib/db';
+import type { ProviderRow } from '@wib/feature-providers';
 
 export interface AutomationLookups {
   accounts: Pick<Account, 'id' | 'name' | 'color'>[];
   banks: Pick<Bank, 'id' | 'name' | 'color'>[];
   methods: Pick<PaymentMethod, 'id' | 'name'>[];
   tags: Pick<Tag, 'id' | 'name' | 'color'>[];
-  providers: Pick<Provider, 'id' | 'name' | 'logoUrl' | 'color'>[];
+  /** Full `<ProviderPicker>` rows — icon + default tags, create-on-the-fly. */
+  providers: ProviderRow[];
   budgets: { id: string; name: string }[];
 }
 
@@ -44,7 +46,15 @@ export async function getAutomationsData(
   const banks = await listBanks(userId);
   const methods = await listPaymentMethods(userId);
   const tags = await listTags(userId);
-  const providers = await listProviders(userId);
+  const providerRows = await listProvidersWithUsage(userId);
+  const providerTagNames = new Map(
+    (
+      await tagsByIds(
+        userId,
+        [...new Set(providerRows.flatMap((r) => r.defaultTagIds))],
+      )
+    ).map((t) => [t.id, t.name]),
+  );
   const budgets = await listBudgets(userId);
   return {
     automations,
@@ -53,11 +63,18 @@ export async function getAutomationsData(
       banks: banks.map((b) => ({ id: b.id, name: b.name, color: b.color })),
       methods: methods.map((m) => ({ id: m.id, name: m.name })),
       tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
-      providers: providers.map((p) => ({
+      providers: providerRows.map((p) => ({
         id: p.id,
         name: p.name,
-        logoUrl: p.logoUrl,
-        color: p.color,
+        color: p.color ?? '#6321d6',
+        usageCount: p.paymentCount + p.expenseCount,
+        mark: {
+          url: p.url,
+          logoUrl: p.logoUrl,
+          defaultTags: p.defaultTagIds
+            .map((tid) => providerTagNames.get(tid))
+            .filter((n): n is string => n != null),
+        },
       })),
       // Only recurring monthly budgets — a one-off budget is a single month's
       // envelope and the automation would keep filing into a stale, closed
