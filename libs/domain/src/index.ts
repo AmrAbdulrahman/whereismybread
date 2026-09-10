@@ -6,3 +6,4 @@ export * from './lib/occurrences';
 export * from './lib/currency';
 export * from './lib/merchant';
 export * from './lib/automations';
+export * from './lib/debts';

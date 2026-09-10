@@ -10,6 +10,7 @@
     "@wib/db": "workspace:*",
     "@wib/domain": "workspace:*",
     "@wib/feature-automations": "workspace:*",
+    "@wib/feature-debts": "workspace:*",
     "@wib/feature-insights": "workspace:*",
     "@wib/feature-payments": "workspace:*",
     "@wib/feature-providers": "workspace:*",

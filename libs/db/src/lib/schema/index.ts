@@ -6,3 +6,4 @@ export * from './bank-sync';
 export * from './insights';
 export * from './automations';
 export * from './push';
+export * from './debts';

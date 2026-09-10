@@ -7,6 +7,7 @@ const PUBLIC_PREFIXES = [
   '/forgot-password',
   '/reset-password',
   '/verify',
+  '/d',
   '/api/auth',
   '/privacy-policy',
   '/terms-and-conditions',

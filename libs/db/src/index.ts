@@ -300,6 +300,49 @@ export type {
 } from './lib/schema/automations';
 
 export {
+  listDebtPeople,
+  getDebtPersonById,
+  getDebtPersonByShareId,
+  getDebtPersonByEmail,
+  createDebtPerson,
+  updateDebtPerson,
+  listDebtsWithProgress,
+  getDebtWithEntries,
+  getDebtRow,
+  createDebt,
+  updateDebt,
+  deleteDebt,
+  setDebtSettled,
+  addDebtEntry,
+  deleteDebtEntry,
+  getSharedPersonDebts,
+  deletePersonDebtOtps,
+  createDebtOtp,
+  findLiveDebtOtp,
+  bumpDebtOtpAttempts,
+  consumeDebtOtp,
+  createDebtGrant,
+  findLiveDebtGrant,
+  touchDebtGrant,
+  type DebtPersonInput,
+  type DebtInput,
+  type DebtEntryInput,
+  type DebtWithProgress,
+  type DebtWithEntries,
+  type SharedPersonDebts,
+} from './lib/repositories/debts';
+export type {
+  DebtPerson,
+  NewDebtPerson,
+  Debt,
+  NewDebt,
+  DebtEntry,
+  NewDebtEntry,
+  DebtOtp,
+  DebtGrant,
+} from './lib/schema/debts';
+
+export {
   getInsightsLayout,
   setInsightsLayout,
 } from './lib/repositories/insights-layout';

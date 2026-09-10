@@ -38,6 +38,7 @@ const navItems: NavEntry[] = [
     comingSoon: true,
   },
   { href: '/budgets', label: 'Budgets', icon: icons.budgets },
+  { href: '/debts', label: 'Debts', icon: icons.debts },
 
   { separator: true },
   { href: '/providers', label: 'Providers', icon: icons.providers },
@@ -52,7 +53,6 @@ const navItems: NavEntry[] = [
   { href: '/accounts', label: 'Accounts', icon: icons.accounts },
 
   { separator: true },
-  { href: '/debts', label: 'Debts', icon: icons.debts, comingSoon: true },
   {
     href: '/installments',
     label: 'Installments',

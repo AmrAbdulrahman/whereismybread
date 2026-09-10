@@ -69,6 +69,72 @@ export async function sendVerificationEmail(
 }
 
 /**
+ * The 6-digit code the other party enters to unlock their shared debt page.
+ * No link — the code is the payload. Logged to the server in non-production
+ * so local / e2e runs can read it without a real inbox.
+ */
+export async function sendDebtOtpEmail(
+  to: string,
+  code: string,
+  ownerName: string,
+): Promise<void> {
+  if (serverEnv().NODE_ENV !== 'production') {
+    console.info(`[debt otp] to=${to} code=${code}`);
+  }
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#1b1e24">
+    <h1 style="font-size:20px;margin:0 0 12px">Your access code</h1>
+    <p style="font-size:15px;line-height:1.6;color:#464d5a;margin:0 0 20px">Enter this code to view the debt summary ${ownerName} shared with you. It expires in 10 minutes.</p>
+    <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:0 0 20px">${code}</p>
+    <p style="font-size:13px;color:#767d8b;margin:0">If you weren't expecting this, you can ignore this email.</p>
+  </div>`;
+  try {
+    const { EMAIL_FROM } = serverEnv();
+    await client().emails.send({
+      from: EMAIL_FROM,
+      to,
+      subject: `Your code: ${code}`,
+      html,
+    });
+  } catch (error) {
+    console.error('[auth email] send failed', error);
+  }
+}
+
+/**
+ * Sent to the other party of a debt when it's created or its repayment
+ * progress changes. `href` is the absolute link to their OTP-gated shared
+ * page (`${APP_URL}/d/<shareId>`). `lines` is a short plain-text summary,
+ * one debt per line. Fire-and-forget — `send` swallows delivery errors.
+ */
+export async function sendDebtUpdateEmail(
+  to: string,
+  info: {
+    personName: string;
+    ownerName: string;
+    intro: string;
+    lines: string[];
+    href: string;
+  },
+): Promise<void> {
+  const list = info.lines
+    .map(
+      (l) =>
+        `<li style="margin:0 0 6px">${l.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c)}</li>`,
+    )
+    .join('');
+  const body = `${info.intro}<ul style="margin:12px 0 0;padding-left:20px;font-size:14px;color:#464d5a">${list}</ul>`;
+  await send(
+    to,
+    `${info.ownerName} shared a debt summary with you`,
+    layout(`Hi ${info.personName},`, body, {
+      href: info.href,
+      label: 'View the details',
+    }),
+  );
+}
+
+/**
  * Sent by the Automations engine when a rule's "Send notification" action
  * fires. `path` is an in-app route (e.g. `/integrations`); it's turned into an
  * absolute link. Fire-and-forget — `send` swallows delivery errors.

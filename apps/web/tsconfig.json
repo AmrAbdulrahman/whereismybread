@@ -68,6 +68,9 @@
       "path": "../../libs/feature-insights"
     },
     {
+      "path": "../../libs/feature-debts"
+    },
+    {
       "path": "../../libs/feature-automations"
     },
     {
