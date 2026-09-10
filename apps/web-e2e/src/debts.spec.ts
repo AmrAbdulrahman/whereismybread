@@ -168,6 +168,7 @@ test('debts: several entries to one person in one go, grouped under a person pan
   await personModal.getByRole('button', { name: 'Add person' }).click();
 
   // Entry 1 — €20 money, with a note.
+  await modal.getByRole('button', { name: 'They owe me' }).click();
   await modal.getByLabel('Amount').fill('20');
   await modal.locator('#nd-0-note').fill('lunch');
 

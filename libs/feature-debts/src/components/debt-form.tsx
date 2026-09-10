@@ -11,7 +11,6 @@ import {
   Input,
   Label,
   ResponsiveModal,
-  cn,
   type AttachmentDraft,
   type StoredAttachment,
 } from '@wib/ui';
@@ -25,6 +24,7 @@ import {
 import { debtFormSchema, type DebtFormValues } from '../lib/schema';
 import type { PersonView } from '../lib/types';
 import { DenominationFields, type DenomValue } from './denomination-fields';
+import { DirectionToggle } from './direction-toggle';
 import { PersonForm } from './person-form';
 
 export interface DebtFormInitial {
@@ -83,7 +83,7 @@ export function DebtForm({
     mode: 'onTouched',
     defaultValues: {
       personId: initial?.personId ?? people[0]?.id ?? '',
-      direction: initial?.direction ?? 'they_owe',
+      direction: initial?.direction ?? 'i_owe',
       amount: initAmount,
       denomKind: initial?.denom.kind ?? 'money',
       currency:
@@ -185,33 +185,10 @@ export function DebtForm({
           ) : null}
         </Field>
 
-        <Field>
-          <Label>Direction</Label>
-          <div className="flex gap-1">
-            {(
-              [
-                ['they_owe', 'They owe me'],
-                ['i_owe', 'I owe them'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setValue('direction', value, { shouldDirty: true })
-                }
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  direction === value
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-line-strong text-muted hover:text-ink',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </Field>
+        <DirectionToggle
+          value={direction ?? 'i_owe'}
+          onChange={(v) => setValue('direction', v, { shouldDirty: true })}
+        />
 
         <DenominationFields
           idPrefix="debt"

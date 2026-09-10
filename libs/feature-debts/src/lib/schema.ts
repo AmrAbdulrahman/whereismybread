@@ -81,7 +81,7 @@ const customGoldMsg = { path: ['goldLabel'], message: 'Name the gold type' };
 export const debtFormSchema = z
   .object({
     personId: z.string().uuid('Pick a person'),
-    direction: z.enum(['they_owe', 'i_owe']).default('they_owe'),
+    direction: z.enum(['they_owe', 'i_owe']).default('i_owe'),
     ...denomLineShape,
     incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
     description: z.preprocess(

@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { Button, Field, Input, Label, ResponsiveModal, cn } from '@wib/ui';
+import { Button, Field, Input, Label, ResponsiveModal } from '@wib/ui';
 import { Plus, Trash2 } from '@wib/ui/icons';
 import { saveDebtsAction } from '../lib/actions';
 import { newDebtsSchema, type NewDebtsValues } from '../lib/schema';
 import type { PersonView } from '../lib/types';
 import { DenominationFields, type DenomValue } from './denomination-fields';
+import { DirectionToggle } from './direction-toggle';
 import { PersonForm } from './person-form';
 
 function emptyLine(currency: string, today: string) {
@@ -60,7 +61,7 @@ export function NewDebtsForm({
     mode: 'onTouched',
     defaultValues: {
       personId: person?.id ?? people[0]?.id ?? '',
-      direction: presetDirection ?? 'they_owe',
+      direction: presetDirection ?? 'i_owe',
       lines: [emptyLine(defaultCurrency, today)],
     },
   });
@@ -172,33 +173,10 @@ export function NewDebtsForm({
           ) : null}
         </Field>
 
-        <Field>
-          <Label>Direction</Label>
-          <div className="flex gap-1">
-            {(
-              [
-                ['they_owe', 'They owe me'],
-                ['i_owe', 'I owe them'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setValue('direction', value, { shouldDirty: true })
-                }
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  direction === value
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-line-strong text-muted hover:text-ink',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </Field>
+        <DirectionToggle
+          value={direction ?? 'i_owe'}
+          onChange={(v) => setValue('direction', v, { shouldDirty: true })}
+        />
 
         {fields.map((f, i) => {
           const lineErr = errors.lines?.[i];
