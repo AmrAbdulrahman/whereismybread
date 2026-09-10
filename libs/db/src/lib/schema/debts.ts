@@ -67,6 +67,10 @@ export const debts = pgTable(
     currency: text('currency').notNull().default('EUR'),
     description: text('description').notNull().default(''),
     notes: text('notes'),
+    /** `YYYY-MM-DD` — when the debt was incurred. */
+    incurredOn: date('incurred_on')
+      .notNull()
+      .default(sql`CURRENT_DATE`),
     settledAt: timestamp('settled_at', { withTimezone: true }),
     ...audit,
   },
@@ -143,6 +147,36 @@ export const debtGrants = pgTable(
   (t) => [index('debt_grants_person_idx').on(t.personId)],
 );
 
+/**
+ * A file (image / PDF / text) attached to a debt or one of its repayments,
+ * stored in Vercel Blob. `entry_id` null = attached to the debt itself;
+ * set = attached to that repayment. Shown to both parties.
+ */
+export const debtAttachments = pgTable(
+  'debt_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    debtId: uuid('debt_id')
+      .notNull()
+      .references(() => debts.id, { onDelete: 'cascade' }),
+    entryId: uuid('entry_id').references(() => debtEntries.id, {
+      onDelete: 'cascade',
+    }),
+    name: text('name').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    url: text('url').notNull(),
+    pathname: text('pathname').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('debt_attachments_debt_idx').on(t.debtId)],
+);
+
 export type DebtPerson = typeof debtPeople.$inferSelect;
 export type NewDebtPerson = typeof debtPeople.$inferInsert;
 export type Debt = typeof debts.$inferSelect;
@@ -151,3 +185,5 @@ export type DebtEntry = typeof debtEntries.$inferSelect;
 export type NewDebtEntry = typeof debtEntries.$inferInsert;
 export type DebtOtp = typeof debtOtps.$inferSelect;
 export type DebtGrant = typeof debtGrants.$inferSelect;
+export type DebtAttachment = typeof debtAttachments.$inferSelect;
+export type NewDebtAttachment = typeof debtAttachments.$inferInsert;

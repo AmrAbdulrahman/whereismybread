@@ -64,6 +64,29 @@ export {
 export { MethodIcon, METHOD_ICON_KEYS } from './components/method-icon';
 export { fileToLogoDataUrl } from './lib/logo-file';
 export {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_ALLOWED_TYPES,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_TYPES,
+  attachmentKind,
+  attachmentSrc,
+  formatBytes,
+  isBlobUrl,
+  resolveAttachmentType,
+  type AttachmentContentType,
+  type AttachmentKind,
+  type AttachmentDraft,
+  type StoredAttachment,
+} from './lib/attachments';
+export {
+  AttachmentsField,
+  type AttachmentUploadResult,
+} from './components/attachments-field';
+export {
+  AttachmentViewer,
+  type ViewableAttachment,
+} from './components/attachment-viewer';
+export {
   AppShell,
   NavBadge,
   isSeparator,

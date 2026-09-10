@@ -1,6 +1,9 @@
 import type { DebtDirection } from '@wib/domain';
+import type { StoredAttachment } from '@wib/ui';
 
 /** Client-safe view models — no DB rows, no server-only imports. */
+
+export type { StoredAttachment };
 
 export interface PersonView {
   id: string;
@@ -8,6 +11,8 @@ export interface PersonView {
   email: string;
   photoUrl: string | null;
   shareId: string;
+  /** How many debts reference this person (people manager / delete guard). */
+  debtCount: number;
 }
 
 export interface DebtEntryView {
@@ -17,6 +22,7 @@ export interface DebtEntryView {
   /** `YYYY-MM-DD`. */
   occurredOn: string;
   createdAt: string;
+  attachments: StoredAttachment[];
 }
 
 export interface DebtView {
@@ -30,6 +36,8 @@ export interface DebtView {
   settled: boolean;
   description: string;
   notes: string | null;
+  /** `YYYY-MM-DD` — when the debt was incurred. */
+  incurredOn: string;
   createdAt: string;
   person: PersonView;
   entryCount: number;
@@ -37,12 +45,13 @@ export interface DebtView {
 
 export interface DebtDetail extends DebtView {
   entries: DebtEntryView[];
+  /** Debt-level attachments. */
+  attachments: StoredAttachment[];
 }
 
 export interface DebtsData {
   debts: DebtView[];
   people: PersonView[];
-  /** Currencies already in use, to prime the amount field's picker. */
   usedCurrencies: string[];
   defaultCurrency: string;
   /** `YYYY-MM-DD` in the user's timezone. */
@@ -65,6 +74,8 @@ export interface SharedView {
     progress: number;
     settled: boolean;
     description: string;
+    incurredOn: string;
+    attachments: StoredAttachment[];
     entries: DebtEntryView[];
   }>;
 }

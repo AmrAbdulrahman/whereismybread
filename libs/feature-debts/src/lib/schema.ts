@@ -3,6 +3,18 @@ import { z } from 'zod';
 const blankToNull = (v: unknown): unknown =>
   typeof v === 'string' && v.trim() === '' ? null : v;
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A file already uploaded to Blob, staged on the form until its row is saved. */
+export const attachmentDraftSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().min(1).max(120),
+  size: z.number().int().nonnegative(),
+  url: z.string().url().max(2048),
+  pathname: z.string().trim().min(1).max(1024),
+});
+export type AttachmentDraftValue = z.input<typeof attachmentDraftSchema>;
+
 const amount = z
   .string()
   .trim()
@@ -42,6 +54,7 @@ export const debtFormSchema = z.object({
   direction: z.enum(['they_owe', 'i_owe']).default('they_owe'),
   amount,
   currency: z.string().trim().toUpperCase().length(3).default('EUR'),
+  incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
   description: z.preprocess(
     (v) => (typeof v === 'string' ? v.trim() : v),
     z.string().max(120).default(''),
@@ -50,17 +63,19 @@ export const debtFormSchema = z.object({
     blankToNull,
     z.string().trim().max(1000).nullable().default(null),
   ),
+  attachments: z.array(attachmentDraftSchema).max(20).default([]),
 });
 export type DebtFormValues = z.input<typeof debtFormSchema>;
 
 /** One repayment against a debt (currency is the debt's, not chosen here). */
 export const repaymentFormSchema = z.object({
   amount,
-  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a date'),
+  occurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
   note: z.preprocess(
     blankToNull,
     z.string().trim().max(200).nullable().default(null),
   ),
+  attachments: z.array(attachmentDraftSchema).max(20).default([]),
 });
 export type RepaymentFormValues = z.input<typeof repaymentFormSchema>;
 

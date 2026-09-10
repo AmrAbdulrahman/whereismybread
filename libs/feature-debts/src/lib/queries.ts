@@ -7,11 +7,13 @@ import {
   listDebtPeople,
   listDebtsWithProgress,
   type Debt,
+  type DebtAttachment,
   type DebtEntry,
   type DebtPerson,
 } from '@wib/db';
 import { debtProgress, todayIn, type DebtDirection } from '@wib/domain';
 import { serverEnv } from '@wib/config';
+import type { StoredAttachment } from '@wib/ui';
 import type {
   DebtDetail,
   DebtEntryView,
@@ -21,23 +23,38 @@ import type {
   SharedView,
 } from './types';
 
-function personView(p: DebtPerson): PersonView {
+function att(a: DebtAttachment): StoredAttachment {
+  return {
+    id: a.id,
+    name: a.name,
+    contentType: a.contentType,
+    size: a.size,
+    url: a.url,
+    pathname: a.pathname,
+  };
+}
+
+function personView(p: DebtPerson, debtCount = 0): PersonView {
   return {
     id: p.id,
     name: p.name,
     email: p.email,
     photoUrl: p.photoUrl,
     shareId: p.shareId,
+    debtCount,
   };
 }
 
-function entryView(e: DebtEntry): DebtEntryView {
+function entryView(
+  e: DebtEntry & { attachments?: DebtAttachment[] },
+): DebtEntryView {
   return {
     id: e.id,
     amountMinor: e.amountMinor,
     note: e.note,
     occurredOn: e.occurredOn,
     createdAt: String(e.createdAt),
+    attachments: (e.attachments ?? []).map(att),
   };
 }
 
@@ -45,7 +62,7 @@ function debtView(
   d: Debt,
   paidMinorRaw: number,
   entryCount: number,
-  person: DebtPerson,
+  person: PersonView,
 ): DebtView {
   const p = debtProgress({
     principalMinor: d.principalMinor,
@@ -62,8 +79,9 @@ function debtView(
     settled: d.settledAt != null || p.settled,
     description: d.description,
     notes: d.notes,
+    incurredOn: d.incurredOn,
     createdAt: String(d.createdAt),
-    person: personView(person),
+    person,
     entryCount,
   };
 }
@@ -75,7 +93,14 @@ export async function getDebtsData(): Promise<DebtsData> {
     listDebtsWithProgress(user.id),
     listDebtPeople(user.id),
   ]);
-  const byId = new Map(people.map((p) => [p.id, p]));
+  const countByPerson = new Map<string, number>();
+  for (const r of rows) {
+    countByPerson.set(r.personId, (countByPerson.get(r.personId) ?? 0) + 1);
+  }
+  const peopleViews = people.map((p) =>
+    personView(p, countByPerson.get(p.id) ?? 0),
+  );
+  const byId = new Map(peopleViews.map((p) => [p.id, p]));
   const debts = rows
     .map((r) => {
       const person = byId.get(r.personId);
@@ -85,7 +110,7 @@ export async function getDebtsData(): Promise<DebtsData> {
 
   return {
     debts,
-    people: people.map(personView),
+    people: peopleViews,
     usedCurrencies: [
       ...new Set([...debts.map((d) => d.currency), user.defaultCurrency]),
     ],
@@ -95,14 +120,27 @@ export async function getDebtsData(): Promise<DebtsData> {
   };
 }
 
+/** People + their debt counts, for the manager's optimistic refresh. */
+export async function getDebtPeople(): Promise<PersonView[]> {
+  const user = await requireUser();
+  const [people, rows] = await Promise.all([
+    listDebtPeople(user.id),
+    listDebtsWithProgress(user.id),
+  ]);
+  const count = new Map<string, number>();
+  for (const r of rows) count.set(r.personId, (count.get(r.personId) ?? 0) + 1);
+  return people.map((p) => personView(p, count.get(p.id) ?? 0));
+}
+
 /** One debt with its full repayment timeline, or `null`. */
 export async function getDebt(id: string): Promise<DebtDetail | null> {
   const user = await requireUser();
   const row = await getDebtWithEntries(user.id, id);
   if (!row) return null;
   return {
-    ...debtView(row, row.paidMinor, row.entryCount, row.person),
+    ...debtView(row, row.paidMinor, row.entryCount, personView(row.person)),
     entries: row.entries.map(entryView),
+    attachments: row.attachments.map(att),
   };
 }
 
@@ -131,6 +169,8 @@ export async function getSharedView(shareId: string): Promise<SharedView | null>
         progress: p.progress,
         settled: d.settledAt != null || p.settled,
         description: d.description,
+        incurredOn: d.incurredOn,
+        attachments: d.attachments.map(att),
         entries: d.entries.map(entryView),
       };
     }),

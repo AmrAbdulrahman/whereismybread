@@ -4,10 +4,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { debtHeadline, formatMoney, money } from '@wib/domain';
-import { Button, Progress, ResponsiveModal, useToast } from '@wib/ui';
+import {
+  AttachmentViewer,
+  AttachmentsField,
+  Button,
+  Progress,
+  ResponsiveModal,
+  attachmentSrc,
+  useToast,
+  type StoredAttachment,
+  type ViewableAttachment,
+} from '@wib/ui';
 import {
   ChevronLeft,
   Link as LinkIcon,
+  Paperclip,
   Pencil,
   Send,
   Trash2,
@@ -15,8 +26,11 @@ import {
 import {
   deleteDebtAction,
   deleteRepaymentAction,
+  discardDebtBlobsAction,
+  removeDebtAttachmentAction,
   resendPersonLinkAction,
   settleDebtAction,
+  uploadDebtAttachmentAction,
 } from '../lib/actions';
 import type { DebtDetail as DebtDetailData, PersonView } from '../lib/types';
 import { DebtForm, type DebtFormInitial } from './debt-form';
@@ -53,6 +67,10 @@ export function DebtDetail({
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [debtFiles, setDebtFiles] = useState<StoredAttachment[]>(
+    debt.attachments,
+  );
+  const [viewing, setViewing] = useState<ViewableAttachment | null>(null);
 
   const pct = Math.round(debt.progress * 100);
 
@@ -87,8 +105,10 @@ export function DebtDetail({
     direction: debt.direction,
     amountMinor: debt.principalMinor,
     currency: debt.currency,
+    incurredOn: debt.incurredOn,
     description: debt.description,
     notes: debt.notes,
+    attachments: debt.attachments,
   };
 
   return (
@@ -109,6 +129,9 @@ export function DebtDetail({
           </h1>
           <p className="text-sm text-ink-soft">
             {debt.description || 'No description'}
+          </p>
+          <p className="mt-0.5 text-xs text-muted">
+            Incurred {fmtDate(debt.incurredOn)}
           </p>
           {debt.notes ? (
             <p className="mt-1 text-xs text-muted">{debt.notes}</p>
@@ -215,6 +238,29 @@ export function DebtDetail({
         </Button>
       </section>
 
+      <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
+        <div className="flex items-center gap-2">
+          <Paperclip size={15} className="text-muted" />
+          <h2 className="text-sm font-semibold text-ink">Attachments</h2>
+        </div>
+        <p className="text-xs text-ink-soft">
+          Receipts or an IOU — {debt.person.name} sees these too.
+        </p>
+        <AttachmentsField
+          inputId="debt-detail-attachment"
+          ownerId={debt.id}
+          saved={debtFiles}
+          onSavedChange={setDebtFiles}
+          drafts={[]}
+          onDraftsChange={() => undefined}
+          upload={(ownerId, form) =>
+            uploadDebtAttachmentAction(ownerId, null, form)
+          }
+          remove={removeDebtAttachmentAction}
+          discard={discardDebtBlobsAction}
+        />
+      </section>
+
       <section className="flex flex-col gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
           Repayments
@@ -228,33 +274,61 @@ export function DebtDetail({
             {debt.entries.map((e) => (
               <li
                 key={e.id}
-                className="flex items-center gap-3 rounded-lg border border-line/60 bg-surface px-3 py-2"
+                className="flex flex-col gap-1.5 rounded-lg border border-line/60 bg-surface px-3 py-2"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink">
-                    {formatMoney(money(e.amountMinor, debt.currency))}
-                  </p>
-                  <p className="truncate text-[11px] text-muted">
-                    {fmtDate(e.occurredOn)}
-                    {e.note ? ` · ${e.note}` : ''}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink">
+                      {formatMoney(money(e.amountMinor, debt.currency))}
+                    </p>
+                    <p className="truncate text-[11px] text-muted">
+                      {fmtDate(e.occurredOn)}
+                      {e.note ? ` · ${e.note}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Delete repayment"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() => deleteRepaymentAction(debt.id, e.id))
+                    }
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-danger"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  aria-label="Delete repayment"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(() => deleteRepaymentAction(debt.id, e.id))
-                  }
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-danger"
-                >
-                  <Trash2 size={13} strokeWidth={2} />
-                </button>
+                {e.attachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {e.attachments.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() =>
+                          setViewing({
+                            name: a.name,
+                            url: attachmentSrc(a.pathname),
+                            contentType: a.contentType,
+                          })
+                        }
+                        className="flex items-center gap-1 rounded-md border border-line bg-ground px-2 py-1 text-[11px] text-ink-soft hover:text-ink"
+                      >
+                        <Paperclip size={11} strokeWidth={2} />
+                        <span className="max-w-[10rem] truncate">{a.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      <AttachmentViewer
+        attachment={viewing}
+        onClose={() => setViewing(null)}
+      />
 
       <ResponsiveModal
         open={repayOpen}
@@ -285,6 +359,7 @@ export function DebtDetail({
           <DebtForm
             people={people}
             initial={initialForEdit}
+            today={today}
             defaultCurrency={defaultCurrency}
             usedCurrencies={usedCurrencies}
             onDone={() => {

@@ -344,6 +344,13 @@
       "when": 1789046038822,
       "tag": "0048_debts",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789053933043,
+      "tag": "0049_debts_dates_and_attachments",
+      "breakpoints": true
     }
   ]
 }

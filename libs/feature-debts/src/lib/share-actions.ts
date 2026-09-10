@@ -128,7 +128,9 @@ export async function verifyDebtOtpAction(
     httpOnly: true,
     secure: process.env['NODE_ENV'] === 'production',
     sameSite: 'lax',
-    path: '/d',
+    // `/` so it also reaches `/api/attachments` when the shared page loads a
+    // private blob — not just `/d/*`.
+    path: '/',
     maxAge: Math.floor(DEBT_GRANT_TTL_MS / 1000),
   });
   return { ok: true };

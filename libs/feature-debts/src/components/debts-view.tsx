@@ -10,9 +10,10 @@ import {
   summariseDebts,
 } from '@wib/domain';
 import { Button, Progress, ResponsiveModal, cn } from '@wib/ui';
-import { Plus, Scale } from '@wib/ui/icons';
+import { Plus, Scale, Users } from '@wib/ui/icons';
 import type { DebtsData, DebtView } from '../lib/types';
 import { DebtForm } from './debt-form';
+import { PeopleManager } from './people-manager';
 import { PersonAvatar } from './person-avatar';
 
 function DebtCard({ debt }: { debt: DebtView }) {
@@ -68,6 +69,7 @@ function DebtCard({ debt }: { debt: DebtView }) {
 export function DebtsView({ data }: { data: DebtsData }) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   const totals = summariseDebts(
     data.debts.map((d) => ({
@@ -91,14 +93,25 @@ export function DebtsView({ data }: { data: DebtsData }) {
             Money owed, and how repayment is going.
           </p>
         </div>
-        <Button
-          size="sm"
-          className="sm:h-10 sm:px-4"
-          onClick={() => setFormOpen(true)}
-        >
-          <Plus size={16} strokeWidth={3} />
-          New debt
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="sm:h-10 sm:px-4"
+            onClick={() => setPeopleOpen(true)}
+          >
+            <Users size={15} strokeWidth={2} />
+            People
+          </Button>
+          <Button
+            size="sm"
+            className="sm:h-10 sm:px-4"
+            onClick={() => setFormOpen(true)}
+          >
+            <Plus size={16} strokeWidth={3} />
+            New debt
+          </Button>
+        </div>
       </header>
 
       {totals.length > 0 ? (
@@ -174,6 +187,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
         {formOpen ? (
           <DebtForm
             people={data.people}
+            today={data.today}
             defaultCurrency={data.defaultCurrency}
             usedCurrencies={data.usedCurrencies}
             onDone={(debtId) => {
@@ -181,6 +195,19 @@ export function DebtsView({ data }: { data: DebtsData }) {
               router.push(`/debts/${debtId}`);
             }}
             onCancel={() => setFormOpen(false)}
+          />
+        ) : null}
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        open={peopleOpen}
+        onOpenChange={setPeopleOpen}
+        title="People"
+      >
+        {peopleOpen ? (
+          <PeopleManager
+            initialPeople={data.people}
+            onClose={() => setPeopleOpen(false)}
           />
         ) : null}
       </ResponsiveModal>

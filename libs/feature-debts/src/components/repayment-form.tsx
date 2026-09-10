@@ -4,8 +4,20 @@ import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { formatMoney, money } from '@wib/domain';
-import { Button, Field, Input, Label } from '@wib/ui';
-import { recordRepaymentAction } from '../lib/actions';
+import {
+  AttachmentsField,
+  Button,
+  Field,
+  Input,
+  Label,
+  type AttachmentDraft,
+} from '@wib/ui';
+import {
+  discardDebtBlobsAction,
+  recordRepaymentAction,
+  removeDebtAttachmentAction,
+  uploadDebtAttachmentAction,
+} from '../lib/actions';
 import { repaymentFormSchema, type RepaymentFormValues } from '../lib/schema';
 
 export function RepaymentForm({
@@ -28,14 +40,17 @@ export function RepaymentForm({
   const {
     register,
     handleSubmit,
+    watch,
     setValue,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<RepaymentFormValues>({
     resolver: zodResolver(repaymentFormSchema),
     mode: 'onTouched',
-    defaultValues: { amount: '', occurredOn: today, note: null },
+    defaultValues: { amount: '', occurredOn: today, note: null, attachments: [] },
   });
+
+  const drafts = watch('attachments') ?? [];
 
   const submit = handleSubmit(async (values) => {
     setFormError(undefined);
@@ -102,6 +117,25 @@ export function RepaymentForm({
           id="repayment-note"
           placeholder="Bank transfer, cash…"
           {...register('note')}
+        />
+      </Field>
+
+      <Field>
+        <Label>Attachments (optional)</Label>
+        <AttachmentsField
+          inputId="repayment-attachment"
+          ownerId={null}
+          saved={[]}
+          onSavedChange={() => undefined}
+          drafts={drafts as AttachmentDraft[]}
+          onDraftsChange={(next) =>
+            setValue('attachments', next, { shouldDirty: true })
+          }
+          upload={(_o, form) =>
+            uploadDebtAttachmentAction(null, null, form)
+          }
+          remove={removeDebtAttachmentAction}
+          discard={discardDebtBlobsAction}
         />
       </Field>
 

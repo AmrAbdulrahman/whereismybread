@@ -3,9 +3,25 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { AmountField, Button, Field, Input, Label, ResponsiveModal, cn } from '@wib/ui';
+import {
+  AmountField,
+  AttachmentsField,
+  Button,
+  Field,
+  Input,
+  Label,
+  ResponsiveModal,
+  cn,
+  type AttachmentDraft,
+  type StoredAttachment,
+} from '@wib/ui';
 import { Plus } from '@wib/ui/icons';
-import { saveDebtAction } from '../lib/actions';
+import {
+  discardDebtBlobsAction,
+  removeDebtAttachmentAction,
+  saveDebtAction,
+  uploadDebtAttachmentAction,
+} from '../lib/actions';
 import { debtFormSchema, type DebtFormValues } from '../lib/schema';
 import type { PersonView } from '../lib/types';
 import { PersonForm } from './person-form';
@@ -16,13 +32,16 @@ export interface DebtFormInitial {
   direction: 'they_owe' | 'i_owe';
   amountMinor: number;
   currency: string;
+  incurredOn: string;
   description: string;
   notes: string | null;
+  attachments: StoredAttachment[];
 }
 
 export function DebtForm({
   people,
   initial,
+  today,
   defaultCurrency,
   usedCurrencies = [],
   onDone,
@@ -30,6 +49,7 @@ export function DebtForm({
 }: {
   people: PersonView[];
   initial?: DebtFormInitial;
+  today: string;
   defaultCurrency: string;
   usedCurrencies?: string[];
   onDone: (debtId: string) => void;
@@ -38,6 +58,9 @@ export function DebtForm({
   const [formError, setFormError] = useState<string>();
   const [roster, setRoster] = useState(people);
   const [addingPerson, setAddingPerson] = useState(false);
+  const [saved, setSaved] = useState<StoredAttachment[]>(
+    initial?.attachments ?? [],
+  );
 
   const {
     register,
@@ -54,14 +77,17 @@ export function DebtForm({
       direction: initial?.direction ?? 'they_owe',
       amount: initial ? (initial.amountMinor / 100).toFixed(2) : '',
       currency: initial?.currency ?? defaultCurrency,
+      incurredOn: initial?.incurredOn ?? today,
       description: initial?.description ?? '',
       notes: initial?.notes ?? null,
+      attachments: [],
     },
   });
 
   const direction = watch('direction');
   const personId = watch('personId');
   const currency = watch('currency');
+  const drafts = watch('attachments') ?? [];
 
   const submit = handleSubmit(async (values) => {
     setFormError(undefined);
@@ -177,6 +203,14 @@ export function DebtForm({
         </Field>
 
         <Field>
+          <Label htmlFor="debt-date">Date incurred</Label>
+          <Input id="debt-date" type="date" {...register('incurredOn')} />
+          {errors.incurredOn?.message ? (
+            <p className="text-xs text-danger">{errors.incurredOn.message}</p>
+          ) : null}
+        </Field>
+
+        <Field>
           <Label htmlFor="debt-description">What&apos;s it for?</Label>
           <Input
             id="debt-description"
@@ -196,6 +230,25 @@ export function DebtForm({
             className="rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink"
             placeholder="Anything worth remembering"
             {...register('notes')}
+          />
+        </Field>
+
+        <Field>
+          <Label>Attachments (optional)</Label>
+          <AttachmentsField
+            inputId="debt-attachment"
+            ownerId={initial?.id ?? null}
+            saved={saved}
+            onSavedChange={setSaved}
+            drafts={drafts as AttachmentDraft[]}
+            onDraftsChange={(next) =>
+              setValue('attachments', next, { shouldDirty: true })
+            }
+            upload={(ownerId, form) =>
+              uploadDebtAttachmentAction(ownerId, null, form)
+            }
+            remove={removeDebtAttachmentAction}
+            discard={discardDebtBlobsAction}
           />
         </Field>
 

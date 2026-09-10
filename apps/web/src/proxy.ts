@@ -9,6 +9,9 @@ const PUBLIC_PREFIXES = [
   '/verify',
   '/d',
   '/api/auth',
+  // The handler authenticates each request itself (owning user, or an
+  // OTP-verified debt viewer with no app account).
+  '/api/attachments',
   '/privacy-policy',
   '/terms-and-conditions',
 ];

@@ -306,6 +306,8 @@ export {
   getDebtPersonByEmail,
   createDebtPerson,
   updateDebtPerson,
+  deleteDebtPerson,
+  personHasDebts,
   listDebtsWithProgress,
   getDebtWithEntries,
   getDebtRow,
@@ -329,8 +331,18 @@ export {
   type DebtEntryInput,
   type DebtWithProgress,
   type DebtWithEntries,
+  type DebtEntryWithAttachments,
   type SharedPersonDebts,
 } from './lib/repositories/debts';
+export {
+  addDebtAttachment,
+  deleteDebtAttachment,
+  listDebtAttachments,
+  reconcileDebtAttachments,
+  getDebtAttachmentGrantInfo,
+  type DebtAttachmentInput,
+  type DebtAttachmentGrantCheck,
+} from './lib/repositories/debt-attachments';
 export type {
   DebtPerson,
   NewDebtPerson,
@@ -340,6 +352,8 @@ export type {
   NewDebtEntry,
   DebtOtp,
   DebtGrant,
+  DebtAttachment,
+  NewDebtAttachment,
 } from './lib/schema/debts';
 
 export {

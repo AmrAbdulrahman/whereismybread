@@ -34,12 +34,25 @@ describe('debtFormSchema', () => {
       direction: 'i_owe',
       amount: '120.50',
       currency: 'gbp',
+      incurredOn: '2026-09-10',
       description: '  taxi ',
       notes: '',
     });
     expect(parsed.currency).toBe('GBP');
     expect(parsed.description).toBe('taxi');
     expect(parsed.notes).toBeNull();
+    expect(parsed.attachments).toEqual([]);
+  });
+
+  it('requires the incurred date', () => {
+    expect(
+      debtFormSchema.safeParse({
+        personId: '11111111-1111-4111-8111-111111111111',
+        direction: 'they_owe',
+        amount: '10',
+        currency: 'EUR',
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects a zero or negative amount', () => {
@@ -47,6 +60,7 @@ describe('debtFormSchema', () => {
       personId: '11111111-1111-4111-8111-111111111111',
       direction: 'they_owe' as const,
       currency: 'EUR',
+      incurredOn: '2026-09-10',
     };
     expect(debtFormSchema.safeParse({ ...base, amount: '0' }).success).toBe(false);
     expect(debtFormSchema.safeParse({ ...base, amount: '-5' }).success).toBe(

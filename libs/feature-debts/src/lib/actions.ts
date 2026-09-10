@@ -1,23 +1,38 @@
 'use server';
 
+import { del, put } from '@vercel/blob';
 import { fieldErrors, type FormState } from '@wib/auth';
 import { requireUser } from '@wib/auth/server';
 import {
+  addDebtAttachment,
   addDebtEntry,
   createDebt,
   createDebtPerson,
   deleteDebt as deleteDebtRow,
+  deleteDebtAttachment,
   deleteDebtEntry,
+  deleteDebtPerson,
   getDebtRow,
   getDebtWithEntries,
   getDebtPersonById,
   listDebtsWithProgress,
+  personHasDebts,
+  reconcileDebtAttachments,
   setDebtSettled,
   updateDebt,
   updateDebtPerson,
 } from '@wib/db';
 import { debtProgress, parseMoneyInput } from '@wib/domain';
+import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_TYPES,
+  isBlobUrl,
+  resolveAttachmentType,
+  type AttachmentDraft,
+  type StoredAttachment,
+} from '@wib/ui';
 import { revalidatePath } from 'next/cache';
+import { getDebtPeople } from './queries';
 import { notifyPersonOfDebts } from './notify';
 import {
   debtFormSchema,
@@ -40,6 +55,25 @@ function ownerName(name: string | null): string {
 
 // --- people -------------------------------------------------------------
 
+async function personViewById(
+  userId: string,
+  id: string,
+): Promise<PersonView | null> {
+  const [people, rows] = await Promise.all([
+    getDebtPersonById(userId, id),
+    listDebtsWithProgress(userId),
+  ]);
+  if (!people) return null;
+  return {
+    id: people.id,
+    name: people.name,
+    email: people.email,
+    photoUrl: people.photoUrl,
+    shareId: people.shareId,
+    debtCount: rows.filter((d) => d.personId === id).length,
+  };
+}
+
 export async function savePersonAction(
   id: string | null,
   values: PersonFormValues,
@@ -60,16 +94,15 @@ export async function savePersonAction(
       : await createDebtPerson(user.id, input);
     if (!row) return { ok: false, error: 'That person no longer exists.' };
     revalidate();
-    return {
-      ok: true,
-      person: {
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        photoUrl: row.photoUrl,
-        shareId: row.shareId,
-      },
+    const person = (await personViewById(user.id, row.id)) ?? {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      photoUrl: row.photoUrl,
+      shareId: row.shareId,
+      debtCount: 0,
     };
+    return { ok: true, person };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === '23505') {
       return {
@@ -79,6 +112,24 @@ export async function savePersonAction(
     }
     throw error;
   }
+}
+
+export async function deletePersonAction(id: string): Promise<FormState> {
+  const user = await requireUser();
+  if (await personHasDebts(user.id, id)) {
+    return {
+      ok: false,
+      error: 'Delete or settle their debts first, then remove the person.',
+    };
+  }
+  await deleteDebtPerson(user.id, id);
+  revalidate();
+  return { ok: true };
+}
+
+/** People + debt counts, for the manager's optimistic refresh. */
+export async function listPeopleAction(): Promise<PersonView[]> {
+  return getDebtPeople();
 }
 
 // --- debts -------------------------------------------------------------
@@ -112,6 +163,7 @@ export async function saveDebtAction(
     direction: parsed.data.direction,
     principalMinor,
     currency: parsed.data.currency,
+    incurredOn: parsed.data.incurredOn,
     description: parsed.data.description ?? '',
     notes: parsed.data.notes,
   };
@@ -120,6 +172,16 @@ export async function saveDebtAction(
     ? await updateDebt(user.id, id, input)
     : await createDebt(user.id, input);
   if (!row) return { ok: false, error: 'Could not save the debt.' };
+
+  // Files staged while creating — attach them to the fresh debt.
+  if (!id) {
+    const drafts = validDrafts(parsed.data.attachments);
+    if (drafts.length > 0) {
+      await reconcileDebtAttachments(user.id, row.id, null, drafts).catch(
+        () => undefined,
+      );
+    }
+  }
 
   revalidate(row.id);
   await notifyPersonOfDebts(
@@ -203,6 +265,13 @@ export async function recordRepaymentAction(
   });
   if (!entry) return { ok: false, error: 'Could not record the repayment.' };
 
+  const drafts = validDrafts(parsed.data.attachments);
+  if (drafts.length > 0) {
+    await reconcileDebtAttachments(user.id, debtId, entry.id, drafts).catch(
+      () => undefined,
+    );
+  }
+
   const detail = await getDebtWithEntries(user.id, debtId);
   if (detail) {
     const { settled } = debtProgress({
@@ -238,6 +307,124 @@ export async function deleteRepaymentAction(
     if (!settled) await setDebtSettled(user.id, debtId, false);
   }
   revalidate(debtId);
+  return { ok: true };
+}
+
+// --- attachments -----------------------------------------------------
+
+const SAFE_NAME = /[^\w.\- ]+/g;
+
+/** Keep only well-formed drafts pointing at our blob store with an allowed type. */
+function validDrafts(
+  drafts: readonly AttachmentDraft[] | undefined,
+): AttachmentDraft[] {
+  return (Array.isArray(drafts) ? drafts : [])
+    .filter(
+      (d) =>
+        d &&
+        typeof d.url === 'string' &&
+        isBlobUrl(d.url) &&
+        typeof d.pathname === 'string' &&
+        d.pathname.length > 0 &&
+        typeof d.contentType === 'string' &&
+        d.contentType in ATTACHMENT_TYPES &&
+        Number.isFinite(d.size) &&
+        d.size >= 0 &&
+        d.size <= ATTACHMENT_MAX_BYTES,
+    )
+    .slice(0, 20)
+    .map((d) => ({
+      name: String(d.name || 'file').slice(0, 255),
+      contentType: d.contentType,
+      size: Math.round(d.size),
+      url: d.url,
+      pathname: d.pathname,
+    }));
+}
+
+/**
+ * Upload a file to Blob and, when the debt/entry already exists, record it
+ * straight away. When staging (`debtId` null) the blob is stored and returned
+ * as a draft that `saveDebtAction` / `recordRepaymentAction` attaches later.
+ */
+export async function uploadDebtAttachmentAction(
+  debtId: string | null,
+  entryId: string | null,
+  form: FormData,
+): Promise<
+  | { ok: true; draft: AttachmentDraft; attachment: StoredAttachment | null }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+
+  const file = form.get('file');
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: 'No file received.' };
+  }
+  if (file.size > ATTACHMENT_MAX_BYTES) {
+    return { ok: false, error: 'That file is too large (max 10 MB).' };
+  }
+  const contentType = resolveAttachmentType(file.name, file.type);
+  if (!contentType) {
+    return { ok: false, error: 'Only images, PDFs and text files are allowed.' };
+  }
+
+  const safeName = file.name.replace(SAFE_NAME, '_').slice(0, 120) || 'file';
+  const blob = await put(
+    `debts/${user.id}/${crypto.randomUUID()}-${safeName}`,
+    file,
+    { access: 'private', contentType, addRandomSuffix: false },
+  );
+
+  const draft: AttachmentDraft = {
+    name: file.name.slice(0, 255),
+    contentType,
+    size: file.size,
+    url: blob.url,
+    pathname: blob.pathname,
+  };
+
+  if (!debtId) return { ok: true, draft, attachment: null };
+
+  const attachment = await addDebtAttachment(user.id, { debtId, entryId, ...draft });
+  if (!attachment) {
+    await del(blob.url).catch(() => undefined);
+    return { ok: false, error: 'That debt no longer exists.' };
+  }
+  revalidate(debtId);
+  return {
+    ok: true,
+    draft,
+    attachment: {
+      id: attachment.id,
+      name: attachment.name,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      url: attachment.url,
+      pathname: attachment.pathname,
+    },
+  };
+}
+
+export async function removeDebtAttachmentAction(
+  id: string,
+): Promise<FormState> {
+  const user = await requireUser();
+  if (typeof id !== 'string' || !id) return { ok: false, error: 'Bad file.' };
+  const row = await deleteDebtAttachment(user.id, id);
+  if (row) await del(row.url).catch(() => undefined);
+  if (row) revalidate(row.debtId);
+  return { ok: true };
+}
+
+export async function discardDebtBlobsAction(
+  urls: string[],
+): Promise<{ ok: true }> {
+  await requireUser();
+  const safe = (Array.isArray(urls) ? urls : [])
+    .filter((u) => typeof u === 'string' && isBlobUrl(u))
+    .slice(0, 20);
+  if (safe.length > 0) await del(safe).catch(() => undefined);
   return { ok: true };
 }
 

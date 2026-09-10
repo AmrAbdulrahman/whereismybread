@@ -1,31 +1,59 @@
 import { get } from '@vercel/blob';
-import { requireUserId } from '@wib/auth/server';
+import { hashToken, requireUserId } from '@wib/auth/server';
+import { findLiveDebtGrant, getDebtAttachmentGrantInfo } from '@wib/db';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 /** Every kind of attachment this route is allowed to stream, by blob prefix. */
-const ATTACHMENT_KINDS = ['payments', 'expenses'];
+const ATTACHMENT_KINDS = ['payments', 'expenses', 'debts'];
 
 /**
- * Streams a payment or expense attachment back to its owner. The blob store is
- * private, so files can't be linked to directly — this route authenticates the
- * viewer and checks the blob pathname is under their own `<kind>/<userId>/`
- * prefix before proxying the bytes.
+ * `true` when this request carries a valid `wib_debt` grant for the person the
+ * debt behind `path` is with — lets the OTP-verified other party view debt /
+ * repayment attachments without an app account.
+ */
+async function allowedByDebtGrant(path: string): Promise<boolean> {
+  if (!path.startsWith('debts/')) return false;
+  const raw = (await cookies()).get('wib_debt')?.value;
+  if (!raw) return false;
+  const grant = await findLiveDebtGrant(hashToken(raw));
+  if (!grant) return false;
+  const info = await getDebtAttachmentGrantInfo(path);
+  return (
+    !!info &&
+    info.personId === grant.personId &&
+    path.startsWith(`debts/${info.ownerId}/`)
+  );
+}
+
+/**
+ * Streams a payment / expense / debt attachment. The blob store is private, so
+ * files can't be linked to directly — this route authenticates the viewer
+ * (the owning user, or an OTP-granted debt viewer) and checks the blob
+ * pathname before proxying the bytes.
  */
 export async function GET(request: Request): Promise<Response> {
-  let userId: string;
+  const path = new URL(request.url).searchParams.get('path') ?? '';
+  if (!path || path.includes('..')) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  let userId: string | null = null;
   try {
     userId = await requireUserId();
   } catch {
-    return new Response('Unauthorized', { status: 401 });
+    userId = null;
   }
 
-  const path = new URL(request.url).searchParams.get('path') ?? '';
-  const allowed = ATTACHMENT_KINDS.some((kind) =>
-    path.startsWith(`${kind}/${userId}/`),
-  );
-  if (!path || !allowed || path.includes('..')) {
-    return new Response('Not found', { status: 404 });
+  const ownedByUser =
+    userId != null &&
+    ATTACHMENT_KINDS.some((kind) => path.startsWith(`${kind}/${userId}/`));
+
+  if (!ownedByUser && !(await allowedByDebtGrant(path))) {
+    return new Response(userId ? 'Not found' : 'Unauthorized', {
+      status: userId ? 404 : 401,
+    });
   }
 
   let result;

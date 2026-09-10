@@ -2,12 +2,14 @@ import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import type { DebtDirection } from '@wib/domain';
 import { getDb } from '../client';
 import {
+  debtAttachments,
   debtEntries,
   debtGrants,
   debtOtps,
   debtPeople,
   debts,
   type Debt,
+  type DebtAttachment,
   type DebtEntry,
   type DebtGrant,
   type DebtOtp,
@@ -119,6 +121,30 @@ export interface DebtInput {
   currency: string;
   description: string;
   notes: string | null;
+  /** `YYYY-MM-DD` — when the debt was incurred. */
+  incurredOn: string;
+}
+
+/** `true` when the person still has at least one debt (blocks deletion). */
+export async function personHasDebts(
+  userId: string,
+  personId: string,
+): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: debts.id })
+    .from(debts)
+    .where(and(eq(debts.userId, userId), eq(debts.personId, personId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function deleteDebtPerson(
+  userId: string,
+  id: string,
+): Promise<void> {
+  await getDb()
+    .delete(debtPeople)
+    .where(and(eq(debtPeople.id, id), eq(debtPeople.userId, userId)));
 }
 
 export interface DebtWithProgress extends Debt {
@@ -157,9 +183,32 @@ export async function listDebtsWithProgress(
   }));
 }
 
+export type DebtEntryWithAttachments = DebtEntry & {
+  attachments: DebtAttachment[];
+};
+
 export interface DebtWithEntries extends DebtWithProgress {
   person: DebtPerson;
-  entries: DebtEntry[];
+  entries: DebtEntryWithAttachments[];
+  /** Debt-level attachments (`entry_id` null). */
+  attachments: DebtAttachment[];
+}
+
+function groupAttachments(
+  rows: DebtAttachment[],
+): { debt: DebtAttachment[]; byEntry: Map<string, DebtAttachment[]> } {
+  const debt: DebtAttachment[] = [];
+  const byEntry = new Map<string, DebtAttachment[]>();
+  for (const a of rows) {
+    if (a.entryId == null) {
+      debt.push(a);
+    } else {
+      const list = byEntry.get(a.entryId) ?? [];
+      list.push(a);
+      byEntry.set(a.entryId, list);
+    }
+  }
+  return { debt, byEntry };
 }
 
 export async function getDebtWithEntries(
@@ -174,16 +223,28 @@ export async function getDebtWithEntries(
     .limit(1);
   const row = rows[0];
   if (!row) return undefined;
-  const entries = await getDb()
-    .select()
-    .from(debtEntries)
-    .where(eq(debtEntries.debtId, id))
-    .orderBy(desc(debtEntries.occurredOn), desc(debtEntries.createdAt));
+  const [entries, attachmentRows] = await Promise.all([
+    getDb()
+      .select()
+      .from(debtEntries)
+      .where(eq(debtEntries.debtId, id))
+      .orderBy(desc(debtEntries.occurredOn), desc(debtEntries.createdAt)),
+    getDb()
+      .select()
+      .from(debtAttachments)
+      .where(eq(debtAttachments.debtId, id))
+      .orderBy(asc(debtAttachments.createdAt)),
+  ]);
+  const { debt: debtAtt, byEntry } = groupAttachments(attachmentRows);
   const paidMinor = entries.reduce((s, e) => s + e.amountMinor, 0);
   return {
     ...row.debt,
     person: row.person,
-    entries,
+    entries: entries.map((e) => ({
+      ...e,
+      attachments: byEntry.get(e.id) ?? [],
+    })),
+    attachments: debtAtt,
     paidMinor,
     entryCount: entries.length,
   };
@@ -217,6 +278,7 @@ export async function createDebt(
       currency: input.currency,
       description: input.description.trim(),
       notes: input.notes,
+      incurredOn: input.incurredOn,
     })
     .returning();
   return rows[0] ?? null;
@@ -237,6 +299,7 @@ export async function updateDebt(
       currency: input.currency,
       description: input.description.trim(),
       notes: input.notes,
+      incurredOn: input.incurredOn,
       updatedAt: new Date(),
     })
     .where(and(eq(debts.id, id), eq(debts.userId, userId)))
@@ -306,7 +369,12 @@ export async function deleteDebtEntry(
 
 export interface SharedPersonDebts {
   person: DebtPerson;
-  debts: Array<Debt & { entries: DebtEntry[] }>;
+  debts: Array<
+    Debt & {
+      entries: DebtEntryWithAttachments[];
+      attachments: DebtAttachment[];
+    }
+  >;
 }
 
 /** Everything the OTP-verified shared page shows for one person. */
@@ -321,22 +389,47 @@ export async function getSharedPersonDebts(
     .where(eq(debts.personId, person.id))
     .orderBy(desc(debts.createdAt));
   const ids = rows.map((d) => d.id);
-  const entries = ids.length
-    ? await getDb()
-        .select()
-        .from(debtEntries)
-        .where(inArray(debtEntries.debtId, ids))
-        .orderBy(desc(debtEntries.occurredOn), desc(debtEntries.createdAt))
-    : [];
-  const byDebt = new Map<string, DebtEntry[]>();
+  const [entries, attachmentRows] = ids.length
+    ? await Promise.all([
+        getDb()
+          .select()
+          .from(debtEntries)
+          .where(inArray(debtEntries.debtId, ids))
+          .orderBy(desc(debtEntries.occurredOn), desc(debtEntries.createdAt)),
+        getDb()
+          .select()
+          .from(debtAttachments)
+          .where(inArray(debtAttachments.debtId, ids))
+          .orderBy(asc(debtAttachments.createdAt)),
+      ])
+    : [[], []];
+  const entriesByDebt = new Map<string, DebtEntry[]>();
   for (const e of entries) {
-    const list = byDebt.get(e.debtId) ?? [];
+    const list = entriesByDebt.get(e.debtId) ?? [];
     list.push(e);
-    byDebt.set(e.debtId, list);
+    entriesByDebt.set(e.debtId, list);
+  }
+  const attByDebt = new Map<string, DebtAttachment[]>();
+  for (const a of attachmentRows) {
+    const list = attByDebt.get(a.debtId) ?? [];
+    list.push(a);
+    attByDebt.set(a.debtId, list);
   }
   return {
     person,
-    debts: rows.map((d) => ({ ...d, entries: byDebt.get(d.id) ?? [] })),
+    debts: rows.map((d) => {
+      const { debt: debtAtt, byEntry } = groupAttachments(
+        attByDebt.get(d.id) ?? [],
+      );
+      return {
+        ...d,
+        entries: (entriesByDebt.get(d.id) ?? []).map((e) => ({
+          ...e,
+          attachments: byEntry.get(e.id) ?? [],
+        })),
+        attachments: debtAtt,
+      };
+    }),
   };
 }
 

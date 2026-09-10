@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
+    "@vercel/blob": "^2.8.0",
     "@wib/auth": "workspace:*",
     "@wib/config": "workspace:*",
     "@wib/db": "workspace:*",

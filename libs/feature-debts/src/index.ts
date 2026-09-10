@@ -8,12 +8,17 @@ export { DebtOtpForm } from './components/debt-otp-form';
 
 export {
   savePersonAction,
+  deletePersonAction,
+  listPeopleAction,
   saveDebtAction,
   deleteDebtAction,
   settleDebtAction,
   recordRepaymentAction,
   deleteRepaymentAction,
   resendPersonLinkAction,
+  uploadDebtAttachmentAction,
+  removeDebtAttachmentAction,
+  discardDebtBlobsAction,
 } from './lib/actions';
 export {
   requestDebtOtpAction,
