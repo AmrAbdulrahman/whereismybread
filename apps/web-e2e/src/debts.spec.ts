@@ -34,6 +34,14 @@ async function addPerson(page: Page, modalName: string | RegExp, name: string) {
   return modal;
 }
 
+/** Person panels start collapsed — expand the one for `personName`. */
+async function expandPanel(page: Page, personName: string) {
+  const panel = page.locator('section').filter({ hasText: personName });
+  const toggle = panel.getByRole('button', { expanded: false });
+  if (await toggle.count()) await toggle.click();
+  return panel;
+}
+
 async function unlockShared(page: Page, shareUrl: string, email: string) {
   await page.goto(shareUrl);
   await page.getByLabel('Email').fill(email);
@@ -89,6 +97,7 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
   await expect(page).toHaveURL(/\/debts$/);
 
   // The card shows a chip per denomination + an app-currency equivalent.
+  await expandPanel(page, 'Sarah Cole');
   const card = page.getByRole('link', { name: /Trip costs/ });
   await expect(card).toBeVisible();
   await expect(card.getByText(/\$100\.00/)).toBeVisible();
@@ -186,6 +195,7 @@ test('debts: a gold-denominated row tracks quantity and shows on the shared page
   await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
 
+  await expandPanel(page, 'Nabil Fahmy');
   await page.getByRole('link', { name: /Wedding gift/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
   await expect(
@@ -240,6 +250,7 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
   await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
 
+  await expandPanel(page, 'Alex Kerr');
   await page.getByRole('link', { name: /Groceries/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
 
@@ -314,13 +325,17 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
   await expect(page).toHaveURL(/\/debts$/);
-  const card = page.getByRole('link', { name: /lunch/ });
-  await expect(card).toBeVisible(); // optimistic — no reload
-  expect(Date.now() - t0).toBeLessThan(10_000);
-  await expect(card.getByText(/€20\.00/)).toBeVisible();
 
+  // Optimistic — the person panel + its summary appear with no reload.
   const panel = page.locator('section').filter({ hasText: 'Dana Roy' });
   await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
+  expect(Date.now() - t0).toBeLessThan(10_000);
+
+  // Panels start collapsed — expand to see the card.
+  await panel.getByRole('button', { expanded: false }).click();
+  const card = page.getByRole('link', { name: /lunch/ });
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/€20\.00/)).toBeVisible();
 
   // The panel's own "Add" appends a second gold debt to the same person.
   await panel.getByRole('button', { name: 'Add' }).click();
@@ -333,11 +348,12 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
 
   await page.goto('/debts');
   const panel2 = page.locator('section').filter({ hasText: 'Dana Roy' });
-  await expect(panel2.getByRole('listitem')).toHaveCount(2);
-  await expect(panel2.getByText(/1 oz bar/).first()).toBeVisible();
-
-  // Collapse — cards hide, the summary stays.
-  await panel2.getByRole('button', { expanded: true }).click();
+  // Collapsed by default — the summary shows, the cards don't.
   await expect(panel2.getByRole('listitem')).toHaveCount(0);
   await expect(panel2.getByText(/€20\.00 to you/)).toBeVisible();
+
+  // Expand — both cards appear.
+  await panel2.getByRole('button', { expanded: false }).click();
+  await expect(panel2.getByRole('listitem')).toHaveCount(2);
+  await expect(panel2.getByText(/1 oz bar/).first()).toBeVisible();
 });

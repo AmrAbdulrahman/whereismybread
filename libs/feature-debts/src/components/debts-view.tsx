@@ -155,7 +155,8 @@ export function DebtsView({ data }: { data: DebtsData }) {
     { person?: DebtsData['people'][number] } | null
   >(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Person panels start collapsed — expand on click.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<DebtView[]>([]);
   const [, startTransition] = useTransition();
 
@@ -167,8 +168,8 @@ export function DebtsView({ data }: { data: DebtsData }) {
     });
   }, [data.debts]);
 
-  const toggleCollapsed = (personId: string) =>
-    setCollapsed((prev) => {
+  const toggleExpanded = (personId: string) =>
+    setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(personId)) next.delete(personId);
       else next.add(personId);
@@ -314,7 +315,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
       ) : (
         <>
           {groups.map((g) => {
-            const isCollapsed = collapsed.has(g.person.id);
+            const isCollapsed = !expanded.has(g.person.id);
             return (
               <section
                 key={g.person.id}
@@ -323,7 +324,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
                 <div className="flex items-start gap-2">
                   <button
                     type="button"
-                    onClick={() => toggleCollapsed(g.person.id)}
+                    onClick={() => toggleExpanded(g.person.id)}
                     aria-expanded={!isCollapsed}
                     className="flex min-w-0 flex-1 items-start gap-3 text-left"
                   >
