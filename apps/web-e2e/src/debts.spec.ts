@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 // eslint-disable-next-line playwright/no-skipped-test -- env-gated: needs a live DB
 test.skip(
@@ -11,7 +11,7 @@ const PNG_1PX = Buffer.from(
   'base64',
 );
 
-async function signUp(page: import('@playwright/test').Page) {
+async function signUp(page: Page) {
   const email = `e2e+debt-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
   await page.goto('/signup');
   await page.getByLabel('Name').fill('Debt Tester');
@@ -21,12 +21,32 @@ async function signUp(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/plan/, { timeout: 35_000 });
 }
 
-test('debts: create, repay, settle, and view via the OTP shared page', async ({
+async function addPerson(page: Page, modalName: string | RegExp, name: string) {
+  const modal = page.getByRole('dialog', { name: modalName });
+  await modal.getByRole('button', { name: 'New' }).click();
+  const personModal = page.getByRole('dialog', { name: 'New person' });
+  await personModal.getByLabel('Name').fill(name);
+  await personModal
+    .getByLabel('Email')
+    .fill(`${name.toLowerCase().replace(/\W+/g, '.')}-${Date.now()}@example.com`);
+  await personModal.getByRole('button', { name: 'Add person' }).click();
+  await expect(personModal).toBeHidden();
+  return modal;
+}
+
+async function unlockShared(page: Page, shareUrl: string, email: string) {
+  await page.goto(shareUrl);
+  await page.getByLabel('Email').fill(email);
+  await page.getByRole('button', { name: 'Send me a code' }).click();
+  // Under AUTH_E2E the code is pre-filled into the field.
+  await page.getByRole('button', { name: 'View the debt' }).click();
+}
+
+test('debts: a basket with several denomination rows — repay, settle, add a row, shared page', async ({
   page,
   browser,
 }) => {
   await signUp(page);
-
   const personEmail = `sarah-${Date.now()}@example.com`;
 
   await page.goto('/debts');
@@ -34,77 +54,115 @@ test('debts: create, repay, settle, and view via the OTP shared page', async ({
     page.getByRole('heading', { name: 'No debts tracked yet' }),
   ).toBeVisible();
 
-  // New debt → add a person on the fly.
   await page.getByRole('button', { name: 'New debt' }).first().click();
   const modal = page.getByRole('dialog', { name: 'New debt' });
   await modal.getByRole('button', { name: 'New' }).click();
-
   const personModal = page.getByRole('dialog', { name: 'New person' });
   await personModal.getByLabel('Name').fill('Sarah Cole');
   await personModal.getByLabel('Email').fill(personEmail);
   await personModal.getByRole('button', { name: 'Add person' }).click();
+  await expect(personModal).toBeHidden();
 
-  // Back on the debt form.
   await modal.getByRole('button', { name: 'They owe me' }).click();
-  await modal.getByLabel('Amount').fill('120');
-  await modal.getByLabel('Date').fill('2026-02-14');
-  await modal.getByLabel('Note (optional)').fill('Concert tickets');
-  await modal.getByRole('button', { name: 'Add debt' }).click();
+  await modal.getByLabel('Date incurred').fill('2026-02-14');
+  await modal.getByLabel("What's it for?").fill('Trip costs');
 
-  // Stays on the list (optimistic) — open the new card for the detail page.
+  // Row 0 — 100 USD.
+  await modal.locator('#row-0-amount').fill('100');
+  await modal.getByRole('button', { name: 'EUR' }).first().click();
+  const ccy = page.getByRole('dialog', { name: 'Choose currency' });
+  await ccy.getByPlaceholder('Search currencies…').fill('USD');
+  await ccy.getByRole('button', { name: /USD/ }).first().click();
+
+  // Row 1 — 30 EUR.
+  await modal.getByRole('button', { name: 'Add a row' }).click();
+  await modal.locator('#row-1-amount').fill('30');
+
+  // Row 2 — a 50 g gold bar.
+  await modal.getByRole('button', { name: 'Add a row' }).click();
+  await modal.getByRole('button', { name: 'Gold', exact: true }).nth(2).click();
+  await modal.getByLabel('Gold type').selectOption('bar_50g');
+  await modal.getByLabel('Quantity (pieces)').fill('1');
+
+  await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
   await expect(page).toHaveURL(/\/debts$/);
-  await page.getByRole('link', { name: /Concert tickets/ }).click();
+
+  // The card shows a chip per denomination + an app-currency equivalent.
+  const card = page.getByRole('link', { name: /Trip costs/ });
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/\$100\.00/)).toBeVisible();
+  await expect(card.getByText(/€30\.00/)).toBeVisible();
+  await expect(card.getByText(/50 g bar/)).toBeVisible();
+  await expect(card.getByText(/≈\s*€/)).toBeVisible();
+
+  await card.click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
   await expect(
     page.getByRole('heading', { name: 'Sarah Cole owes you' }),
   ).toBeVisible();
   await expect(page.getByText(/Incurred 14 Feb 2026/)).toBeVisible();
-  await expect(page.getByText(/€0\.00 repaid of €120\.00/)).toBeVisible();
 
-  // Grab the transparency link.
-  const shareUrl = await page
-    .getByLabel('Shared debt link')
-    .inputValue();
+  await expect(page.getByText(/\$0\.00 repaid of \$100\.00/)).toBeVisible();
+  await expect(page.getByText(/€0\.00 repaid of €30\.00/)).toBeVisible();
+
+  const shareUrl = await page.getByLabel('Shared debt link').inputValue();
   expect(shareUrl).toMatch(/\/d\/[0-9a-f-]{36}$/);
 
-  // Record a €50 repayment.
-  await page.getByRole('button', { name: 'Record repayment' }).click();
+  // Record a $50 repayment from the USD balance.
+  const usdBlock = page
+    .getByRole('listitem')
+    .filter({ hasText: '$100.00' });
+  await usdBlock.getByRole('button', { name: 'Record repayment' }).click();
   const repay = page.getByRole('dialog', { name: 'Record a repayment' });
   await repay.getByLabel(/^Amount/).fill('50');
   await repay.getByRole('button', { name: 'Record repayment' }).click();
+  await expect(repay).toBeHidden();
+  await expect(page.getByText(/\$50\.00 repaid of \$100\.00/)).toBeVisible();
+  await expect(page.getByText(/€0\.00 repaid of €30\.00/)).toBeVisible();
 
-  await expect(page.getByText(/€50\.00 repaid of €120\.00/)).toBeVisible();
+  // Settle just the EUR balance.
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: '€30.00' })
+    .getByRole('button', { name: 'Settle this' })
+    .click();
+  await expect(page.getByText(/€30\.00 repaid of €30\.00/)).toBeVisible();
 
-  // Settle in full.
+  // Settle the whole debt.
   await page.getByRole('button', { name: 'Settle in full' }).click();
   await expect(page.getByRole('button', { name: 'Reopen' })).toBeVisible();
-  await expect(page.getByText(/€120\.00 repaid of €120\.00/)).toBeVisible();
+  await expect(page.getByText(/\$100\.00 repaid of \$100\.00/)).toBeVisible();
 
-  // --- external party opens the shared link ---
+  // Add a fourth row on the detail page.
+  await page
+    .getByRole('button', { name: 'Add a row' })
+    .click();
+  const lineModal = page.getByRole('dialog', { name: 'Add a row' });
+  await lineModal.locator('#line-amount').fill('10');
+  await lineModal.getByRole('button', { name: /USD|EUR|GBP/ }).first().click();
+  const ccy2 = page.getByRole('dialog', { name: 'Choose currency' });
+  await ccy2.getByPlaceholder('Search currencies…').fill('GBP');
+  await ccy2.getByRole('button', { name: /GBP/ }).first().click();
+  await lineModal.getByRole('button', { name: 'Add row' }).click();
+  await expect(lineModal).toBeHidden();
+  await expect(page.getByText(/£0\.00 repaid of £10\.00/)).toBeVisible();
+
+  // The other party sees the same rows + balances.
   const outsider = await browser.newContext();
-  const guestPage = await outsider.newPage();
-  await guestPage.goto(shareUrl);
-
+  const guest = await outsider.newPage();
+  await unlockShared(guest, shareUrl, personEmail);
   await expect(
-    guestPage.getByRole('heading', { name: 'A debt was shared with you' }),
+    guest.getByRole('heading', { name: 'Hi Sarah Cole' }),
   ).toBeVisible();
-  await guestPage.getByLabel('Email').fill(personEmail);
-  await guestPage.getByRole('button', { name: 'Send me a code' }).click();
-
-  // Under AUTH_E2E the code is pre-filled into the field.
-  await guestPage.getByRole('button', { name: 'View the debt' }).click();
-
-  await expect(
-    guestPage.getByRole('heading', { name: 'Hi Sarah Cole' }),
-  ).toBeVisible();
-  await expect(guestPage.getByText('You owe Debt Tester')).toBeVisible();
-  await expect(guestPage.getByText(/€120\.00 repaid of €120\.00/)).toBeVisible();
-
+  await expect(guest.getByText('You owe Debt Tester').first()).toBeVisible();
+  // USD + EUR were settled; the GBP row added afterwards is still outstanding.
+  await expect(guest.getByText(/\$100\.00 repaid of \$100\.00/)).toBeVisible();
+  await expect(guest.getByText(/£0\.00 repaid of £10\.00/)).toBeVisible();
   await outsider.close();
 });
 
-test('debts: a gold-denominated debt tracks quantity and shows on the shared page', async ({
+test('debts: a gold-denominated row tracks quantity and shows on the shared page', async ({
   page,
   browser,
 }) => {
@@ -119,27 +177,33 @@ test('debts: a gold-denominated debt tracks quantity and shows on the shared pag
   await personModal.getByLabel('Name').fill('Nabil Fahmy');
   await personModal.getByLabel('Email').fill(personEmail);
   await personModal.getByRole('button', { name: 'Add person' }).click();
+  await expect(personModal).toBeHidden();
 
-  // Switch the denomination to Gold, 21K, 10 g.
   await modal.getByRole('button', { name: 'Gold', exact: true }).click();
   await modal.getByLabel('Gold type').selectOption('k21');
   await modal.getByLabel('Quantity (g)').fill('10');
-  await modal.getByLabel('Note (optional)').fill('Wedding gift');
-  await modal.getByRole('button', { name: 'Add debt' }).click();
-
+  await modal.getByLabel("What's it for?").fill('Wedding gift');
+  await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
+
   await page.getByRole('link', { name: /Wedding gift/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
   await expect(
     page.getByText(/0 g of 21K gold repaid of 10 g of 21K gold/),
   ).toBeVisible();
 
-  // Repay 4 g.
-  await page.getByRole('button', { name: 'Record repayment' }).click();
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: '21K gold' })
+    .getByRole('button', { name: 'Record repayment' })
+    .click();
   const repay = page.getByRole('dialog', { name: 'Record a repayment' });
-  await expect(repay.getByText(/Repay the rest · 10 g of 21K gold/)).toBeVisible();
+  await expect(
+    repay.getByText(/Repay the rest · 10 g of 21K gold/),
+  ).toBeVisible();
   await repay.getByLabel('Amount (g)').fill('4');
   await repay.getByRole('button', { name: 'Record repayment' }).click();
+  await expect(repay).toBeHidden();
   await expect(
     page.getByText(/4 g of 21K gold repaid of 10 g of 21K gold/),
   ).toBeVisible();
@@ -147,75 +211,11 @@ test('debts: a gold-denominated debt tracks quantity and shows on the shared pag
   const shareUrl = await page.getByLabel('Shared debt link').inputValue();
   const outsider = await browser.newContext();
   const guest = await outsider.newPage();
-  await guest.goto(shareUrl);
-  await guest.getByLabel('Email').fill(personEmail);
-  await guest.getByRole('button', { name: 'Send me a code' }).click();
-  await guest.getByRole('button', { name: 'View the debt' }).click();
+  await unlockShared(guest, shareUrl, personEmail);
   await expect(
     guest.getByText(/4 g of 21K gold repaid of 10 g of 21K gold/),
   ).toBeVisible();
   await outsider.close();
-});
-
-test('debts: several entries to one person in one go, grouped under a person panel', async ({
-  page,
-}) => {
-  await signUp(page);
-  const personEmail = `dana-${Date.now()}@example.com`;
-
-  await page.goto('/debts');
-  await page.getByRole('button', { name: 'New debt' }).first().click();
-  const modal = page.getByRole('dialog', { name: 'New debt' });
-  await modal.getByRole('button', { name: 'New' }).click();
-  const personModal = page.getByRole('dialog', { name: 'New person' });
-  await personModal.getByLabel('Name').fill('Dana Roy');
-  await personModal.getByLabel('Email').fill(personEmail);
-  await personModal.getByRole('button', { name: 'Add person' }).click();
-
-  // Entry 1 — €20 money, with a note.
-  await modal.getByRole('button', { name: 'They owe me' }).click();
-  await modal.getByLabel('Amount').fill('20');
-  await modal.locator('#nd-0-note').fill('lunch');
-
-  // Entry 2 — 5 g of 21K gold.
-  await modal.getByRole('button', { name: 'Add another entry' }).click();
-  await modal.getByRole('button', { name: 'Gold', exact: true }).nth(1).click();
-  await modal.getByLabel('Gold type').selectOption('k21');
-  await modal.getByLabel('Quantity (g)').fill('5');
-
-  await modal.getByRole('button', { name: 'Add 2 debts' }).click();
-
-  // Back on the list — both debts sit under one "Dana Roy" panel.
-  await expect(page).toHaveURL(/\/debts$/);
-  const panel = page.locator('section').filter({ hasText: 'Dana Roy' });
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText(/€20\.00 to you/).first()).toBeVisible();
-  await expect(panel.getByText(/5 g of 21K gold to you/)).toBeVisible();
-  await expect(panel.getByRole('listitem')).toHaveCount(2);
-
-  // The panel collapses — cards hide, the summary stays.
-  await panel.getByRole('button', { expanded: true }).click();
-  await expect(panel.getByRole('listitem')).toHaveCount(0);
-  await expect(panel.getByText(/€20\.00 to you/).first()).toBeVisible();
-  await panel.getByRole('button', { expanded: false }).click();
-  await expect(panel.getByRole('listitem')).toHaveCount(2);
-
-  // The panel's own "Add" appends a third to the same person.
-  await panel.getByRole('button', { name: 'Add' }).click();
-  const add = page.getByRole('dialog', { name: /New debt · Dana Roy/ });
-  await add.getByRole('button', { name: 'Gold', exact: true }).click();
-  await add.getByLabel('Gold type').selectOption('bar_oz');
-  await add.getByLabel('Quantity (pieces)').fill('2');
-  await add.getByRole('button', { name: 'Add debt' }).click();
-  // The modal closes on success (single line → navigates to the debt).
-  await expect(add).toBeHidden();
-
-  await page.goto('/debts');
-  const panel2 = page.locator('section').filter({ hasText: 'Dana Roy' });
-  await expect(panel2.getByRole('listitem')).toHaveCount(3);
-  await expect(
-    panel2.getByRole('link').filter({ hasText: '1 oz bar (999)' }),
-  ).toHaveCount(1);
 });
 
 test('debts: attachments on debt + repayment, visible on the shared page; people manager', async ({
@@ -233,15 +233,16 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
   await personModal.getByLabel('Name').fill('Alex Kerr');
   await personModal.getByLabel('Email').fill(personEmail);
   await personModal.getByRole('button', { name: 'Add person' }).click();
+  await expect(personModal).toBeHidden();
 
-  await modal.getByLabel('Amount').fill('80');
-  await modal.getByLabel('Note (optional)').fill('Groceries');
-  await modal.getByRole('button', { name: 'Add debt' }).click();
+  await modal.locator('#row-0-amount').fill('80');
+  await modal.getByLabel("What's it for?").fill('Groceries');
+  await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
+
   await page.getByRole('link', { name: /Groceries/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
 
-  // Attach a file to the debt itself (edit mode — hits the server now).
   await page
     .locator('#debt-detail-attachment')
     .setInputFiles({ name: 'iou.png', mimeType: 'image/png', buffer: PNG_1PX });
@@ -249,41 +250,33 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
     page.getByRole('button', { name: 'Preview iou.png' }),
   ).toBeVisible();
 
-  // Attach a file while recording a repayment.
-  await page.getByRole('button', { name: 'Record repayment' }).click();
+  await page.getByRole('button', { name: 'Record repayment' }).first().click();
   const repay = page.getByRole('dialog', { name: 'Record a repayment' });
   await repay.getByLabel(/^Amount/).fill('30');
-  await repay
-    .locator('#repayment-attachment')
-    .setInputFiles({
-      name: 'transfer.png',
-      mimeType: 'image/png',
-      buffer: PNG_1PX,
-    });
+  await repay.locator('#repayment-attachment').setInputFiles({
+    name: 'transfer.png',
+    mimeType: 'image/png',
+    buffer: PNG_1PX,
+  });
   await expect(
     repay.getByRole('button', { name: 'Preview transfer.png' }),
   ).toBeVisible();
   await repay.getByRole('button', { name: 'Record repayment' }).click();
+  await expect(repay).toBeHidden();
   await expect(page.getByText(/€30\.00 repaid of €80\.00/)).toBeVisible();
   await expect(
     page.getByRole('button', { name: /transfer\.png/ }),
   ).toBeVisible();
 
   const shareUrl = await page.getByLabel('Shared debt link').inputValue();
-
-  // The other party sees both files on the shared page.
   const outsider = await browser.newContext();
   const guest = await outsider.newPage();
-  await guest.goto(shareUrl);
-  await guest.getByLabel('Email').fill(personEmail);
-  await guest.getByRole('button', { name: 'Send me a code' }).click();
-  await guest.getByRole('button', { name: 'View the debt' }).click();
+  await unlockShared(guest, shareUrl, personEmail);
   await expect(guest.getByRole('heading', { name: 'Hi Alex Kerr' })).toBeVisible();
 
   const iouLink = guest.getByRole('link', { name: /iou\.png/ });
   await expect(iouLink).toBeVisible();
   await expect(guest.getByRole('link', { name: /transfer\.png/ })).toBeVisible();
-  // The private blob streams back for the granted browser.
   const href = await iouLink.getAttribute('href');
   const res = await guest.request.get(href ?? '');
   expect(res.status()).toBe(200);
@@ -305,51 +298,46 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
   ).toBeDisabled();
 });
 
-test('debts: optimistic add, gold icons, 50 g bar, app-currency equivalents', async ({
-  page,
-}) => {
+test('debts: optimistic add, per-person grouping, collapse', async ({ page }) => {
   await signUp(page);
-  const email = `omar-${Date.now()}@example.com`;
 
   await page.goto('/debts');
   await page.getByRole('button', { name: 'New debt' }).first().click();
+  await addPerson(page, 'New debt', 'Dana Roy');
   const modal = page.getByRole('dialog', { name: 'New debt' });
-  await modal.getByRole('button', { name: 'New' }).click();
-  const pm = page.getByRole('dialog', { name: 'New person' });
-  await pm.getByLabel('Name').fill('Omar Said');
-  await pm.getByLabel('Email').fill(email);
-  await pm.getByRole('button', { name: 'Add person' }).click();
 
-  // 100 USD, while the app currency is EUR → an `≈ €` equivalent.
   await modal.getByRole('button', { name: 'They owe me' }).click();
-  await modal.getByLabel('Amount').fill('100');
-  await modal.getByRole('button', { name: 'EUR' }).click();
-  const ccy = page.getByRole('dialog', { name: 'Choose currency' });
-  await ccy.getByPlaceholder('Search currencies…').fill('USD');
-  await ccy.getByRole('button', { name: /USD/ }).first().click();
-  await modal.locator('#nd-0-note').fill('cash loan');
+  await modal.locator('#row-0-amount').fill('20');
+  await modal.getByLabel("What's it for?").fill('lunch');
 
   const t0 = Date.now();
-  await modal.getByRole('button', { name: 'Add debt' }).click();
+  await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
-  await expect(page).toHaveURL(/\/debts$/); // stayed on the list
-  const card = page.getByRole('link', { name: /cash loan/ });
+  await expect(page).toHaveURL(/\/debts$/);
+  const card = page.getByRole('link', { name: /lunch/ });
   await expect(card).toBeVisible(); // optimistic — no reload
   expect(Date.now() - t0).toBeLessThan(10_000);
-  await expect(card.getByText(/≈\s*€/)).toBeVisible();
-  await expect(page.getByText(/≈.*owed to you/)).toBeVisible();
+  await expect(card.getByText(/€20\.00/)).toBeVisible();
 
-  // A 50 g gold bar, with an icon on the card.
-  const panel = page.locator('section').filter({ hasText: 'Omar Said' });
+  const panel = page.locator('section').filter({ hasText: 'Dana Roy' });
+  await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
+
+  // The panel's own "Add" appends a second gold debt to the same person.
   await panel.getByRole('button', { name: 'Add' }).click();
-  const add = page.getByRole('dialog', { name: /New debt · Omar Said/ });
+  const add = page.getByRole('dialog', { name: /New debt · Dana Roy/ });
   await add.getByRole('button', { name: 'Gold', exact: true }).click();
-  await add.getByLabel('Gold type').selectOption('bar_50g');
-  await add.getByLabel('Quantity (pieces)').fill('1');
-  await add.getByRole('button', { name: 'Add debt' }).click();
+  await add.getByLabel('Gold type').selectOption('bar_oz');
+  await add.getByLabel('Quantity (pieces)').fill('2');
+  await add.getByRole('button', { name: 'Create debt' }).click();
   await expect(add).toBeHidden();
 
-  const goldCard = page.getByRole('link', { name: /50 g bar/ });
-  await expect(goldCard).toBeVisible();
-  expect(await goldCard.locator('svg').count()).toBeGreaterThan(0);
+  await page.goto('/debts');
+  const panel2 = page.locator('section').filter({ hasText: 'Dana Roy' });
+  await expect(panel2.getByRole('listitem')).toHaveCount(2);
+  await expect(panel2.getByText(/1 oz bar/).first()).toBeVisible();
+
+  // Collapse — cards hide, the summary stays.
+  await panel2.getByRole('button', { expanded: true }).click();
+  await expect(panel2.getByRole('listitem')).toHaveCount(0);
+  await expect(panel2.getByText(/€20\.00 to you/)).toBeVisible();
 });

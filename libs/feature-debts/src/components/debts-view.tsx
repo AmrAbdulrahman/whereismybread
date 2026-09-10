@@ -6,26 +6,61 @@ import { useRouter } from 'next/navigation';
 import {
   debtEquivalentTotals,
   debtHeadline,
+  denomKey,
   formatDebtAmount,
   formatMoney,
   money,
   summariseDebts,
 } from '@wib/domain';
-import { Button, Progress, ResponsiveModal, cn } from '@wib/ui';
+import { Button, ResponsiveModal, cn } from '@wib/ui';
 import { ChevronDown, Plus, Scale, Users } from '@wib/ui/icons';
-import type { DebtsData, DebtView } from '../lib/types';
+import type { DebtsData, DebtView, DenomBalanceView } from '../lib/types';
+import { DebtForm } from './debt-form';
 import { GoldMark } from './gold-mark';
-import { NewDebtsForm } from './new-debts-form';
 import { PeopleManager } from './people-manager';
 import { PersonAvatar } from './person-avatar';
 
-/** Show a `≈` equivalent only when it adds information (not for a debt already
- * in the display currency). */
+/** Flatten every debt's per-denomination balances for `summariseDebts`. */
+function outstandingRows(debts: DebtView[]) {
+  return debts.flatMap((d) =>
+    d.balances.map((b) => ({
+      direction: d.direction,
+      denom: b.denom,
+      outstandingMinor: b.outstandingMinor,
+    })),
+  );
+}
+
+/** Show a `≈` equivalent only when it adds information. */
 function showEquivalent(debt: DebtView, displayCurrency: string): boolean {
   if (debt.equivalentMinor == null) return false;
+  const only = debt.balances.length === 1 ? debt.balances[0] : null;
   return !(
-    debt.denom.kind === 'money' &&
-    debt.denom.currency.toUpperCase() === displayCurrency.toUpperCase()
+    only != null &&
+    only.denom.kind === 'money' &&
+    only.denom.currency.toUpperCase() === displayCurrency.toUpperCase()
+  );
+}
+
+function BalanceChip({ balance }: { balance: DenomBalanceView }) {
+  return (
+    <span
+      className={cn(
+        'flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]',
+        balance.settled
+          ? 'border-line text-muted'
+          : 'border-line-strong text-ink',
+      )}
+    >
+      {balance.denom.kind === 'gold' ? (
+        <GoldMark type={balance.denom.goldType} size={11} />
+      ) : null}
+      {formatDebtAmount(
+        balance.settled ? balance.owedMinor : balance.outstandingMinor,
+        balance.denom,
+      )}
+      <span className="text-muted">{balance.settled ? 'settled' : 'left'}</span>
+    </span>
   );
 }
 
@@ -36,7 +71,6 @@ function DebtCard({
   debt: DebtView;
   displayCurrency: string;
 }) {
-  const pct = Math.round(debt.progress * 100);
   const approx =
     showEquivalent(debt, displayCurrency) && debt.equivalentMinor != null
       ? `≈ ${formatMoney(money(debt.equivalentMinor, displayCurrency))}`
@@ -45,7 +79,7 @@ function DebtCard({
     <li>
       <Link
         href={`/debts/${debt.id}`}
-        className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3.5 transition-colors hover:border-line-strong sm:p-4"
+        className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-3.5 transition-colors hover:border-line-strong sm:p-4"
       >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -56,35 +90,17 @@ function DebtCard({
               {debt.description || 'No description'}
             </p>
           </div>
-          <div className="shrink-0 text-right">
-            <p className="flex items-center justify-end gap-1 text-sm font-semibold text-ink">
-              {debt.denom.kind === 'gold' ? (
-                <GoldMark type={debt.denom.goldType} size={13} />
-              ) : null}
-              {formatDebtAmount(debt.remainingMinor, debt.denom)}
-            </p>
-            <p className="text-[11px] text-muted">
-              {approx ?? (debt.settled ? 'settled' : 'left')}
-            </p>
-          </div>
+          {approx ? (
+            <p className="shrink-0 text-[11px] text-muted">{approx}</p>
+          ) : null}
         </div>
-
-        <div className="flex flex-col gap-1">
-          <Progress
-            value={pct}
-            indicatorClassName={debt.settled ? 'bg-teal' : undefined}
-          />
-          <div className="flex items-center justify-between text-[11px] text-muted">
-            <span>
-              {formatDebtAmount(debt.paidMinor, debt.denom)} of{' '}
-              {formatDebtAmount(debt.principalMinor, debt.denom)} repaid
-            </span>
-            {debt.settled ? (
-              <span className="font-semibold text-teal">Settled</span>
-            ) : (
-              <span>{pct}%</span>
-            )}
-          </div>
+        <div className="flex flex-wrap gap-1.5">
+          {debt.balances.map((b) => (
+            <BalanceChip key={denomKey(b.denom)} balance={b} />
+          ))}
+          {debt.balances.length === 0 ? (
+            <span className="text-[11px] text-muted">No amounts</span>
+          ) : null}
         </div>
       </Link>
     </li>
@@ -99,14 +115,7 @@ function PersonSummary({
   debts: DebtView[];
   displayCurrency: string;
 }) {
-  const totals = summariseDebts(
-    debts.map((d) => ({
-      direction: d.direction,
-      denom: d.denom,
-      principalMinor: d.principalMinor,
-      paidMinor: d.paidMinor,
-    })),
-  );
+  const totals = summariseDebts(outstandingRows(debts));
   const eq = debtEquivalentTotals(
     debts.map((d) => ({
       direction: d.direction,
@@ -132,8 +141,7 @@ function PersonSummary({
       ))}
       {eq.priced > 0 && (totals.length > 1 || eq.priced > 1) ? (
         <span className="text-muted">
-          net ≈{' '}
-          {formatMoney(money(Math.abs(eq.netMinor), displayCurrency))}
+          net ≈ {formatMoney(money(Math.abs(eq.netMinor), displayCurrency))}
           {eq.netMinor >= 0 ? ' to you' : ' you owe'}
         </span>
       ) : null}
@@ -143,7 +151,7 @@ function PersonSummary({
 
 export function DebtsView({ data }: { data: DebtsData }) {
   const router = useRouter();
-  const [newDebts, setNewDebts] = useState<
+  const [newDebt, setNewDebt] = useState<
     { person?: DebtsData['people'][number] } | null
   >(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
@@ -154,9 +162,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
   // Drop optimistic cards once the refreshed server data includes them.
   useEffect(() => {
     setPending((prev) => {
-      const next = prev.filter(
-        (p) => !data.debts.some((d) => d.id === p.id),
-      );
+      const next = prev.filter((p) => !data.debts.some((d) => d.id === p.id));
       return next.length === prev.length ? prev : next;
     });
   }, [data.debts]);
@@ -174,14 +180,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
     ...data.debts,
   ];
 
-  const totals = summariseDebts(
-    merged.map((d) => ({
-      direction: d.direction,
-      denom: d.denom,
-      principalMinor: d.principalMinor,
-      paidMinor: d.paidMinor,
-    })),
-  );
+  const totals = summariseDebts(outstandingRows(merged));
 
   const open = merged.filter((d) => !d.settled);
   const settled = merged.filter((d) => d.settled);
@@ -211,9 +210,9 @@ export function DebtsView({ data }: { data: DebtsData }) {
     group.debts.push(d);
   }
 
-  const finishNew = (created: DebtView[]) => {
-    setNewDebts(null);
-    if (created.length > 0) setPending((prev) => [...prev, ...created]);
+  const finishNew = (result: { debtId: string; debt?: DebtView }) => {
+    setNewDebt(null);
+    if (result.debt) setPending((prev) => [...prev, result.debt as DebtView]);
     startTransition(() => router.refresh());
   };
 
@@ -239,7 +238,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
           <Button
             size="sm"
             className="sm:h-10 sm:px-4"
-            onClick={() => setNewDebts({})}
+            onClick={() => setNewDebt({})}
           >
             <Plus size={16} strokeWidth={3} />
             New debt
@@ -307,7 +306,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
             Add a debt — who it&apos;s with and how much — and they&apos;ll get a
             private link to follow the repayments.
           </p>
-          <Button size="lg" onClick={() => setNewDebts({})}>
+          <Button size="lg" onClick={() => setNewDebt({})}>
             <Plus size={18} strokeWidth={3} />
             New debt
           </Button>
@@ -354,7 +353,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
                     variant="ghost"
                     size="sm"
                     className="shrink-0"
-                    onClick={() => setNewDebts({ person: g.person })}
+                    onClick={() => setNewDebt({ person: g.person })}
                   >
                     <Plus size={14} strokeWidth={2.5} />
                     Add
@@ -394,30 +393,26 @@ export function DebtsView({ data }: { data: DebtsData }) {
       )}
 
       <ResponsiveModal
-        open={newDebts != null}
-        onOpenChange={(o) => !o && setNewDebts(null)}
+        open={newDebt != null}
+        onOpenChange={(o) => !o && setNewDebt(null)}
         title={
-          newDebts?.person ? `New debt · ${newDebts.person.name}` : 'New debt'
+          newDebt?.person ? `New debt · ${newDebt.person.name}` : 'New debt'
         }
       >
-        {newDebts ? (
-          <NewDebtsForm
+        {newDebt ? (
+          <DebtForm
             people={data.people}
-            person={newDebts.person}
+            person={newDebt.person}
             today={data.today}
             defaultCurrency={data.defaultCurrency}
             usedCurrencies={data.usedCurrencies}
             onDone={finishNew}
-            onCancel={() => setNewDebts(null)}
+            onCancel={() => setNewDebt(null)}
           />
         ) : null}
       </ResponsiveModal>
 
-      <ResponsiveModal
-        open={peopleOpen}
-        onOpenChange={setPeopleOpen}
-        title="People"
-      >
+      <ResponsiveModal open={peopleOpen} onOpenChange={setPeopleOpen} title="People">
         {peopleOpen ? (
           <PeopleManager
             initialPeople={data.people}

@@ -15,8 +15,17 @@ export interface PersonView {
   debtCount: number;
 }
 
+/** One principal row of a debt basket. */
+export interface DebtRowView {
+  id: string;
+  denom: DebtDenomination;
+  amountMinor: number;
+}
+
+/** A free-form repayment. */
 export interface DebtEntryView {
   id: string;
+  denom: DebtDenomination;
   amountMinor: number;
   note: string | null;
   /** `YYYY-MM-DD`. */
@@ -25,27 +34,34 @@ export interface DebtEntryView {
   attachments: StoredAttachment[];
 }
 
+/** The running balance for one denomination of a debt. */
+export interface DenomBalanceView {
+  denom: DebtDenomination;
+  owedMinor: number;
+  repaidMinor: number;
+  outstandingMinor: number;
+  progress: number;
+  settled: boolean;
+  /** Outstanding converted to the display currency — `null` if it can't be. */
+  equivalentMinor: number | null;
+}
+
 export interface DebtView {
   id: string;
   direction: DebtDirection;
-  denom: DebtDenomination;
-  principalMinor: number;
-  paidMinor: number;
-  remainingMinor: number;
-  progress: number;
-  settled: boolean;
   description: string;
   notes: string | null;
   /** `YYYY-MM-DD` — when the debt was incurred. */
   incurredOn: string;
   createdAt: string;
+  settled: boolean;
   person: PersonView;
+  rows: DebtRowView[];
+  balances: DenomBalanceView[];
   entryCount: number;
-  /** Outstanding, converted to the app's display currency — `null` if it can't
-   * be converted (no FX rate, or a custom gold type). */
+  /** Sum of every balance's equivalent (display currency); `null` if any
+   * outstanding balance couldn't be converted. */
   equivalentMinor: number | null;
-  /** Same, for the original principal. */
-  principalEquivalentMinor: number | null;
 }
 
 export interface DebtDetail extends DebtView {
@@ -76,16 +92,13 @@ export interface SharedView {
   debts: Array<{
     id: string;
     direction: DebtDirection;
-    denom: DebtDenomination;
-    principalMinor: number;
-    paidMinor: number;
-    remainingMinor: number;
-    progress: number;
-    settled: boolean;
     description: string;
     incurredOn: string;
-    equivalentMinor: number | null;
-    attachments: StoredAttachment[];
+    settled: boolean;
+    rows: DebtRowView[];
+    balances: DenomBalanceView[];
     entries: DebtEntryView[];
+    attachments: StoredAttachment[];
+    equivalentMinor: number | null;
   }>;
 }

@@ -1,8 +1,10 @@
 import {
   debtEquivalentTotals,
   debtHeadlineForOther,
+  denomKey,
   formatDebtAmount,
   formatMoney,
+  goldTypeLabel,
   money,
 } from '@wib/domain';
 import {
@@ -66,12 +68,10 @@ export function SharedDebtView({
   const eq = debtEquivalentTotals(
     open.map((d) => ({
       direction: d.direction,
-      // From the other party's view the direction is flipped.
       equivalentMinor: d.equivalentMinor,
     })),
   );
-  const fmt = (m: number) =>
-    formatMoney(money(m, view.displayCurrency));
+  const fmt = (m: number) => formatMoney(money(m, view.displayCurrency));
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,8 +87,8 @@ export function SharedDebtView({
 
       {eq.priced > 0 ? (
         <p className="rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink-soft">
-          <span className="text-warn">≈ {fmt(eq.theyOweMinor)} you owe</span>{' '}
-          · <span className="text-teal">≈ {fmt(eq.iOweMinor)} owed to you</span>
+          <span className="text-warn">≈ {fmt(eq.theyOweMinor)} you owe</span> ·{' '}
+          <span className="text-teal">≈ {fmt(eq.iOweMinor)} owed to you</span>
           {eq.unpriced > 0 ? (
             <span className="text-muted"> · {eq.unpriced} not priced</span>
           ) : null}
@@ -112,71 +112,78 @@ export function SharedDebtView({
                 {label as string}
               </h2>
             ) : null}
-            {(list as SharedView['debts']).map((d) => {
-              const pct = Math.round(d.progress * 100);
-              return (
-                <article
-                  key={d.id}
-                  className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-sm font-semibold text-ink">
-                      {debtHeadlineForOther(d.direction, view.ownerName)}
-                    </p>
-                    <p className="flex shrink-0 items-center gap-1 text-sm font-semibold text-ink">
-                      {d.denom.kind === 'gold' ? (
-                        <GoldMark type={d.denom.goldType} size={12} />
-                      ) : null}
-                      {formatDebtAmount(d.remainingMinor, d.denom)}
-                      <span className="text-[11px] font-normal text-muted">
-                        {d.settled ? 'settled' : 'left'}
-                      </span>
-                    </p>
-                  </div>
-                  <p className="-mt-1 text-xs text-ink-soft">
+            {(list as SharedView['debts']).map((d) => (
+              <article
+                key={d.id}
+                className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink">
+                    {debtHeadlineForOther(d.direction, view.ownerName)}
+                  </p>
+                  <p className="shrink-0 text-[11px] text-muted">
                     {d.description ? `${d.description} · ` : ''}
-                    incurred {fmtDate(d.incurredOn)}
-                    {d.equivalentMinor != null &&
-                    !(
-                      d.denom.kind === 'money' &&
-                      d.denom.currency.toUpperCase() ===
-                        view.displayCurrency.toUpperCase()
-                    )
-                      ? ` · ≈ ${fmt(d.equivalentMinor)}`
-                      : ''}
+                    {fmtDate(d.incurredOn)}
                   </p>
-                  <Progress
-                    value={pct}
-                    indicatorClassName={d.settled ? 'bg-teal' : undefined}
-                  />
-                  <p className="text-[11px] text-muted">
-                    {formatDebtAmount(d.paidMinor, d.denom)} repaid of{' '}
-                    {formatDebtAmount(d.principalMinor, d.denom)} · {pct}%
-                  </p>
+                </div>
 
-                  <AttachmentChips files={d.attachments} />
+                {d.balances.map((b) => {
+                  const pct = Math.round(b.progress * 100);
+                  return (
+                    <div key={denomKey(b.denom)} className="flex flex-col gap-1">
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="flex items-center gap-1.5 font-semibold text-ink">
+                          {b.denom.kind === 'gold' ? (
+                            <GoldMark type={b.denom.goldType} size={12} />
+                          ) : null}
+                          {formatDebtAmount(b.outstandingMinor, b.denom)}
+                          <span className="text-[11px] font-normal text-muted">
+                            {b.settled ? 'settled' : 'left'}
+                          </span>
+                        </span>
+                        <span className="text-[11px] text-muted">
+                          {b.denom.kind === 'money'
+                            ? b.denom.currency
+                            : goldTypeLabel(b.denom.goldType, b.denom.goldLabel)}
+                        </span>
+                      </div>
+                      <Progress
+                        value={pct}
+                        indicatorClassName={b.settled ? 'bg-teal' : undefined}
+                      />
+                      <p className="text-[11px] text-muted">
+                        {formatDebtAmount(b.repaidMinor, b.denom)} repaid of{' '}
+                        {formatDebtAmount(b.owedMinor, b.denom)} · {pct}%
+                      </p>
+                    </div>
+                  );
+                })}
 
-                  {d.entries.length > 0 ? (
-                    <ul className="mt-1 flex flex-col gap-1.5 border-t border-line/60 pt-2">
-                      {d.entries.map((e) => (
-                        <li key={e.id} className="flex flex-col gap-1 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted">
-                              {fmtDate(e.occurredOn)}
-                              {e.note ? ` · ${e.note}` : ''}
-                            </span>
-                            <span className="font-medium text-ink">
-                              {formatDebtAmount(e.amountMinor, d.denom)}
-                            </span>
-                          </div>
-                          <AttachmentChips files={e.attachments} />
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </article>
-              );
-            })}
+                <AttachmentChips files={d.attachments} />
+
+                {d.entries.length > 0 ? (
+                  <ul className="mt-1 flex flex-col gap-1.5 border-t border-line/60 pt-2">
+                    {d.entries.map((e) => (
+                      <li key={e.id} className="flex flex-col gap-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted">
+                            {fmtDate(e.occurredOn)}
+                            {e.note ? ` · ${e.note}` : ''}
+                          </span>
+                          <span className="flex items-center gap-1 font-medium text-ink">
+                            {e.denom.kind === 'gold' ? (
+                              <GoldMark type={e.denom.goldType} size={11} />
+                            ) : null}
+                            {formatDebtAmount(e.amountMinor, e.denom)}
+                          </span>
+                        </div>
+                        <AttachmentChips files={e.attachments} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ))}
           </section>
         ),
       )}

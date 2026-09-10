@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
+  denomKey,
   formatDebtAmount,
   goldQuantityString,
   type DebtDenomination,
@@ -23,33 +24,64 @@ import {
   uploadDebtAttachmentAction,
 } from '../lib/actions';
 import { repaymentFormSchema, type RepaymentFormValues } from '../lib/schema';
+import type { DenomBalanceView } from '../lib/types';
+import { DenominationFields, type DenomValue } from './denomination-fields';
+import { GoldMark } from './gold-mark';
+
+function denomToValue(d: DebtDenomination, fallbackCurrency: string): DenomValue {
+  return {
+    amount: '',
+    denomKind: d.kind,
+    currency: d.kind === 'money' ? d.currency : fallbackCurrency,
+    goldType: d.kind === 'gold' ? d.goldType : 'k21',
+    goldLabel: d.kind === 'gold' ? d.goldLabel : null,
+    goldUnit: d.kind === 'gold' ? d.unit : 'g',
+  };
+}
 
 export function RepaymentForm({
   debtId,
-  denom,
-  remainingMinor,
+  balances,
+  presetDenomKey,
   today,
+  defaultCurrency,
+  usedCurrencies = [],
   onDone,
   onCancel,
 }: {
   debtId: string;
-  denom: DebtDenomination;
-  remainingMinor: number;
+  balances: DenomBalanceView[];
+  /** Lock the form to this balance's denomination (opened from a balance row). */
+  presetDenomKey?: string;
   today: string;
+  defaultCurrency: string;
+  usedCurrencies?: string[];
   onDone: () => void;
   onCancel: () => void;
 }) {
   const [formError, setFormError] = useState<string>();
 
-  const isGold = denom.kind === 'gold';
+  const preset =
+    (presetDenomKey &&
+      balances.find((b) => denomKey(b.denom) === presetDenomKey)) ||
+    null;
+  const baseDenom: DebtDenomination =
+    preset?.denom ??
+    balances[0]?.denom ??
+    ({ kind: 'money', currency: defaultCurrency } as const);
+  const init = denomToValue(baseDenom, defaultCurrency);
+
+  const isGold = baseDenom.kind === 'gold';
   const unitLabel = isGold
-    ? denom.unit === 'piece'
+    ? baseDenom.unit === 'piece'
       ? 'pieces'
       : 'g'
-    : denom.currency;
-  const restValue = isGold
-    ? goldQuantityString(remainingMinor)
-    : (remainingMinor / 100).toFixed(2);
+    : baseDenom.currency;
+  const restValue = preset
+    ? isGold
+      ? goldQuantityString(preset.outstandingMinor)
+      : (preset.outstandingMinor / 100).toFixed(2)
+    : null;
 
   const {
     register,
@@ -61,10 +93,36 @@ export function RepaymentForm({
   } = useForm<RepaymentFormValues>({
     resolver: zodResolver(repaymentFormSchema),
     mode: 'onTouched',
-    defaultValues: { amount: '', occurredOn: today, note: null, attachments: [] },
+    defaultValues: {
+      amount: '',
+      denomKind: init.denomKind,
+      currency: init.currency,
+      goldType: init.goldType,
+      goldLabel: init.goldLabel,
+      goldUnit: init.goldUnit,
+      occurredOn: today,
+      note: null,
+      attachments: [],
+    },
   });
 
   const drafts = watch('attachments') ?? [];
+
+  const denomValue: DenomValue = {
+    amount: watch('amount') ?? '',
+    denomKind: watch('denomKind') ?? init.denomKind,
+    currency: watch('currency') ?? init.currency,
+    goldType: watch('goldType') ?? init.goldType,
+    goldLabel: (watch('goldLabel') as string | null) ?? null,
+    goldUnit: watch('goldUnit') ?? init.goldUnit,
+  };
+  const onDenomChange = (patch: Partial<DenomValue>) => {
+    for (const [k, v] of Object.entries(patch)) {
+      setValue(k as keyof RepaymentFormValues, v as never, {
+        shouldDirty: true,
+      });
+    }
+  };
 
   const submit = handleSubmit(async (values) => {
     setFormError(undefined);
@@ -88,32 +146,51 @@ export function RepaymentForm({
         </p>
       ) : null}
 
-      <Field>
-        <Label htmlFor="repayment-amount">Amount ({unitLabel})</Label>
-        <Input
-          id="repayment-amount"
-          inputMode="decimal"
-          placeholder={isGold ? '0' : '0.00'}
-          {...register('amount')}
+      {preset ? (
+        <Field>
+          <Label htmlFor="repayment-amount">Amount ({unitLabel})</Label>
+          <div className="flex items-center gap-2">
+            {baseDenom.kind === 'gold' ? (
+              <GoldMark type={baseDenom.goldType} size={16} />
+            ) : null}
+            <Input
+              id="repayment-amount"
+              className="flex-1"
+              inputMode="decimal"
+              placeholder={isGold ? '0' : '0.00'}
+              aria-invalid={errors.amount ? true : undefined}
+              {...register('amount')}
+            />
+          </div>
+          {restValue && preset.outstandingMinor > 0 ? (
+            <button
+              type="button"
+              onClick={() =>
+                setValue('amount', restValue, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
+              className="self-start text-[11px] font-medium text-accent underline-offset-2 hover:underline"
+            >
+              Repay the rest ·{' '}
+              {formatDebtAmount(preset.outstandingMinor, preset.denom)}
+            </button>
+          ) : null}
+          {errors.amount?.message ? (
+            <p className="text-xs text-danger">{errors.amount.message}</p>
+          ) : null}
+        </Field>
+      ) : (
+        <DenominationFields
+          idPrefix="repayment"
+          value={denomValue}
+          onChange={onDenomChange}
+          usedCurrencies={usedCurrencies}
+          amountError={errors.amount?.message}
+          goldLabelError={errors.goldLabel?.message}
         />
-        {remainingMinor > 0 ? (
-          <button
-            type="button"
-            onClick={() =>
-              setValue('amount', restValue, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            className="self-start text-[11px] font-medium text-accent underline-offset-2 hover:underline"
-          >
-            Repay the rest · {formatDebtAmount(remainingMinor, denom)}
-          </button>
-        ) : null}
-        {errors.amount?.message ? (
-          <p className="text-xs text-danger">{errors.amount.message}</p>
-        ) : null}
-      </Field>
+      )}
 
       <Field>
         <Label htmlFor="repayment-date">Date</Label>
@@ -143,9 +220,7 @@ export function RepaymentForm({
           onDraftsChange={(next) =>
             setValue('attachments', next, { shouldDirty: true })
           }
-          upload={(_o, form) =>
-            uploadDebtAttachmentAction(null, null, form)
-          }
+          upload={(_o, form) => uploadDebtAttachmentAction(null, null, form)}
           remove={removeDebtAttachmentAction}
           discard={discardDebtBlobsAction}
         />

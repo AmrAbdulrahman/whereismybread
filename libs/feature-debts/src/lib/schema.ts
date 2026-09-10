@@ -3,6 +3,8 @@ import { z } from 'zod';
 const blankToNull = (v: unknown): unknown =>
   typeof v === 'string' && v.trim() === '' ? null : v;
 
+const trimmed = (v: unknown): unknown => (typeof v === 'string' ? v.trim() : v);
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A file already uploaded to Blob, staged on the form until its row is saved. */
@@ -49,8 +51,8 @@ export const personFormSchema = z.object({
 export type PersonFormValues = z.input<typeof personFormSchema>;
 
 /**
- * The denomination shape shared by the debt-edit form and every line of the
- * multi-line create form. `amount` is money minor units or a gold quantity,
+ * One denomination + quantity — shared by every row of a debt basket and by
+ * each free-form repayment. `amount` is money minor units or a gold quantity,
  * parsed per `denomKind` in the action.
  */
 const denomLineShape = {
@@ -77,58 +79,52 @@ const customGoldNeedsLabel = (v: {
   (v.goldLabel != null && v.goldLabel.length > 0);
 const customGoldMsg = { path: ['goldLabel'], message: 'Name the gold type' };
 
-/** A debt: who, which way, how much (money or gold), what for. Edit path. */
-export const debtFormSchema = z
+/** One principal row of a debt basket. Also used by the add/edit-row form. */
+export const debtLineSchema = z
+  .object({ ...denomLineShape })
+  .refine(customGoldNeedsLabel, customGoldMsg);
+export type DebtLineValue = z.input<typeof debtLineSchema>;
+
+/** Create a debt basket: who, which way, when, what for, and one-or-more rows. */
+export const debtFormSchema = z.object({
+  personId: z.string().uuid('Pick a person'),
+  direction: z.enum(['they_owe', 'i_owe']).default('i_owe'),
+  incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
+  description: z.preprocess(trimmed, z.string().max(120).default('')),
+  notes: z.preprocess(
+    blankToNull,
+    z.string().trim().max(1000).nullable().default(null),
+  ),
+  attachments: z.array(attachmentDraftSchema).max(20).default([]),
+  lines: z.array(debtLineSchema).min(1, 'Add at least one row').max(20),
+});
+export type DebtFormValues = z.input<typeof debtFormSchema>;
+
+/** Edit an existing debt's metadata only — rows are managed on the detail page. */
+export const debtMetaSchema = z.object({
+  personId: z.string().uuid('Pick a person'),
+  direction: z.enum(['they_owe', 'i_owe']).default('i_owe'),
+  incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
+  description: z.preprocess(trimmed, z.string().max(120).default('')),
+  notes: z.preprocess(
+    blankToNull,
+    z.string().trim().max(1000).nullable().default(null),
+  ),
+});
+export type DebtMetaValues = z.input<typeof debtMetaSchema>;
+
+/** One repayment against a debt — carries its own denomination. */
+export const repaymentFormSchema = z
   .object({
-    personId: z.string().uuid('Pick a person'),
-    direction: z.enum(['they_owe', 'i_owe']).default('i_owe'),
     ...denomLineShape,
-    incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
-    description: z.preprocess(
-      (v) => (typeof v === 'string' ? v.trim() : v),
-      z.string().max(120).default(''),
-    ),
-    notes: z.preprocess(
+    occurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
+    note: z.preprocess(
       blankToNull,
-      z.string().trim().max(1000).nullable().default(null),
+      z.string().trim().max(200).nullable().default(null),
     ),
     attachments: z.array(attachmentDraftSchema).max(20).default([]),
   })
   .refine(customGoldNeedsLabel, customGoldMsg);
-export type DebtFormValues = z.input<typeof debtFormSchema>;
-
-/** One line of the multi-line "new debts" form — its own note + date. */
-export const debtLineSchema = z
-  .object({
-    ...denomLineShape,
-    /** → the created debt's `description`. */
-    note: z.preprocess(
-      (v) => (typeof v === 'string' ? v.trim() : v),
-      z.string().max(120).default(''),
-    ),
-    occurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
-  })
-  .refine(customGoldNeedsLabel, customGoldMsg);
-export type DebtLineValue = z.input<typeof debtLineSchema>;
-
-/** Create several debts with one person in one go. */
-export const newDebtsSchema = z.object({
-  personId: z.string().uuid('Pick a person'),
-  direction: z.enum(['they_owe', 'i_owe']).default('they_owe'),
-  lines: z.array(debtLineSchema).min(1, 'Add at least one').max(20),
-});
-export type NewDebtsValues = z.input<typeof newDebtsSchema>;
-
-/** One repayment against a debt (currency is the debt's, not chosen here). */
-export const repaymentFormSchema = z.object({
-  amount,
-  occurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
-  note: z.preprocess(
-    blankToNull,
-    z.string().trim().max(200).nullable().default(null),
-  ),
-  attachments: z.array(attachmentDraftSchema).max(20).default([]),
-});
 export type RepaymentFormValues = z.input<typeof repaymentFormSchema>;
 
 // --- external OTP flow ---

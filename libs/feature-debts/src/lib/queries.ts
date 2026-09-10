@@ -2,19 +2,21 @@ import 'server-only';
 import { requireUser } from '@wib/auth/server';
 import {
   findUserById,
-  getDebtWithEntries,
+  getDebtWithDetail,
   getGoldSpotUsdPerOz,
   getRates,
   getSharedPersonDebts,
   listDebtPeople,
-  listDebtsWithProgress,
-  type Debt,
+  listDebtsWithLines,
   type DebtAttachment,
   type DebtEntry,
+  type DebtLine,
   type DebtPerson,
+  type DebtWithLines,
 } from '@wib/db';
 import {
-  debtProgress,
+  debtIsSettled,
+  denomBalances,
   goldUnitFor,
   todayIn,
   type DebtDenomination,
@@ -29,6 +31,7 @@ import type {
   DebtEntryView,
   DebtsData,
   DebtView,
+  DenomBalanceView,
   PersonView,
   SharedView,
 } from './types';
@@ -57,17 +60,26 @@ function att(a: DebtAttachment): StoredAttachment {
   };
 }
 
-export function denomOf(d: Debt): DebtDenomination {
-  if (d.denomKind === 'gold') {
-    const goldType = d.goldType ?? 'k21';
+interface DenomCols {
+  denomKind: string;
+  currency: string;
+  goldType: string | null;
+  goldLabel: string | null;
+  goldUnit: string | null;
+}
+
+/** Resolve the denomination stored on a `debt_lines` / `debt_entries` row. */
+export function denomOf(r: DenomCols): DebtDenomination {
+  if (r.denomKind === 'gold') {
+    const goldType = r.goldType ?? 'k21';
     return {
       kind: 'gold',
       goldType,
-      goldLabel: d.goldLabel,
-      unit: goldUnitFor(goldType, d.goldUnit),
+      goldLabel: r.goldLabel,
+      unit: goldUnitFor(goldType, r.goldUnit),
     };
   }
-  return { kind: 'money', currency: d.currency };
+  return { kind: 'money', currency: r.currency };
 }
 
 export function personView(p: DebtPerson, debtCount = 0): PersonView {
@@ -86,6 +98,7 @@ function entryView(
 ): DebtEntryView {
   return {
     id: e.id,
+    denom: denomOf(e),
     amountMinor: e.amountMinor,
     note: e.note,
     occurredOn: e.occurredOn,
@@ -94,43 +107,63 @@ function entryView(
   };
 }
 
+/** The core view: principal rows + per-denomination running balances + pricing. */
 export function buildDebtView(
-  d: Debt,
-  paidMinorRaw: number,
-  entryCount: number,
+  debt: {
+    id: string;
+    direction: string;
+    description: string;
+    notes: string | null;
+    incurredOn: string;
+    createdAt: unknown;
+    settledAt: unknown;
+  },
+  lines: DebtLine[],
+  entries: DebtEntry[],
   person: PersonView,
   px: PricingCtx,
 ): DebtView {
-  const p = debtProgress({
-    principalMinor: d.principalMinor,
-    paidMinor: paidMinorRaw,
-  });
-  const denom = denomOf(d);
-  const eq = (minor: number) =>
-    debtEquivalentMinor(
-      denom,
-      minor,
+  const rows = lines.map((l) => ({
+    id: l.id,
+    denom: denomOf(l),
+    amountMinor: l.amountMinor,
+  }));
+  const balances0 = denomBalances(
+    rows.map((r) => ({ denom: r.denom, amountMinor: r.amountMinor })),
+    entries.map((e) => ({ denom: denomOf(e), amountMinor: e.amountMinor })),
+  );
+  let anyUnpriced = false;
+  const balances: DenomBalanceView[] = balances0.map((b) => {
+    const equivalentMinor = debtEquivalentMinor(
+      b.denom,
+      b.outstandingMinor,
       px.rates,
       px.usdPerOz,
       px.displayCurrency,
     );
+    if (b.outstandingMinor > 0 && equivalentMinor == null) anyUnpriced = true;
+    return { ...b, equivalentMinor };
+  });
+  const equivalentMinor = anyUnpriced
+    ? null
+    : balances.reduce((s, b) => s + (b.equivalentMinor ?? 0), 0);
+
   return {
-    id: d.id,
-    direction: d.direction as DebtDirection,
-    denom,
-    principalMinor: d.principalMinor,
-    paidMinor: p.paidMinor,
-    remainingMinor: p.remainingMinor,
-    progress: p.progress,
-    settled: d.settledAt != null || p.settled,
-    description: d.description,
-    notes: d.notes,
-    incurredOn: d.incurredOn,
-    createdAt: String(d.createdAt),
+    id: debt.id,
+    direction: debt.direction as DebtDirection,
+    description: debt.description,
+    notes: debt.notes,
+    incurredOn: debt.incurredOn,
+    createdAt: String(debt.createdAt),
+    settled: debtIsSettled(
+      balances,
+      debt.settledAt as string | Date | null | undefined,
+    ),
     person,
-    entryCount,
-    equivalentMinor: eq(p.remainingMinor),
-    principalEquivalentMinor: eq(d.principalMinor),
+    rows,
+    balances,
+    entryCount: entries.length,
+    equivalentMinor,
   };
 }
 
@@ -138,10 +171,11 @@ export function buildDebtView(
 export async function getDebtsData(): Promise<DebtsData> {
   const user = await requireUser();
   const [rows, people] = await Promise.all([
-    listDebtsWithProgress(user.id),
+    listDebtsWithLines(user.id),
     listDebtPeople(user.id),
   ]);
   const px = await loadPricing(user.displayCurrency);
+
   const countByPerson = new Map<string, number>();
   for (const r of rows) {
     countByPerson.set(r.personId, (countByPerson.get(r.personId) ?? 0) + 1);
@@ -150,26 +184,23 @@ export async function getDebtsData(): Promise<DebtsData> {
     personView(p, countByPerson.get(p.id) ?? 0),
   );
   const byId = new Map(peopleViews.map((p) => [p.id, p]));
+
   const debts = rows
-    .map((r) => {
+    .map((r: DebtWithLines) => {
       const person = byId.get(r.personId);
-      return person
-        ? buildDebtView(r, r.paidMinor, r.entryCount, person, px)
-        : null;
+      return person ? buildDebtView(r, r.lines, r.entries, person, px) : null;
     })
     .filter((d): d is DebtView => d != null);
+
+  const usedCurrencies = new Set<string>([user.defaultCurrency]);
+  for (const d of debts)
+    for (const b of d.balances)
+      if (b.denom.kind === 'money') usedCurrencies.add(b.denom.currency);
 
   return {
     debts,
     people: peopleViews,
-    usedCurrencies: [
-      ...new Set([
-        ...debts
-          .map((d) => (d.denom.kind === 'money' ? d.denom.currency : null))
-          .filter((c): c is string => c != null),
-        user.defaultCurrency,
-      ]),
-    ],
+    usedCurrencies: [...usedCurrencies],
     defaultCurrency: user.defaultCurrency,
     displayCurrency: user.displayCurrency,
     today: todayIn(user.timezone),
@@ -182,21 +213,21 @@ export async function getDebtPeople(): Promise<PersonView[]> {
   const user = await requireUser();
   const [people, rows] = await Promise.all([
     listDebtPeople(user.id),
-    listDebtsWithProgress(user.id),
+    listDebtsWithLines(user.id),
   ]);
   const count = new Map<string, number>();
   for (const r of rows) count.set(r.personId, (count.get(r.personId) ?? 0) + 1);
   return people.map((p) => personView(p, count.get(p.id) ?? 0));
 }
 
-/** One debt with its full repayment timeline, or `null`. */
+/** One debt with its rows + repayment timeline, or `null`. */
 export async function getDebt(id: string): Promise<DebtDetail | null> {
   const user = await requireUser();
-  const row = await getDebtWithEntries(user.id, id);
+  const row = await getDebtWithDetail(user.id, id);
   if (!row) return null;
   const px = await loadPricing(user.displayCurrency);
   return {
-    ...buildDebtView(row, row.paidMinor, row.entryCount, personView(row.person), px),
+    ...buildDebtView(row, row.lines, row.entries, personView(row.person), px),
     entries: row.entries.map(entryView),
     attachments: row.attachments.map(att),
   };
@@ -213,34 +244,24 @@ export async function getSharedView(shareId: string): Promise<SharedView | null>
   const ownerName = owner?.name?.trim() || 'Someone';
   const displayCurrency = owner?.displayCurrency ?? 'EUR';
   const px = await loadPricing(displayCurrency);
+  const stub = personView(bundle.person);
   return {
     personName: bundle.person.name,
     ownerName,
     displayCurrency,
     debts: bundle.debts.map((d) => {
-      const paidMinor = d.entries.reduce((s, e) => s + e.amountMinor, 0);
-      const p = debtProgress({ principalMinor: d.principalMinor, paidMinor });
-      const denom = denomOf(d);
+      const v = buildDebtView(d, d.lines, d.entries, stub, px);
       return {
-        id: d.id,
-        direction: d.direction as DebtDirection,
-        denom,
-        principalMinor: d.principalMinor,
-        paidMinor: p.paidMinor,
-        remainingMinor: p.remainingMinor,
-        progress: p.progress,
-        settled: d.settledAt != null || p.settled,
-        description: d.description,
-        incurredOn: d.incurredOn,
-        equivalentMinor: debtEquivalentMinor(
-          denom,
-          p.remainingMinor,
-          px.rates,
-          px.usdPerOz,
-          displayCurrency,
-        ),
-        attachments: d.attachments.map(att),
+        id: v.id,
+        direction: v.direction,
+        description: v.description,
+        incurredOn: v.incurredOn,
+        settled: v.settled,
+        rows: v.rows,
+        balances: v.balances,
         entries: d.entries.map(entryView),
+        attachments: d.attachments.map(att),
+        equivalentMinor: v.equivalentMinor,
       };
     }),
   };

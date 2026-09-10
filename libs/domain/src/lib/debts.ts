@@ -1,10 +1,14 @@
 /**
  * Debt tracking — pure helpers shared by the DB layer, the owner UI and the
- * external (OTP-verified) shared page. A debt has a fixed principal in one
- * *denomination* — a fiat currency, or a gold type (see `./gold`). Repayments
- * ("entries") are in that same denomination and chip away at it. Amounts are
- * always integers: minor currency units for money, thousandths of a gram /
- * piece for gold — so the progress math below is denomination-agnostic.
+ * external (OTP-verified) shared page.
+ *
+ * A debt is a basket: one date + one description + several **rows**, each row a
+ * quantity in one *denomination* (a fiat currency, or a gold type — see
+ * `./gold`). Repayments ("entries") are free-form: each carries its own
+ * denomination and is not tied to a row. The debt's state is a **running
+ * balance per denomination**: `sum(rows of that denom) − sum(repayments of that
+ * denom)`. Amounts are always integers: minor currency units for money,
+ * thousandths of a gram / piece for gold.
  */
 
 import { formatGold, type GoldUnit } from './gold';
@@ -83,12 +87,76 @@ export function debtHeadlineForOther(
     : `${ownerName} owes you`;
 }
 
-export interface DebtLike {
-  direction: DebtDirection;
+/** One principal row of a debt basket, or one free-form repayment. */
+export interface DenomAmount {
   denom: DebtDenomination;
-  principalMinor: number;
-  paidMinor: number;
-  settledAt?: string | Date | null;
+  amountMinor: number;
+}
+
+export interface DenomBalance {
+  denom: DebtDenomination;
+  /** Sum of the principal rows in this denomination. */
+  owedMinor: number;
+  /** Sum of the repayments in this denomination. */
+  repaidMinor: number;
+  /** `owed − repaid`, never below zero. */
+  outstandingMinor: number;
+  /** `min(repaid, owed) / owed` in `[0, 1]`. */
+  progress: number;
+  /** Nothing left owed in this denomination. */
+  settled: boolean;
+}
+
+/** Sort key: money denominations first (by currency), then gold (by key). */
+function denomSortKey(d: DebtDenomination): string {
+  return d.kind === 'money' ? `0:${d.currency.toUpperCase()}` : `1:${denomKey(d)}`;
+}
+
+/**
+ * The running balance per denomination for one debt: its principal rows netted
+ * against its repayments. Only denominations that appear in `rows` get a
+ * balance (a stray repayment in an un-owed denomination is ignored here).
+ */
+export function denomBalances(
+  rows: readonly DenomAmount[],
+  entries: readonly DenomAmount[],
+): DenomBalance[] {
+  const owed = new Map<string, { denom: DebtDenomination; minor: number }>();
+  for (const r of rows) {
+    const k = denomKey(r.denom);
+    const cur = owed.get(k);
+    if (cur) cur.minor += Math.max(0, Math.round(r.amountMinor));
+    else owed.set(k, { denom: r.denom, minor: Math.max(0, Math.round(r.amountMinor)) });
+  }
+  const repaid = new Map<string, number>();
+  for (const e of entries) {
+    const k = denomKey(e.denom);
+    repaid.set(k, (repaid.get(k) ?? 0) + Math.max(0, Math.round(e.amountMinor)));
+  }
+  return [...owed.entries()]
+    .map(([k, { denom, minor: owedMinor }]) => {
+      const repaidMinor = repaid.get(k) ?? 0;
+      const outstandingMinor = Math.max(0, owedMinor - repaidMinor);
+      return {
+        denom,
+        owedMinor,
+        repaidMinor,
+        outstandingMinor,
+        progress:
+          owedMinor > 0 ? Math.min(repaidMinor, owedMinor) / owedMinor : 1,
+        settled: outstandingMinor <= 0,
+      };
+    })
+    .sort((a, b) => denomSortKey(a.denom).localeCompare(denomSortKey(b.denom)));
+}
+
+/** A debt is done when it's flagged settled, or every denomination balance is clear. */
+export function debtIsSettled(
+  balances: readonly DenomBalance[],
+  settledAt: string | Date | null | undefined,
+): boolean {
+  if (settledAt != null) return true;
+  return balances.length > 0 && balances.every((b) => b.outstandingMinor <= 0);
 }
 
 export interface DebtDenominationTotals {
@@ -99,39 +167,42 @@ export interface DebtDenominationTotals {
   iOweMinor: number;
   /** `theyOwe - iOwe`. */
   netMinor: number;
-  /** Debts counted into this bucket. */
+  /** Balance buckets counted here. */
   count: number;
 }
 
 /**
- * Roll a list of debts up into per-denomination outstanding totals. Only the
- * unsettled remainder counts. Grouped by denomination because there is no FX /
- * gold conversion.
+ * Roll per-denomination outstanding balances (from every debt) up into
+ * per-denomination both-sides totals. Grouped by denomination because there is
+ * no FX / gold conversion.
  */
 export function summariseDebts(
-  debts: readonly DebtLike[],
+  balances: readonly {
+    direction: DebtDirection;
+    denom: DebtDenomination;
+    outstandingMinor: number;
+  }[],
 ): DebtDenominationTotals[] {
   const byDenom = new Map<string, DebtDenominationTotals>();
-  for (const d of debts) {
-    const { remainingMinor } = debtProgress(d);
-    if (remainingMinor <= 0) continue;
-    const key = denomKey(d.denom);
+  for (const b of balances) {
+    if (b.outstandingMinor <= 0) continue;
+    const key = denomKey(b.denom);
     const bucket = byDenom.get(key) ?? {
-      denom: d.denom,
+      denom: b.denom,
       theyOweMinor: 0,
       iOweMinor: 0,
       netMinor: 0,
       count: 0,
     };
-    if (d.direction === 'they_owe') bucket.theyOweMinor += remainingMinor;
-    else bucket.iOweMinor += remainingMinor;
+    if (b.direction === 'they_owe') bucket.theyOweMinor += b.outstandingMinor;
+    else bucket.iOweMinor += b.outstandingMinor;
     bucket.netMinor = bucket.theyOweMinor - bucket.iOweMinor;
     bucket.count += 1;
     byDenom.set(key, bucket);
   }
-  return [...byDenom.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, v]) => v);
+  return [...byDenom.values()].sort((a, b) =>
+    denomSortKey(a.denom).localeCompare(denomSortKey(b.denom)),
+  );
 }
 
 export interface DebtEquivalentTotals {

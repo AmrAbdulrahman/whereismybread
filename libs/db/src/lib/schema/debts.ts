@@ -48,9 +48,10 @@ export const debtPeople = pgTable(
 );
 
 /**
- * One debt in one direction for a fixed principal. `settledAt` is set when the
- * remainder hits zero (explicitly or by the last repayment). Repayments live in
- * `debt_entries` and are always in this row's `currency`.
+ * A debt basket: one direction, one date, one description, held against a
+ * person. The amounts owed live in `debt_lines` (one row per denomination);
+ * repayments live in `debt_entries` (free-form, each carrying its own
+ * denomination). `settledAt` is the manual "this is done" flag.
  */
 export const debts = pgTable(
   'debts',
@@ -63,21 +64,6 @@ export const debts = pgTable(
       .notNull()
       .references(() => debtPeople.id, { onDelete: 'cascade' }),
     direction: text('direction').$type<DebtDirection>().notNull(),
-    /**
-     * The principal, as an integer in the denomination's smallest tracked
-     * unit: minor currency units for `denom_kind = 'money'`, thousandths of a
-     * gram / piece for `'gold'`.
-     */
-    principalMinor: integer('principal_minor').notNull(),
-    /** `'money'` (uses `currency`) or `'gold'` (uses `gold_*`). */
-    denomKind: text('denom_kind').notNull().default('money'),
-    currency: text('currency').notNull().default('EUR'),
-    /** A `@wib/domain` gold catalogue key, or `'custom'`. Null for money debts. */
-    goldType: text('gold_type'),
-    /** The user's label when `gold_type = 'custom'`. */
-    goldLabel: text('gold_label'),
-    /** `'g'` or `'piece'` — denormalised (fixed for built-ins). */
-    goldUnit: text('gold_unit'),
     description: text('description').notNull().default(''),
     notes: text('notes'),
     /** `YYYY-MM-DD` — when the debt was incurred. */
@@ -93,7 +79,49 @@ export const debts = pgTable(
   ],
 );
 
-/** A repayment against a debt, in the debt's currency. */
+/** Denomination fields, shared by principal rows and repayments. */
+const denomCols = {
+  /** `'money'` (uses `currency`) or `'gold'` (uses `gold_*`). */
+  denomKind: text('denom_kind').notNull().default('money'),
+  currency: text('currency').notNull().default('EUR'),
+  /** A `@wib/domain` gold catalogue key, or `'custom'`. Null for money. */
+  goldType: text('gold_type'),
+  /** The user's label when `gold_type = 'custom'`. */
+  goldLabel: text('gold_label'),
+  /** `'g'` or `'piece'` — denormalised (fixed for built-ins). */
+  goldUnit: text('gold_unit'),
+};
+
+/**
+ * One principal row of a debt basket: a quantity in one denomination.
+ * `amount_minor` is minor currency units for money, thousandths of a gram /
+ * piece for gold.
+ */
+export const debtLines = pgTable(
+  'debt_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    debtId: uuid('debt_id')
+      .notNull()
+      .references(() => debts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    ...denomCols,
+    amountMinor: integer('amount_minor').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('debt_lines_debt_idx').on(t.debtId)],
+);
+
+/**
+ * A free-form repayment logged against a debt, carrying its own denomination.
+ * Not tied to a `debt_lines` row — the app nets these against the lines to get
+ * a running balance per denomination.
+ */
 export const debtEntries = pgTable(
   'debt_entries',
   {
@@ -104,6 +132,7 @@ export const debtEntries = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    ...denomCols,
     amountMinor: integer('amount_minor').notNull(),
     note: text('note'),
     /** `YYYY-MM-DD` — when the money actually moved. */
@@ -194,6 +223,8 @@ export type DebtPerson = typeof debtPeople.$inferSelect;
 export type NewDebtPerson = typeof debtPeople.$inferInsert;
 export type Debt = typeof debts.$inferSelect;
 export type NewDebt = typeof debts.$inferInsert;
+export type DebtLine = typeof debtLines.$inferSelect;
+export type NewDebtLine = typeof debtLines.$inferInsert;
 export type DebtEntry = typeof debtEntries.$inferSelect;
 export type NewDebtEntry = typeof debtEntries.$inferInsert;
 export type DebtOtp = typeof debtOtps.$inferSelect;

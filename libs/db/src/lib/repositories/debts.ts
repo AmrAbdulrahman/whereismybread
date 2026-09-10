@@ -5,6 +5,7 @@ import {
   debtAttachments,
   debtEntries,
   debtGrants,
+  debtLines,
   debtOtps,
   debtPeople,
   debts,
@@ -12,6 +13,7 @@ import {
   type DebtAttachment,
   type DebtEntry,
   type DebtGrant,
+  type DebtLine,
   type DebtOtp,
   type DebtPerson,
 } from '../schema/debts';
@@ -114,21 +116,26 @@ export async function updateDebtPerson(
 
 // --- debts ---------------------------------------------------------------
 
-export interface DebtInput {
-  personId: string;
-  direction: DebtDirection;
-  /** Minor currency units, or thousandths of a gram/piece for gold. */
-  principalMinor: number;
-  /** `'money'` or `'gold'`. */
+/** One principal row of a debt basket — a quantity in one denomination. */
+export interface DebtLineInput {
   denomKind: string;
   currency: string;
   goldType: string | null;
   goldLabel: string | null;
   goldUnit: string | null;
+  /** Minor currency units, or thousandths of a gram/piece for gold. */
+  amountMinor: number;
+}
+
+export interface DebtInput {
+  personId: string;
+  direction: DebtDirection;
   description: string;
   notes: string | null;
   /** `YYYY-MM-DD` — when the debt was incurred. */
   incurredOn: string;
+  /** The principal rows. `updateDebt` ignores this (edit rows via the line ops). */
+  lines: DebtLineInput[];
 }
 
 /** `true` when the person still has at least one debt (blocks deletion). */
@@ -153,11 +160,6 @@ export async function deleteDebtPerson(
     .where(and(eq(debtPeople.id, id), eq(debtPeople.userId, userId)));
 }
 
-export interface DebtWithProgress extends Debt {
-  paidMinor: number;
-  entryCount: number;
-}
-
 async function ownsPerson(userId: string, personId: string): Promise<boolean> {
   const rows = await getDb()
     .select({ id: debtPeople.id })
@@ -167,25 +169,61 @@ async function ownsPerson(userId: string, personId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-/** Every debt the user owns, each with its repaid sum + entry count. */
-export async function listDebtsWithProgress(
-  userId: string,
-): Promise<DebtWithProgress[]> {
+async function ownsDebt(userId: string, debtId: string): Promise<boolean> {
   const rows = await getDb()
-    .select({
-      debt: debts,
-      paidMinor: sql<number>`coalesce(sum(${debtEntries.amountMinor}), 0)::int`,
-      entryCount: sql<number>`count(${debtEntries.id})::int`,
-    })
+    .select({ id: debts.id })
     .from(debts)
-    .leftJoin(debtEntries, eq(debtEntries.debtId, debts.id))
+    .where(and(eq(debts.id, debtId), eq(debts.userId, userId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export interface DebtWithLines extends Debt {
+  lines: DebtLine[];
+  entries: DebtEntry[];
+}
+
+function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    const list = m.get(k) ?? [];
+    list.push(r);
+    m.set(k, list);
+  }
+  return m;
+}
+
+/** Every debt the user owns, each with its principal rows + repayments. */
+export async function listDebtsWithLines(
+  userId: string,
+): Promise<DebtWithLines[]> {
+  const rows = await getDb()
+    .select()
+    .from(debts)
     .where(eq(debts.userId, userId))
-    .groupBy(debts.id)
     .orderBy(desc(debts.createdAt));
-  return rows.map((r) => ({
-    ...r.debt,
-    paidMinor: r.paidMinor,
-    entryCount: r.entryCount,
+  const ids = rows.map((d) => d.id);
+  const [lines, entries] = ids.length
+    ? await Promise.all([
+        getDb()
+          .select()
+          .from(debtLines)
+          .where(inArray(debtLines.debtId, ids))
+          .orderBy(asc(debtLines.sortOrder), asc(debtLines.createdAt)),
+        getDb()
+          .select()
+          .from(debtEntries)
+          .where(inArray(debtEntries.debtId, ids))
+          .orderBy(desc(debtEntries.occurredOn), desc(debtEntries.createdAt)),
+      ])
+    : [[], []];
+  const linesByDebt = groupBy(lines, (l) => l.debtId);
+  const entriesByDebt = groupBy(entries, (e) => e.debtId);
+  return rows.map((d) => ({
+    ...d,
+    lines: linesByDebt.get(d.id) ?? [],
+    entries: entriesByDebt.get(d.id) ?? [],
   }));
 }
 
@@ -193,8 +231,9 @@ export type DebtEntryWithAttachments = DebtEntry & {
   attachments: DebtAttachment[];
 };
 
-export interface DebtWithEntries extends DebtWithProgress {
+export interface DebtWithDetail extends Debt {
   person: DebtPerson;
+  lines: DebtLine[];
   entries: DebtEntryWithAttachments[];
   /** Debt-level attachments (`entry_id` null). */
   attachments: DebtAttachment[];
@@ -217,10 +256,10 @@ function groupAttachments(
   return { debt, byEntry };
 }
 
-export async function getDebtWithEntries(
+export async function getDebtWithDetail(
   userId: string,
   id: string,
-): Promise<DebtWithEntries | undefined> {
+): Promise<DebtWithDetail | undefined> {
   const rows = await getDb()
     .select({ debt: debts, person: debtPeople })
     .from(debts)
@@ -229,7 +268,12 @@ export async function getDebtWithEntries(
     .limit(1);
   const row = rows[0];
   if (!row) return undefined;
-  const [entries, attachmentRows] = await Promise.all([
+  const [lines, entries, attachmentRows] = await Promise.all([
+    getDb()
+      .select()
+      .from(debtLines)
+      .where(eq(debtLines.debtId, id))
+      .orderBy(asc(debtLines.sortOrder), asc(debtLines.createdAt)),
     getDb()
       .select()
       .from(debtEntries)
@@ -242,17 +286,15 @@ export async function getDebtWithEntries(
       .orderBy(asc(debtAttachments.createdAt)),
   ]);
   const { debt: debtAtt, byEntry } = groupAttachments(attachmentRows);
-  const paidMinor = entries.reduce((s, e) => s + e.amountMinor, 0);
   return {
     ...row.debt,
     person: row.person,
+    lines,
     entries: entries.map((e) => ({
       ...e,
       attachments: byEntry.get(e.id) ?? [],
     })),
     attachments: debtAtt,
-    paidMinor,
-    entryCount: entries.length,
   };
 }
 
@@ -269,35 +311,58 @@ export async function getDebtRow(
   return rows[0];
 }
 
+function lineValues(debtId: string, userId: string, l: DebtLineInput, i: number) {
+  return {
+    debtId,
+    userId,
+    denomKind: l.denomKind,
+    currency: l.currency,
+    goldType: l.goldType,
+    goldLabel: l.goldLabel,
+    goldUnit: l.goldUnit,
+    amountMinor: l.amountMinor,
+    sortOrder: i,
+  };
+}
+
 export async function createDebt(
   userId: string,
   input: DebtInput,
 ): Promise<Debt | null> {
   if (!(await ownsPerson(userId, input.personId))) return null;
-  const rows = await getDb()
-    .insert(debts)
-    .values({
-      userId,
-      personId: input.personId,
-      direction: input.direction,
-      principalMinor: input.principalMinor,
-      denomKind: input.denomKind,
-      currency: input.currency,
-      goldType: input.goldType,
-      goldLabel: input.goldLabel,
-      goldUnit: input.goldUnit,
-      description: input.description.trim(),
-      notes: input.notes,
-      incurredOn: input.incurredOn,
-    })
-    .returning();
-  return rows[0] ?? null;
+  return getDb().transaction(async (tx) => {
+    const rows = await tx
+      .insert(debts)
+      .values({
+        userId,
+        personId: input.personId,
+        direction: input.direction,
+        description: input.description.trim(),
+        notes: input.notes,
+        incurredOn: input.incurredOn,
+      })
+      .returning();
+    const debt = rows[0];
+    if (!debt) return null;
+    if (input.lines.length > 0) {
+      await tx
+        .insert(debtLines)
+        .values(
+          input.lines.map((l, i) => lineValues(debt.id, userId, l, i)),
+        );
+    }
+    return debt;
+  });
 }
 
+/** Update a debt's metadata only — rows are managed via the line ops. */
 export async function updateDebt(
   userId: string,
   id: string,
-  input: DebtInput,
+  input: Pick<
+    DebtInput,
+    'personId' | 'direction' | 'description' | 'notes' | 'incurredOn'
+  >,
 ): Promise<Debt | null> {
   if (!(await ownsPerson(userId, input.personId))) return null;
   const rows = await getDb()
@@ -305,12 +370,6 @@ export async function updateDebt(
     .set({
       personId: input.personId,
       direction: input.direction,
-      principalMinor: input.principalMinor,
-      denomKind: input.denomKind,
-      currency: input.currency,
-      goldType: input.goldType,
-      goldLabel: input.goldLabel,
-      goldUnit: input.goldUnit,
       description: input.description.trim(),
       notes: input.notes,
       incurredOn: input.incurredOn,
@@ -341,6 +400,55 @@ export async function setDebtSettled(
   return rows[0];
 }
 
+// --- lines (the principal rows) --------------------------------------
+
+export async function addDebtLine(
+  userId: string,
+  debtId: string,
+  input: DebtLineInput,
+): Promise<DebtLine | null> {
+  if (!(await ownsDebt(userId, debtId))) return null;
+  const maxRow = await getDb()
+    .select({ n: sql<number>`coalesce(max(${debtLines.sortOrder}), -1)::int` })
+    .from(debtLines)
+    .where(eq(debtLines.debtId, debtId));
+  const next = (maxRow[0]?.n ?? -1) + 1;
+  const rows = await getDb()
+    .insert(debtLines)
+    .values(lineValues(debtId, userId, input, next))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function updateDebtLine(
+  userId: string,
+  lineId: string,
+  input: DebtLineInput,
+): Promise<DebtLine | null> {
+  const rows = await getDb()
+    .update(debtLines)
+    .set({
+      denomKind: input.denomKind,
+      currency: input.currency,
+      goldType: input.goldType,
+      goldLabel: input.goldLabel,
+      goldUnit: input.goldUnit,
+      amountMinor: input.amountMinor,
+    })
+    .where(and(eq(debtLines.id, lineId), eq(debtLines.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function deleteDebtLine(
+  userId: string,
+  lineId: string,
+): Promise<void> {
+  await getDb()
+    .delete(debtLines)
+    .where(and(eq(debtLines.id, lineId), eq(debtLines.userId, userId)));
+}
+
 // --- entries (repayments) ----------------------------------------------
 
 export interface DebtEntryInput {
@@ -348,6 +456,11 @@ export interface DebtEntryInput {
   note: string | null;
   /** `YYYY-MM-DD`. */
   occurredOn: string;
+  denomKind: string;
+  currency: string;
+  goldType: string | null;
+  goldLabel: string | null;
+  goldUnit: string | null;
 }
 
 export async function addDebtEntry(
@@ -365,6 +478,11 @@ export async function addDebtEntry(
       amountMinor: input.amountMinor,
       note: input.note,
       occurredOn: input.occurredOn,
+      denomKind: input.denomKind,
+      currency: input.currency,
+      goldType: input.goldType,
+      goldLabel: input.goldLabel,
+      goldUnit: input.goldUnit,
     })
     .returning();
   return rows[0] ?? null;
@@ -385,6 +503,7 @@ export interface SharedPersonDebts {
   person: DebtPerson;
   debts: Array<
     Debt & {
+      lines: DebtLine[];
       entries: DebtEntryWithAttachments[];
       attachments: DebtAttachment[];
     }
@@ -403,8 +522,13 @@ export async function getSharedPersonDebts(
     .where(eq(debts.personId, person.id))
     .orderBy(desc(debts.createdAt));
   const ids = rows.map((d) => d.id);
-  const [entries, attachmentRows] = ids.length
+  const [lines, entries, attachmentRows] = ids.length
     ? await Promise.all([
+        getDb()
+          .select()
+          .from(debtLines)
+          .where(inArray(debtLines.debtId, ids))
+          .orderBy(asc(debtLines.sortOrder), asc(debtLines.createdAt)),
         getDb()
           .select()
           .from(debtEntries)
@@ -416,19 +540,10 @@ export async function getSharedPersonDebts(
           .where(inArray(debtAttachments.debtId, ids))
           .orderBy(asc(debtAttachments.createdAt)),
       ])
-    : [[], []];
-  const entriesByDebt = new Map<string, DebtEntry[]>();
-  for (const e of entries) {
-    const list = entriesByDebt.get(e.debtId) ?? [];
-    list.push(e);
-    entriesByDebt.set(e.debtId, list);
-  }
-  const attByDebt = new Map<string, DebtAttachment[]>();
-  for (const a of attachmentRows) {
-    const list = attByDebt.get(a.debtId) ?? [];
-    list.push(a);
-    attByDebt.set(a.debtId, list);
-  }
+    : [[], [], []];
+  const linesByDebt = groupBy(lines, (l) => l.debtId);
+  const entriesByDebt = groupBy(entries, (e) => e.debtId);
+  const attByDebt = groupBy(attachmentRows, (a) => a.debtId);
   return {
     person,
     debts: rows.map((d) => {
@@ -437,6 +552,7 @@ export async function getSharedPersonDebts(
       );
       return {
         ...d,
+        lines: linesByDebt.get(d.id) ?? [],
         entries: (entriesByDebt.get(d.id) ?? []).map((e) => ({
           ...e,
           attachments: byEntry.get(e.id) ?? [],

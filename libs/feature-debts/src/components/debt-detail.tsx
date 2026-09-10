@@ -3,7 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { debtHeadline, formatDebtAmount, formatMoney, money } from '@wib/domain';
+import {
+  debtHeadline,
+  denomKey,
+  formatDebtAmount,
+  formatMoney,
+  goldTypeLabel,
+  money,
+} from '@wib/domain';
 import {
   AttachmentViewer,
   AttachmentsField,
@@ -20,21 +27,30 @@ import {
   Link as LinkIcon,
   Paperclip,
   Pencil,
+  Plus,
   Send,
   Trash2,
 } from '@wib/ui/icons';
 import {
   deleteDebtAction,
+  deleteLineAction,
   deleteRepaymentAction,
   discardDebtBlobsAction,
   removeDebtAttachmentAction,
   resendPersonLinkAction,
   settleDebtAction,
+  settleDenomAction,
   uploadDebtAttachmentAction,
 } from '../lib/actions';
-import type { DebtDetail as DebtDetailData, PersonView } from '../lib/types';
+import type {
+  DebtDetail as DebtDetailData,
+  DebtRowView,
+  DenomBalanceView,
+  PersonView,
+} from '../lib/types';
 import { DebtForm, type DebtFormInitial } from './debt-form';
 import { GoldMark } from './gold-mark';
+import { LineForm } from './line-form';
 import { PersonAvatar } from './person-avatar';
 import { RepaymentForm } from './repayment-form';
 
@@ -46,6 +62,14 @@ function fmtDate(d: string): string {
     timeZone: 'UTC',
   }).format(new Date(`${d}T00:00:00Z`));
 }
+
+function denomLabel(denom: DebtRowView['denom']): string {
+  return denom.kind === 'money'
+    ? denom.currency
+    : goldTypeLabel(denom.goldType, denom.goldLabel);
+}
+
+type RunResult = { ok: boolean; error?: string; message?: string };
 
 export function DebtDetail({
   debt,
@@ -66,8 +90,9 @@ export function DebtDetail({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [repayOpen, setRepayOpen] = useState(false);
+  const [repay, setRepay] = useState<{ presetKey?: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [lineEdit, setLineEdit] = useState<DebtRowView | 'new' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [debtFiles, setDebtFiles] = useState<StoredAttachment[]>(
@@ -75,16 +100,12 @@ export function DebtDetail({
   );
   const [viewing, setViewing] = useState<ViewableAttachment | null>(null);
 
-  const pct = Math.round(debt.progress * 100);
-  const sameCurrency =
-    debt.denom.kind === 'money' &&
-    debt.denom.currency.toUpperCase() === displayCurrency.toUpperCase();
   const equivalent =
-    debt.equivalentMinor != null && !sameCurrency
+    debt.equivalentMinor != null
       ? formatMoney(money(debt.equivalentMinor, displayCurrency))
       : null;
 
-  const run = async (fn: () => Promise<{ ok: boolean; error?: string; message?: string }>) => {
+  const run = async (fn: () => Promise<RunResult>) => {
     setBusy(true);
     try {
       const result = await fn();
@@ -105,7 +126,10 @@ export function DebtDetail({
       await navigator.clipboard.writeText(shareUrl);
       toast({ title: 'Link copied.' });
     } catch {
-      toast({ title: 'Could not copy — select and copy it manually.', tone: 'danger' });
+      toast({
+        title: 'Could not copy — select and copy it manually.',
+        tone: 'danger',
+      });
     }
   };
 
@@ -113,13 +137,17 @@ export function DebtDetail({
     id: debt.id,
     personId: debt.person.id,
     direction: debt.direction,
-    principalMinor: debt.principalMinor,
-    denom: debt.denom,
     incurredOn: debt.incurredOn,
     description: debt.description,
     notes: debt.notes,
-    attachments: debt.attachments,
   };
+
+  const showBalanceEquivalent = (b: DenomBalanceView) =>
+    b.equivalentMinor != null &&
+    !(
+      b.denom.kind === 'money' &&
+      b.denom.currency.toUpperCase() === displayCurrency.toUpperCase()
+    );
 
   return (
     <div className="flex max-w-2xl flex-col gap-5">
@@ -142,6 +170,7 @@ export function DebtDetail({
           </p>
           <p className="mt-0.5 text-xs text-muted">
             Incurred {fmtDate(debt.incurredOn)}
+            {equivalent ? ` · ≈ ${equivalent} in ${displayCurrency}` : ''}
           </p>
           {debt.notes ? (
             <p className="mt-1 text-xs text-muted">{debt.notes}</p>
@@ -167,57 +196,167 @@ export function DebtDetail({
         </div>
       </header>
 
-      <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
-        <div className="flex items-baseline justify-between">
-          <span className="flex items-center gap-1.5 text-2xl font-bold text-ink">
-            {debt.denom.kind === 'gold' ? (
-              <GoldMark type={debt.denom.goldType} size={18} />
-            ) : null}
-            {formatDebtAmount(debt.remainingMinor, debt.denom)}
-          </span>
-          <span className="text-sm text-muted">
-            {debt.settled ? 'settled' : 'still owed'}
-          </span>
-        </div>
-        {equivalent ? (
-          <p className="-mt-1 text-xs text-ink-soft">≈ {equivalent} in {displayCurrency}</p>
-        ) : null}
-        <Progress
-          value={pct}
-          indicatorClassName={debt.settled ? 'bg-teal' : undefined}
-        />
-        <div className="flex items-center justify-between text-xs text-muted">
-          <span>
-            {formatDebtAmount(debt.paidMinor, debt.denom)} repaid of{' '}
-            {formatDebtAmount(debt.principalMinor, debt.denom)}
-          </span>
-          <span>{pct}%</span>
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Balances
+          </h2>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => setRepay({})}
+            >
+              Record repayment
+            </Button>
+            {debt.settled ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void run(() => settleDebtAction(debt.id, false))}
+              >
+                Reopen
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={busy || debt.balances.length === 0}
+                onClick={() => void run(() => settleDebtAction(debt.id, true))}
+              >
+                Settle in full
+              </Button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setRepayOpen(true)} disabled={busy}>
-            Record repayment
+        {debt.balances.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-xs text-muted">
+            No amounts yet — add a row below.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {debt.balances.map((b) => {
+              const pct = Math.round(b.progress * 100);
+              return (
+                <li
+                  key={denomKey(b.denom)}
+                  className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-lg font-bold text-ink">
+                      {b.denom.kind === 'gold' ? (
+                        <GoldMark type={b.denom.goldType} size={16} />
+                      ) : null}
+                      {formatDebtAmount(b.outstandingMinor, b.denom)}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {b.settled ? 'settled' : 'left'}
+                    </span>
+                  </div>
+                  {showBalanceEquivalent(b) ? (
+                    <p className="-mt-1 text-[11px] text-ink-soft">
+                      ≈ {formatMoney(money(b.equivalentMinor ?? 0, displayCurrency))}
+                    </p>
+                  ) : null}
+                  <Progress
+                    value={pct}
+                    indicatorClassName={b.settled ? 'bg-teal' : undefined}
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-muted">
+                    <span>
+                      {formatDebtAmount(b.repaidMinor, b.denom)} repaid of{' '}
+                      {formatDebtAmount(b.owedMinor, b.denom)}
+                    </span>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() =>
+                        setRepay({ presetKey: denomKey(b.denom) })
+                      }
+                    >
+                      Record repayment
+                    </Button>
+                    {!b.settled ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() =>
+                            settleDenomAction(debt.id, denomKey(b.denom)),
+                          )
+                        }
+                      >
+                        Settle this
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Amounts
+          </h2>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => setLineEdit('new')}
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            Add a row
           </Button>
-          {debt.settled ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void run(() => settleDebtAction(debt.id, false))}
-            >
-              Reopen
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => void run(() => settleDebtAction(debt.id, true))}
-            >
-              Settle in full
-            </Button>
-          )}
         </div>
+        <ul className="flex flex-col gap-1.5">
+          {debt.rows.map((r) => (
+            <li
+              key={r.id}
+              className="flex items-center gap-3 rounded-lg border border-line/60 bg-surface px-3 py-2"
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-ink">
+                {r.denom.kind === 'gold' ? (
+                  <GoldMark type={r.denom.goldType} size={13} />
+                ) : null}
+                {formatDebtAmount(r.amountMinor, r.denom)}
+                <span className="text-[11px] text-muted">
+                  · {denomLabel(r.denom)}
+                </span>
+              </span>
+              <button
+                type="button"
+                aria-label="Edit row"
+                disabled={busy}
+                onClick={() => setLineEdit(r)}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink"
+              >
+                <Pencil size={13} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                aria-label="Delete row"
+                disabled={busy || debt.rows.length === 1}
+                onClick={() =>
+                  void run(() => deleteLineAction(debt.id, r.id))
+                }
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-40"
+              >
+                <Trash2 size={13} strokeWidth={2} />
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
@@ -237,7 +376,12 @@ export function DebtDetail({
             onFocus={(e) => e.currentTarget.select()}
             className="h-9 flex-1 rounded-md border border-line-strong bg-ground px-2 text-xs text-ink-soft"
           />
-          <Button type="button" variant="secondary" size="sm" onClick={() => void copyLink()}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => void copyLink()}
+          >
             Copy
           </Button>
         </div>
@@ -294,8 +438,11 @@ export function DebtDetail({
               >
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-ink">
-                      {formatDebtAmount(e.amountMinor, debt.denom)}
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                      {e.denom.kind === 'gold' ? (
+                        <GoldMark type={e.denom.goldType} size={12} />
+                      ) : null}
+                      {formatDebtAmount(e.amountMinor, e.denom)}
                     </p>
                     <p className="truncate text-[11px] text-muted">
                       {fmtDate(e.occurredOn)}
@@ -341,36 +488,51 @@ export function DebtDetail({
         )}
       </section>
 
-      <AttachmentViewer
-        attachment={viewing}
-        onClose={() => setViewing(null)}
-      />
+      <AttachmentViewer attachment={viewing} onClose={() => setViewing(null)} />
 
       <ResponsiveModal
-        open={repayOpen}
-        onOpenChange={setRepayOpen}
+        open={repay != null}
+        onOpenChange={(o) => !o && setRepay(null)}
         title="Record a repayment"
       >
-        {repayOpen ? (
+        {repay ? (
           <RepaymentForm
             debtId={debt.id}
-            denom={debt.denom}
-            remainingMinor={debt.remainingMinor}
+            balances={debt.balances}
+            presetDenomKey={repay.presetKey}
             today={today}
+            defaultCurrency={defaultCurrency}
+            usedCurrencies={usedCurrencies}
             onDone={() => {
-              setRepayOpen(false);
+              setRepay(null);
               router.refresh();
             }}
-            onCancel={() => setRepayOpen(false)}
+            onCancel={() => setRepay(null)}
           />
         ) : null}
       </ResponsiveModal>
 
       <ResponsiveModal
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        title="Edit debt"
+        open={lineEdit != null}
+        onOpenChange={(o) => !o && setLineEdit(null)}
+        title={lineEdit === 'new' ? 'Add a row' : 'Edit row'}
       >
+        {lineEdit ? (
+          <LineForm
+            debtId={debt.id}
+            line={lineEdit === 'new' ? undefined : lineEdit}
+            defaultCurrency={defaultCurrency}
+            usedCurrencies={usedCurrencies}
+            onDone={() => {
+              setLineEdit(null);
+              router.refresh();
+            }}
+            onCancel={() => setLineEdit(null)}
+          />
+        ) : null}
+      </ResponsiveModal>
+
+      <ResponsiveModal open={editOpen} onOpenChange={setEditOpen} title="Edit debt">
         {editOpen ? (
           <DebtForm
             people={people}

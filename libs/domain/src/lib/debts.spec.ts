@@ -3,7 +3,9 @@ import {
   debtEquivalentTotals,
   debtHeadline,
   debtHeadlineForOther,
+  debtIsSettled,
   debtProgress,
+  denomBalances,
   formatDebtAmount,
   isOtpCode,
   summariseDebts,
@@ -49,29 +51,66 @@ const gold21 = {
   unit: 'g',
 } as const;
 
-describe('summariseDebts', () => {
-  it('groups outstanding remainders by denomination and direction', () => {
-    const totals = summariseDebts([
-      { direction: 'they_owe', denom: gbp, principalMinor: 10000, paidMinor: 2000 },
-      { direction: 'i_owe', denom: gbp, principalMinor: 5000, paidMinor: 0 },
-      { direction: 'they_owe', denom: eur, principalMinor: 3000, paidMinor: 0 },
-      { direction: 'they_owe', denom: gold21, principalMinor: 10000, paidMinor: 4000 },
-      // fully settled — excluded
-      { direction: 'i_owe', denom: gbp, principalMinor: 4000, paidMinor: 4000 },
-    ]);
-    const g = totals.find((t) => t.denom.kind === 'money' && t.denom.currency === 'GBP');
-    expect(g).toMatchObject({ theyOweMinor: 8000, iOweMinor: 5000, netMinor: 3000, count: 2 });
-    const e = totals.find((t) => t.denom.kind === 'money' && t.denom.currency === 'EUR');
-    expect(e).toMatchObject({ theyOweMinor: 3000, iOweMinor: 0, netMinor: 3000, count: 1 });
-    const au = totals.find((t) => t.denom.kind === 'gold');
-    expect(au).toMatchObject({ theyOweMinor: 6000, iOweMinor: 0, count: 1 });
+describe('denomBalances', () => {
+  it('nets principal rows against free-form repayments per denomination', () => {
+    const rows = [
+      { denom: gbp, amountMinor: 10000 },
+      { denom: gbp, amountMinor: 2000 }, // two GBP rows sum
+      { denom: eur, amountMinor: 3000 },
+      { denom: gold21, amountMinor: 10000 },
+    ];
+    const entries = [
+      { denom: gbp, amountMinor: 5000 },
+      { denom: gold21, amountMinor: 10000 }, // clears the gold row
+    ];
+    const bal = denomBalances(rows, entries);
+    const g = bal.find((b) => b.denom.kind === 'money' && b.denom.currency === 'GBP')!;
+    expect(g).toMatchObject({ owedMinor: 12000, repaidMinor: 5000, outstandingMinor: 7000, settled: false });
+    const au = bal.find((b) => b.denom.kind === 'gold')!;
+    expect(au).toMatchObject({ owedMinor: 10000, repaidMinor: 10000, outstandingMinor: 0, settled: true });
+    // money before gold
+    expect(bal[0]!.denom.kind).toBe('money');
   });
 
-  it('returns nothing when every debt is settled', () => {
+  it('clamps an overpayment', () => {
+    const bal = denomBalances(
+      [{ denom: eur, amountMinor: 1000 }],
+      [{ denom: eur, amountMinor: 4000 }],
+    );
+    expect(bal[0]).toMatchObject({ outstandingMinor: 0, progress: 1, settled: true });
+  });
+});
+
+describe('debtIsSettled', () => {
+  it('is true when flagged, or when every balance is clear', () => {
+    const clear = denomBalances([{ denom: eur, amountMinor: 100 }], [{ denom: eur, amountMinor: 100 }]);
+    const open = denomBalances([{ denom: eur, amountMinor: 100 }], []);
+    expect(debtIsSettled(clear, null)).toBe(true);
+    expect(debtIsSettled(open, null)).toBe(false);
+    expect(debtIsSettled(open, new Date())).toBe(true);
+    expect(debtIsSettled([], null)).toBe(false);
+  });
+});
+
+describe('summariseDebts', () => {
+  it('groups per-denomination outstanding balances by direction', () => {
+    const totals = summariseDebts([
+      { direction: 'they_owe', denom: gbp, outstandingMinor: 8000 },
+      { direction: 'i_owe', denom: gbp, outstandingMinor: 5000 },
+      { direction: 'they_owe', denom: eur, outstandingMinor: 3000 },
+      { direction: 'they_owe', denom: gold21, outstandingMinor: 6000 },
+      { direction: 'i_owe', denom: gbp, outstandingMinor: 0 }, // settled — excluded
+    ]);
+    const g = totals.find((t) => t.denom.kind === 'money' && t.denom.currency === 'GBP')!;
+    expect(g).toMatchObject({ theyOweMinor: 8000, iOweMinor: 5000, netMinor: 3000, count: 2 });
+    const au = totals.find((t) => t.denom.kind === 'gold')!;
+    expect(au).toMatchObject({ theyOweMinor: 6000, iOweMinor: 0, count: 1 });
+    expect(totals[0]!.denom.kind).toBe('money'); // money first
+  });
+
+  it('returns nothing when everything is settled', () => {
     expect(
-      summariseDebts([
-        { direction: 'they_owe', denom: gbp, principalMinor: 100, paidMinor: 100 },
-      ]),
+      summariseDebts([{ direction: 'they_owe', denom: gbp, outstandingMinor: 0 }]),
     ).toEqual([]);
   });
 });

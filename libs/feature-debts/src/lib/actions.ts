@@ -6,27 +6,33 @@ import { requireUser } from '@wib/auth/server';
 import {
   addDebtAttachment,
   addDebtEntry,
+  addDebtLine,
   createDebt,
   createDebtPerson,
   deleteDebt as deleteDebtRow,
   deleteDebtAttachment,
   deleteDebtEntry,
+  deleteDebtLine,
   deleteDebtPerson,
-  getDebtRow,
-  getDebtWithEntries,
   getDebtPersonById,
-  listDebtsWithProgress,
+  getDebtRow,
+  getDebtWithDetail,
+  listDebtsWithLines,
   personHasDebts,
   reconcileDebtAttachments,
   setDebtSettled,
   updateDebt,
+  updateDebtLine,
   updateDebtPerson,
+  type DebtLineInput,
 } from '@wib/db';
 import {
-  debtProgress,
+  denomBalances,
+  denomKey,
   goldUnitFor,
   parseGoldQuantity,
   parseMoneyInput,
+  type DebtDenomination,
 } from '@wib/domain';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -37,21 +43,29 @@ import {
   type StoredAttachment,
 } from '@wib/ui';
 import { revalidatePath } from 'next/cache';
-import { buildDebtView, getDebtPeople, loadPricing, personView } from './queries';
+import {
+  buildDebtView,
+  denomOf,
+  getDebtPeople,
+  loadPricing,
+  personView,
+} from './queries';
 import { notifyPersonOfDebts } from './notify';
 import {
   debtFormSchema,
-  newDebtsSchema,
+  debtLineSchema,
+  debtMetaSchema,
   personFormSchema,
   repaymentFormSchema,
   type DebtFormValues,
-  type NewDebtsValues,
+  type DebtLineValue,
+  type DebtMetaValues,
   type PersonFormValues,
   type RepaymentFormValues,
 } from './schema';
 import type { DebtView, PersonView } from './types';
 
-/** Shared denomination fields, validated by `denomLineShape` in both schemas. */
+/** The denomination + quantity fields every row / repayment form submits. */
 interface DenomLine {
   amount: string;
   denomKind: string;
@@ -61,41 +75,48 @@ interface DenomLine {
   goldUnit: string;
 }
 
-/** Parse a line's typed amount + denomination into the columns `createDebt` writes. */
-function denomColumns(line: DenomLine):
-  | {
-      ok: true;
-      value: {
-        principalMinor: number;
-        denomKind: string;
-        currency: string;
-        goldType: string | null;
-        goldLabel: string | null;
-        goldUnit: string | null;
-      };
-    }
-  | { ok: false } {
+/** Parse a form line's typed amount + denomination into the DB columns. */
+function parseDenomLine(line: DenomLine): DebtLineInput | null {
   const isGold = line.denomKind === 'gold';
-  let principalMinor: number;
+  let amountMinor: number;
   try {
-    principalMinor = isGold
+    amountMinor = isGold
       ? parseGoldQuantity(line.amount)
       : parseMoneyInput(line.amount, line.currency).minorUnits;
   } catch {
-    return { ok: false };
+    return null;
   }
   return {
-    ok: true,
-    value: {
-      principalMinor,
-      denomKind: line.denomKind,
-      currency: line.currency,
-      goldType: isGold ? line.goldType : null,
-      goldLabel: isGold ? line.goldLabel : null,
-      goldUnit: isGold ? goldUnitFor(line.goldType, line.goldUnit) : null,
-    },
+    amountMinor,
+    denomKind: line.denomKind,
+    currency: line.currency,
+    goldType: isGold ? line.goldType : null,
+    goldLabel: isGold ? line.goldLabel : null,
+    goldUnit: isGold ? goldUnitFor(line.goldType, line.goldUnit) : null,
   };
 }
+
+/** A resolved denomination back into the DB columns (for covering repayments). */
+function denomColumns(d: DebtDenomination): Omit<DebtLineInput, 'amountMinor'> {
+  return d.kind === 'money'
+    ? {
+        denomKind: 'money',
+        currency: d.currency,
+        goldType: null,
+        goldLabel: null,
+        goldUnit: null,
+      }
+    : {
+        denomKind: 'gold',
+        currency: 'EUR',
+        goldType: d.goldType,
+        goldLabel: d.goldLabel,
+        goldUnit: d.unit,
+      };
+}
+
+const amountErrorFor = (denomKind: string) =>
+  denomKind === 'gold' ? 'Not a valid quantity' : 'Not a valid amount';
 
 function revalidate(debtId?: string) {
   revalidatePath('/debts');
@@ -106,6 +127,30 @@ function ownerName(name: string | null): string {
   return name?.trim() || 'Someone';
 }
 
+/**
+ * Re-derive the whole-debt `settled_at` flag from the current balances: set it
+ * when every denomination is clear, clear it when something is outstanding
+ * again (a new row, a deleted repayment).
+ */
+async function reevalSettled(userId: string, debtId: string): Promise<void> {
+  const detail = await getDebtWithDetail(userId, debtId);
+  if (!detail) return;
+  const balances = denomBalances(
+    detail.lines.map((l) => ({ denom: denomOf(l), amountMinor: l.amountMinor })),
+    detail.entries.map((e) => ({
+      denom: denomOf(e),
+      amountMinor: e.amountMinor,
+    })),
+  );
+  const allClear =
+    balances.length > 0 && balances.every((b) => b.outstandingMinor <= 0);
+  if (allClear && detail.settledAt == null) {
+    await setDebtSettled(userId, debtId, true);
+  } else if (!allClear && detail.settledAt != null) {
+    await setDebtSettled(userId, debtId, false);
+  }
+}
+
 // --- people -------------------------------------------------------------
 
 async function personViewById(
@@ -114,7 +159,7 @@ async function personViewById(
 ): Promise<PersonView | null> {
   const [people, rows] = await Promise.all([
     getDebtPersonById(userId, id),
-    listDebtsWithProgress(userId),
+    listDebtsWithLines(userId),
   ]);
   if (!people) return null;
   return {
@@ -187,11 +232,42 @@ export async function listPeopleAction(): Promise<PersonView[]> {
 
 // --- debts -------------------------------------------------------------
 
+/**
+ * Create a debt basket (with its rows), or edit an existing debt's metadata.
+ * On create, returns the built `DebtView` so the list can show it optimistically.
+ */
 export async function saveDebtAction(
   id: string | null,
-  values: DebtFormValues,
-): Promise<FormState & { debtId?: string }> {
+  values: DebtFormValues | DebtMetaValues,
+): Promise<FormState & { debtId?: string; debt?: DebtView }> {
   const user = await requireUser();
+
+  if (id) {
+    const parsed = debtMetaSchema.safeParse(values);
+    if (!parsed.success) {
+      return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+    }
+    const person = await getDebtPersonById(user.id, parsed.data.personId);
+    if (!person) {
+      return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
+    }
+    const row = await updateDebt(user.id, id, {
+      personId: parsed.data.personId,
+      direction: parsed.data.direction,
+      description: parsed.data.description ?? '',
+      notes: parsed.data.notes,
+      incurredOn: parsed.data.incurredOn,
+    });
+    if (!row) return { ok: false, error: 'Could not save the debt.' };
+    revalidate(id);
+    await notifyPersonOfDebts(
+      person,
+      ownerName(user.name),
+      `${ownerName(user.name)} updated a debt you share.`,
+    );
+    return { ok: true, debtId: id };
+  }
+
   const parsed = debtFormSchema.safeParse(values);
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrors(parsed.error) };
@@ -201,121 +277,57 @@ export async function saveDebtAction(
     return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
   }
 
-  const denom = denomColumns(parsed.data);
-  if (!denom.ok) {
-    return {
-      ok: false,
-      fieldErrors: {
-        amount: [
-          parsed.data.denomKind === 'gold'
-            ? 'Not a valid quantity'
-            : 'Not a valid amount',
-        ],
-      },
-    };
+  const lines: DebtLineInput[] = [];
+  for (const [i, line] of parsed.data.lines.entries()) {
+    const parsedLine = parseDenomLine(line);
+    if (!parsedLine) {
+      return {
+        ok: false,
+        fieldErrors: { [`lines.${i}.amount`]: [amountErrorFor(line.denomKind)] },
+      };
+    }
+    lines.push(parsedLine);
   }
 
-  const input = {
+  const row = await createDebt(user.id, {
     personId: parsed.data.personId,
     direction: parsed.data.direction,
-    ...denom.value,
-    incurredOn: parsed.data.incurredOn,
     description: parsed.data.description ?? '',
     notes: parsed.data.notes,
-  };
-
-  const row = id
-    ? await updateDebt(user.id, id, input)
-    : await createDebt(user.id, input);
+    incurredOn: parsed.data.incurredOn,
+    lines,
+  });
   if (!row) return { ok: false, error: 'Could not save the debt.' };
 
-  // Files staged while creating — attach them to the fresh debt.
-  if (!id) {
-    const drafts = validDrafts(parsed.data.attachments);
-    if (drafts.length > 0) {
-      await reconcileDebtAttachments(user.id, row.id, null, drafts).catch(
-        () => undefined,
-      );
-    }
+  const drafts = validDrafts(parsed.data.attachments);
+  if (drafts.length > 0) {
+    await reconcileDebtAttachments(user.id, row.id, null, drafts).catch(
+      () => undefined,
+    );
   }
 
   revalidate(row.id);
-  await notifyPersonOfDebts(
-    person,
-    ownerName(user.name),
-    id
-      ? `${ownerName(user.name)} updated a debt you share.`
-      : `${ownerName(user.name)} added a debt to keep things transparent between you.`,
-  );
-  return { ok: true, debtId: row.id };
-}
 
-/**
- * Create several debts with one person in one go — each line its own
- * denomination + optional note + date. One notification email at the end.
- */
-export async function saveDebtsAction(
-  values: NewDebtsValues,
-): Promise<FormState & { debtIds?: string[]; debts?: DebtView[] }> {
-  const user = await requireUser();
-  const parsed = newDebtsSchema.safeParse(values);
-  if (!parsed.success) {
-    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
-  }
-  const person = await getDebtPersonById(user.id, parsed.data.personId);
-  if (!person) {
-    return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
-  }
-
-  const created: Awaited<ReturnType<typeof createDebt>>[] = [];
-  for (const [i, line] of parsed.data.lines.entries()) {
-    const denom = denomColumns(line);
-    if (!denom.ok) {
-      return {
-        ok: false,
-        fieldErrors: {
-          [`lines.${i}.amount`]: [
-            line.denomKind === 'gold'
-              ? 'Not a valid quantity'
-              : 'Not a valid amount',
-          ],
-        },
-      };
-    }
-    const row = await createDebt(user.id, {
-      personId: parsed.data.personId,
-      direction: parsed.data.direction,
-      ...denom.value,
-      incurredOn: line.occurredOn,
-      description: line.note ?? '',
-      notes: null,
-    });
-    if (!row) return { ok: false, error: 'Could not save the debts.' };
-    created.push(row);
-  }
-
-  const rows = created.filter((r): r is NonNullable<typeof r> => r != null);
-  const debtIds = rows.map((r) => r.id);
-
-  // Shape the created debts so the list can render them optimistically.
-  const [px, existing] = await Promise.all([
+  const [px, detail] = await Promise.all([
     loadPricing(user.displayCurrency),
-    listDebtsWithProgress(user.id),
+    getDebtWithDetail(user.id, row.id),
   ]);
-  const count = existing.filter((d) => d.personId === person.id).length;
-  const pv = personView(person, count);
-  const debts = rows.map((r) => buildDebtView(r, 0, 0, pv, px));
+  const debt = detail
+    ? buildDebtView(
+        detail,
+        detail.lines,
+        detail.entries,
+        personView(detail.person),
+        px,
+      )
+    : undefined;
 
-  revalidate();
-  debtIds.forEach((id) => revalidate(id));
   await notifyPersonOfDebts(
     person,
     ownerName(user.name),
-    debtIds.length === 1
-      ? `${ownerName(user.name)} added a debt to keep things transparent between you.`
-      : `${ownerName(user.name)} added ${debtIds.length} debts to keep things transparent between you.`,
+    `${ownerName(user.name)} added a debt to keep things transparent between you.`,
   );
-  return { ok: true, debtIds, debts };
+  return { ok: true, debtId: row.id, debt };
 }
 
 export async function deleteDebtAction(id: string): Promise<FormState> {
@@ -330,19 +342,28 @@ export async function settleDebtAction(
   settled: boolean,
 ): Promise<FormState> {
   const user = await requireUser();
-  const detail = await getDebtWithEntries(user.id, debtId);
+  const detail = await getDebtWithDetail(user.id, debtId);
   if (!detail) return { ok: false, error: 'That debt no longer exists.' };
 
   if (settled) {
-    const { remainingMinor } = debtProgress({
-      principalMinor: detail.principalMinor,
-      paidMinor: detail.paidMinor,
-    });
-    if (remainingMinor > 0) {
+    const balances = denomBalances(
+      detail.lines.map((l) => ({
+        denom: denomOf(l),
+        amountMinor: l.amountMinor,
+      })),
+      detail.entries.map((e) => ({
+        denom: denomOf(e),
+        amountMinor: e.amountMinor,
+      })),
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    for (const b of balances) {
+      if (b.outstandingMinor <= 0) continue;
       await addDebtEntry(user.id, debtId, {
-        amountMinor: remainingMinor,
+        amountMinor: b.outstandingMinor,
         note: 'Settled in full',
-        occurredOn: new Date().toISOString().slice(0, 10),
+        occurredOn: today,
+        ...denomColumns(b.denom),
       });
     }
     await setDebtSettled(user.id, debtId, true);
@@ -361,6 +382,121 @@ export async function settleDebtAction(
   return { ok: true };
 }
 
+/** Record a covering repayment for one denomination's outstanding balance. */
+export async function settleDenomAction(
+  debtId: string,
+  denomKeyStr: string,
+): Promise<FormState> {
+  const user = await requireUser();
+  const detail = await getDebtWithDetail(user.id, debtId);
+  if (!detail) return { ok: false, error: 'That debt no longer exists.' };
+
+  const balances = denomBalances(
+    detail.lines.map((l) => ({ denom: denomOf(l), amountMinor: l.amountMinor })),
+    detail.entries.map((e) => ({
+      denom: denomOf(e),
+      amountMinor: e.amountMinor,
+    })),
+  );
+  const balance = balances.find((b) => denomKey(b.denom) === denomKeyStr);
+  if (!balance) return { ok: false, error: 'No such balance.' };
+
+  if (balance.outstandingMinor > 0) {
+    await addDebtEntry(user.id, debtId, {
+      amountMinor: balance.outstandingMinor,
+      note: 'Settled',
+      occurredOn: new Date().toISOString().slice(0, 10),
+      ...denomColumns(balance.denom),
+    });
+  }
+  await reevalSettled(user.id, debtId);
+  revalidate(debtId);
+  await notifyPersonOfDebts(
+    detail.person,
+    ownerName(user.name),
+    `${ownerName(user.name)} settled a balance on a debt.`,
+  );
+  return { ok: true };
+}
+
+// --- rows -------------------------------------------------------------
+
+export async function addLineAction(
+  debtId: string,
+  values: DebtLineValue,
+): Promise<FormState> {
+  const user = await requireUser();
+  const parsed = debtLineSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+  const line = parseDenomLine(parsed.data);
+  if (!line) {
+    return {
+      ok: false,
+      fieldErrors: { amount: [amountErrorFor(parsed.data.denomKind)] },
+    };
+  }
+  const row = await addDebtLine(user.id, debtId, line);
+  if (!row) return { ok: false, error: 'That debt no longer exists.' };
+  await reevalSettled(user.id, debtId);
+  revalidate(debtId);
+  await notifyDebtChanged(user.id, user.name, debtId, 'added a row to a debt');
+  return { ok: true };
+}
+
+export async function updateLineAction(
+  debtId: string,
+  lineId: string,
+  values: DebtLineValue,
+): Promise<FormState> {
+  const user = await requireUser();
+  const parsed = debtLineSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+  const line = parseDenomLine(parsed.data);
+  if (!line) {
+    return {
+      ok: false,
+      fieldErrors: { amount: [amountErrorFor(parsed.data.denomKind)] },
+    };
+  }
+  const row = await updateDebtLine(user.id, lineId, line);
+  if (!row) return { ok: false, error: 'That row no longer exists.' };
+  await reevalSettled(user.id, debtId);
+  revalidate(debtId);
+  await notifyDebtChanged(user.id, user.name, debtId, 'edited a debt');
+  return { ok: true };
+}
+
+export async function deleteLineAction(
+  debtId: string,
+  lineId: string,
+): Promise<FormState> {
+  const user = await requireUser();
+  await deleteDebtLine(user.id, lineId);
+  await reevalSettled(user.id, debtId);
+  revalidate(debtId);
+  await notifyDebtChanged(user.id, user.name, debtId, 'removed a row from a debt');
+  return { ok: true };
+}
+
+async function notifyDebtChanged(
+  userId: string,
+  name: string | null,
+  debtId: string,
+  what: string,
+): Promise<void> {
+  const detail = await getDebtWithDetail(userId, debtId);
+  if (!detail) return;
+  await notifyPersonOfDebts(
+    detail.person,
+    ownerName(name),
+    `${ownerName(name)} ${what} you share.`,
+  );
+}
+
 // --- repayments -------------------------------------------------------
 
 export async function recordRepaymentAction(
@@ -375,20 +511,23 @@ export async function recordRepaymentAction(
   const debt = await getDebtRow(user.id, debtId);
   if (!debt) return { ok: false, error: 'That debt no longer exists.' };
 
-  let amountMinor: number;
-  try {
-    amountMinor =
-      debt.denomKind === 'gold'
-        ? parseGoldQuantity(parsed.data.amount)
-        : parseMoneyInput(parsed.data.amount, debt.currency).minorUnits;
-  } catch {
-    return { ok: false, fieldErrors: { amount: ['Not a valid amount'] } };
+  const line = parseDenomLine(parsed.data);
+  if (!line) {
+    return {
+      ok: false,
+      fieldErrors: { amount: [amountErrorFor(parsed.data.denomKind)] },
+    };
   }
 
   const entry = await addDebtEntry(user.id, debtId, {
-    amountMinor,
+    amountMinor: line.amountMinor,
     note: parsed.data.note,
     occurredOn: parsed.data.occurredOn,
+    denomKind: line.denomKind,
+    currency: line.currency,
+    goldType: line.goldType,
+    goldLabel: line.goldLabel,
+    goldUnit: line.goldUnit,
   });
   if (!entry) return { ok: false, error: 'Could not record the repayment.' };
 
@@ -399,15 +538,9 @@ export async function recordRepaymentAction(
     );
   }
 
-  const detail = await getDebtWithEntries(user.id, debtId);
+  await reevalSettled(user.id, debtId);
+  const detail = await getDebtWithDetail(user.id, debtId);
   if (detail) {
-    const { settled } = debtProgress({
-      principalMinor: detail.principalMinor,
-      paidMinor: detail.paidMinor,
-    });
-    if (settled && detail.settledAt == null) {
-      await setDebtSettled(user.id, debtId, true);
-    }
     await notifyPersonOfDebts(
       detail.person,
       ownerName(user.name),
@@ -425,14 +558,7 @@ export async function deleteRepaymentAction(
 ): Promise<FormState> {
   const user = await requireUser();
   await deleteDebtEntry(user.id, entryId);
-  const detail = await getDebtWithEntries(user.id, debtId);
-  if (detail && detail.settledAt != null) {
-    const { settled } = debtProgress({
-      principalMinor: detail.principalMinor,
-      paidMinor: detail.paidMinor,
-    });
-    if (!settled) await setDebtSettled(user.id, debtId, false);
-  }
+  await reevalSettled(user.id, debtId);
   revalidate(debtId);
   return { ok: true };
 }
@@ -563,7 +689,7 @@ export async function resendPersonLinkAction(
   const user = await requireUser();
   const person = await getDebtPersonById(user.id, personId);
   if (!person) return { ok: false, error: 'That person no longer exists.' };
-  const anyDebt = (await listDebtsWithProgress(user.id)).some(
+  const anyDebt = (await listDebtsWithLines(user.id)).some(
     (d) => d.personId === personId,
   );
   if (!anyDebt) {
