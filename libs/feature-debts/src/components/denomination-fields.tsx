@@ -2,6 +2,7 @@
 
 import { GOLD_CUSTOM_KEY, GOLD_TYPES, goldUnitFor } from '@wib/domain';
 import { AmountField, Field, Input, Label, cn } from '@wib/ui';
+import { GoldMark } from './gold-mark';
 
 export interface DenomValue {
   /** Money minor-unit string, or a gold quantity string. */
@@ -90,24 +91,27 @@ export function DenominationFields({
         <>
           <Field>
             <Label htmlFor={`${idPrefix}-gold-type`}>Gold type</Label>
-            <select
-              id={`${idPrefix}-gold-type`}
-              className="h-10 rounded-md border border-line-strong bg-surface px-2 text-sm text-ink"
-              value={goldTypeKey}
-              onChange={(e) => pickGoldType(e.target.value)}
-            >
-              {GOLD_GROUPS.map((g) => (
-                <optgroup key={g.group} label={g.label}>
-                  {GOLD_TYPES.filter((t) => t.group === g.group).map((t) => (
-                    <option key={t.key} value={t.key}>
-                      {t.label}
-                      {t.hint ? ` — ${t.hint}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-              <option value={GOLD_CUSTOM_KEY}>Custom…</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <GoldMark type={goldTypeKey} size={16} />
+              <select
+                id={`${idPrefix}-gold-type`}
+                className="h-10 flex-1 rounded-md border border-line-strong bg-surface px-2 text-sm text-ink"
+                value={goldTypeKey}
+                onChange={(e) => pickGoldType(e.target.value)}
+              >
+                {GOLD_GROUPS.map((g) => (
+                  <optgroup key={g.group} label={g.label}>
+                    {GOLD_TYPES.filter((t) => t.group === g.group).map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.label}
+                        {t.hint ? ` — ${t.hint}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                <option value={GOLD_CUSTOM_KEY}>Custom…</option>
+              </select>
+            </div>
           </Field>
 
           {isCustomGold ? (

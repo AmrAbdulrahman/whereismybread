@@ -1,11 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GOLD_TYPE_BY_KEY,
+  goldFineGrams,
   formatGold,
   goldQuantityString,
   goldTypeLabel,
   goldUnitFor,
   parseGoldQuantity,
 } from './gold';
+
+describe('catalogue', () => {
+  it('includes the 50 g bar', () => {
+    expect(GOLD_TYPE_BY_KEY.get('bar_50g')).toMatchObject({
+      unit: 'piece',
+      group: 'bar',
+    });
+  });
+});
+
+describe('goldFineGrams', () => {
+  it('scales carat purity by weight', () => {
+    expect(goldFineGrams('k24', 10)).toBeCloseTo(10);
+    expect(goldFineGrams('k21', 10)).toBeCloseTo(8.75);
+    expect(goldFineGrams('k18', 4)).toBeCloseTo(3);
+  });
+  it('prices coins and bars per piece', () => {
+    expect(goldFineGrams('coin_egp', 2)).toBeCloseTo(14);
+    expect(goldFineGrams('bar_50g', 1)).toBeCloseTo(49.95);
+    expect(goldFineGrams('bar_oz', 1)).toBeCloseTo(31.072, 2);
+  });
+  it('returns null for a custom or unknown type', () => {
+    expect(goldFineGrams('custom', 5)).toBeNull();
+    expect(goldFineGrams('nope', 5)).toBeNull();
+  });
+});
 
 describe('parseGoldQuantity', () => {
   it('scales to thousandths', () => {

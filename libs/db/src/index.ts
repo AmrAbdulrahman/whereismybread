@@ -188,7 +188,7 @@ export {
   type PaymentOverrides,
 } from './lib/repositories/payment-events';
 
-export { getRates } from './lib/repositories/rates';
+export { getRates, getGoldSpotUsdPerOz } from './lib/repositories/rates';
 
 export {
   listBudgets,

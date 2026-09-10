@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { debtHeadline, formatDebtAmount } from '@wib/domain';
+import { debtHeadline, formatDebtAmount, formatMoney, money } from '@wib/domain';
 import {
   AttachmentViewer,
   AttachmentsField,
@@ -34,6 +34,7 @@ import {
 } from '../lib/actions';
 import type { DebtDetail as DebtDetailData, PersonView } from '../lib/types';
 import { DebtForm, type DebtFormInitial } from './debt-form';
+import { GoldMark } from './gold-mark';
 import { PersonAvatar } from './person-avatar';
 import { RepaymentForm } from './repayment-form';
 
@@ -52,6 +53,7 @@ export function DebtDetail({
   today,
   usedCurrencies,
   defaultCurrency,
+  displayCurrency,
   shareUrl,
 }: {
   debt: DebtDetailData;
@@ -59,6 +61,7 @@ export function DebtDetail({
   today: string;
   usedCurrencies: string[];
   defaultCurrency: string;
+  displayCurrency: string;
   shareUrl: string;
 }) {
   const router = useRouter();
@@ -73,6 +76,13 @@ export function DebtDetail({
   const [viewing, setViewing] = useState<ViewableAttachment | null>(null);
 
   const pct = Math.round(debt.progress * 100);
+  const sameCurrency =
+    debt.denom.kind === 'money' &&
+    debt.denom.currency.toUpperCase() === displayCurrency.toUpperCase();
+  const equivalent =
+    debt.equivalentMinor != null && !sameCurrency
+      ? formatMoney(money(debt.equivalentMinor, displayCurrency))
+      : null;
 
   const run = async (fn: () => Promise<{ ok: boolean; error?: string; message?: string }>) => {
     setBusy(true);
@@ -159,13 +169,19 @@ export function DebtDetail({
 
       <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
         <div className="flex items-baseline justify-between">
-          <span className="text-2xl font-bold text-ink">
+          <span className="flex items-center gap-1.5 text-2xl font-bold text-ink">
+            {debt.denom.kind === 'gold' ? (
+              <GoldMark type={debt.denom.goldType} size={18} />
+            ) : null}
             {formatDebtAmount(debt.remainingMinor, debt.denom)}
           </span>
           <span className="text-sm text-muted">
             {debt.settled ? 'settled' : 'still owed'}
           </span>
         </div>
+        {equivalent ? (
+          <p className="-mt-1 text-xs text-ink-soft">≈ {equivalent} in {displayCurrency}</p>
+        ) : null}
         <Progress
           value={pct}
           indicatorClassName={debt.settled ? 'bg-teal' : undefined}

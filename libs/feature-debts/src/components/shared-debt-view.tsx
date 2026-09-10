@@ -1,4 +1,10 @@
-import { debtHeadlineForOther, formatDebtAmount } from '@wib/domain';
+import {
+  debtEquivalentTotals,
+  debtHeadlineForOther,
+  formatDebtAmount,
+  formatMoney,
+  money,
+} from '@wib/domain';
 import {
   Progress,
   Wordmark,
@@ -8,6 +14,7 @@ import {
 } from '@wib/ui';
 import { Paperclip } from '@wib/ui/icons';
 import type { SharedView } from '../lib/types';
+import { GoldMark } from './gold-mark';
 
 function fmtDate(d: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -56,6 +63,15 @@ export function SharedDebtView({
 }) {
   const open = view.debts.filter((d) => !d.settled);
   const settled = view.debts.filter((d) => d.settled);
+  const eq = debtEquivalentTotals(
+    open.map((d) => ({
+      direction: d.direction,
+      // From the other party's view the direction is flipped.
+      equivalentMinor: d.equivalentMinor,
+    })),
+  );
+  const fmt = (m: number) =>
+    formatMoney(money(m, view.displayCurrency));
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,6 +84,16 @@ export function SharedDebtView({
             : `${view.ownerName} shared this so you can both see where things stand.`}
         </p>
       </div>
+
+      {eq.priced > 0 ? (
+        <p className="rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink-soft">
+          <span className="text-warn">≈ {fmt(eq.theyOweMinor)} you owe</span>{' '}
+          · <span className="text-teal">≈ {fmt(eq.iOweMinor)} owed to you</span>
+          {eq.unpriced > 0 ? (
+            <span className="text-muted"> · {eq.unpriced} not priced</span>
+          ) : null}
+        </p>
+      ) : null}
 
       {view.debts.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
@@ -97,9 +123,12 @@ export function SharedDebtView({
                     <p className="text-sm font-semibold text-ink">
                       {debtHeadlineForOther(d.direction, view.ownerName)}
                     </p>
-                    <p className="shrink-0 text-sm font-semibold text-ink">
+                    <p className="flex shrink-0 items-center gap-1 text-sm font-semibold text-ink">
+                      {d.denom.kind === 'gold' ? (
+                        <GoldMark type={d.denom.goldType} size={12} />
+                      ) : null}
                       {formatDebtAmount(d.remainingMinor, d.denom)}
-                      <span className="ml-1 text-[11px] font-normal text-muted">
+                      <span className="text-[11px] font-normal text-muted">
                         {d.settled ? 'settled' : 'left'}
                       </span>
                     </p>
@@ -107,6 +136,14 @@ export function SharedDebtView({
                   <p className="-mt-1 text-xs text-ink-soft">
                     {d.description ? `${d.description} · ` : ''}
                     incurred {fmtDate(d.incurredOn)}
+                    {d.equivalentMinor != null &&
+                    !(
+                      d.denom.kind === 'money' &&
+                      d.denom.currency.toUpperCase() ===
+                        view.displayCurrency.toUpperCase()
+                    )
+                      ? ` · ≈ ${fmt(d.equivalentMinor)}`
+                      : ''}
                   </p>
                   <Progress
                     value={pct}

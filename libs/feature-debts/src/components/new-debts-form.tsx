@@ -7,7 +7,7 @@ import { Button, Field, Input, Label, ResponsiveModal } from '@wib/ui';
 import { Plus, Trash2 } from '@wib/ui/icons';
 import { saveDebtsAction } from '../lib/actions';
 import { newDebtsSchema, type NewDebtsValues } from '../lib/schema';
-import type { PersonView } from '../lib/types';
+import type { DebtView, PersonView } from '../lib/types';
 import { DenominationFields, type DenomValue } from './denomination-fields';
 import { DirectionToggle } from './direction-toggle';
 import { PersonForm } from './person-form';
@@ -42,7 +42,7 @@ export function NewDebtsForm({
   today: string;
   defaultCurrency: string;
   usedCurrencies?: string[];
-  onDone: (debtIds: string[]) => void;
+  onDone: (created: DebtView[]) => void;
   onCancel: () => void;
 }) {
   const [formError, setFormError] = useState<string>();
@@ -98,8 +98,8 @@ export function NewDebtsForm({
   const submit = handleSubmit(async (values) => {
     setFormError(undefined);
     const result = await saveDebtsAction(values);
-    if (result.ok && result.debtIds) {
-      onDone(result.debtIds);
+    if (result.ok) {
+      onDone(result.debts ?? []);
       return;
     }
     for (const [field, msgs] of Object.entries(result.fieldErrors ?? {})) {

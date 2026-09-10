@@ -25,6 +25,7 @@ export default async function DebtPage({
       today={data.today}
       usedCurrencies={data.usedCurrencies}
       defaultCurrency={data.defaultCurrency}
+      displayCurrency={data.displayCurrency}
       shareUrl={`${data.appUrl}/d/${debt.person.shareId}`}
     />
   );

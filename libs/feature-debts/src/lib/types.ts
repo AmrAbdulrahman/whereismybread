@@ -41,6 +41,11 @@ export interface DebtView {
   createdAt: string;
   person: PersonView;
   entryCount: number;
+  /** Outstanding, converted to the app's display currency — `null` if it can't
+   * be converted (no FX rate, or a custom gold type). */
+  equivalentMinor: number | null;
+  /** Same, for the original principal. */
+  principalEquivalentMinor: number | null;
 }
 
 export interface DebtDetail extends DebtView {
@@ -54,6 +59,8 @@ export interface DebtsData {
   people: PersonView[];
   usedCurrencies: string[];
   defaultCurrency: string;
+  /** The currency amounts are shown converted into. */
+  displayCurrency: string;
   /** `YYYY-MM-DD` in the user's timezone. */
   today: string;
   /** Absolute origin for building share links (`${appUrl}/d/<shareId>`). */
@@ -64,6 +71,8 @@ export interface DebtsData {
 export interface SharedView {
   personName: string;
   ownerName: string;
+  /** The owner's display currency — equivalents are shown in it. */
+  displayCurrency: string;
   debts: Array<{
     id: string;
     direction: DebtDirection;
@@ -75,6 +84,7 @@ export interface SharedView {
     settled: boolean;
     description: string;
     incurredOn: string;
+    equivalentMinor: number | null;
     attachments: StoredAttachment[];
     entries: DebtEntryView[];
   }>;

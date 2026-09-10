@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  debtEquivalentTotals,
   debtHeadline,
   debtHeadlineForOther,
   debtProgress,
@@ -98,6 +99,24 @@ describe('headlines', () => {
     expect(debtHeadline('i_owe', 'Sarah')).toBe('You owe Sarah');
     expect(debtHeadlineForOther('they_owe', 'Amr')).toBe('You owe Amr');
     expect(debtHeadlineForOther('i_owe', 'Amr')).toBe('Amr owes you');
+  });
+});
+
+describe('debtEquivalentTotals', () => {
+  it('splits both sides and counts what could not be priced', () => {
+    const t = debtEquivalentTotals([
+      { direction: 'they_owe', equivalentMinor: 10000 },
+      { direction: 'they_owe', equivalentMinor: 2500 },
+      { direction: 'i_owe', equivalentMinor: 4000 },
+      { direction: 'i_owe', equivalentMinor: null },
+    ]);
+    expect(t).toEqual({
+      theyOweMinor: 12500,
+      iOweMinor: 4000,
+      netMinor: 8500,
+      priced: 3,
+      unpriced: 1,
+    });
   });
 });
 

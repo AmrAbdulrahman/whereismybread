@@ -134,6 +134,49 @@ export function summariseDebts(
     .map(([, v]) => v);
 }
 
+export interface DebtEquivalentTotals {
+  /** Outstanding others owe the user, converted to the display currency. */
+  theyOweMinor: number;
+  /** Outstanding the user owes others, converted. */
+  iOweMinor: number;
+  /** `theyOwe - iOwe`. */
+  netMinor: number;
+  /** How many outstanding debts had a usable conversion. */
+  priced: number;
+  /** How many were skipped (no FX rate, or a custom gold type). */
+  unpriced: number;
+}
+
+/**
+ * Roll pre-computed per-debt equivalents (already in one display currency) into
+ * a both-sides total. `equivalentMinor === null` means the debt couldn't be
+ * converted and is only counted in `unpriced`.
+ */
+export function debtEquivalentTotals(
+  rows: readonly { direction: DebtDirection; equivalentMinor: number | null }[],
+): DebtEquivalentTotals {
+  let theyOweMinor = 0;
+  let iOweMinor = 0;
+  let priced = 0;
+  let unpriced = 0;
+  for (const r of rows) {
+    if (r.equivalentMinor == null || r.equivalentMinor <= 0) {
+      if (r.equivalentMinor == null) unpriced += 1;
+      continue;
+    }
+    priced += 1;
+    if (r.direction === 'they_owe') theyOweMinor += r.equivalentMinor;
+    else iOweMinor += r.equivalentMinor;
+  }
+  return {
+    theyOweMinor,
+    iOweMinor,
+    netMinor: theyOweMinor - iOweMinor,
+    priced,
+    unpriced,
+  };
+}
+
 /** A 6-digit numeric one-time code, as a zero-padded string. */
 export function isOtpCode(value: string): boolean {
   return /^\d{6}$/.test(value.trim());

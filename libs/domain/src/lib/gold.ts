@@ -44,8 +44,43 @@ export const GOLD_TYPES: readonly GoldType[] = [
   { key: 'bar_5g', label: '5 g bar (999)', unit: 'piece', group: 'bar' },
   { key: 'bar_10g', label: '10 g bar (999)', unit: 'piece', group: 'bar' },
   { key: 'bar_20g', label: '20 g bar (999)', unit: 'piece', group: 'bar' },
+  { key: 'bar_50g', label: '50 g bar (999)', unit: 'piece', group: 'bar' },
   { key: 'bar_oz', label: '1 oz bar (999)', unit: 'piece', group: 'bar' },
 ] as const;
+
+/** One troy ounce in grams. */
+export const OZ_GRAMS = 31.1034768;
+
+/**
+ * Fine (24K / pure) gold grams in **one unit** of each built-in type. Per gram
+ * for the carat types; per piece for coins and bars. `custom` has no known
+ * purity/weight and can't be priced.
+ */
+export const GOLD_FINE_GRAMS: Readonly<Record<string, number>> = {
+  k24: 1,
+  k21: 0.875,
+  k18: 0.75,
+  coin_egp: 7.0, // 8 g of 21K
+  coin_sovereign: 7.322, // 7.98805 g of 22K
+  coin_islamic: 4.25, // 4.25 g of 24K
+  bar_1g: 0.999,
+  bar_2g: 1.998,
+  bar_5g: 4.995,
+  bar_10g: 9.99,
+  bar_20g: 19.98,
+  bar_50g: 49.95,
+  bar_oz: OZ_GRAMS * 0.999,
+};
+
+/**
+ * Total fine gold grams for `qty` units (grams or pieces, per the type) of a
+ * gold type, or `null` when it can't be priced — a custom type or unknown key.
+ */
+export function goldFineGrams(key: string, qty: number): number | null {
+  const perUnit = GOLD_FINE_GRAMS[key];
+  if (perUnit == null || !Number.isFinite(qty) || qty < 0) return null;
+  return perUnit * qty;
+}
 
 /** The stored key for a user-defined type. */
 export const GOLD_CUSTOM_KEY = 'custom';

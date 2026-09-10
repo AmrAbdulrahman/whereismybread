@@ -37,7 +37,7 @@ import {
   type StoredAttachment,
 } from '@wib/ui';
 import { revalidatePath } from 'next/cache';
-import { getDebtPeople } from './queries';
+import { buildDebtView, getDebtPeople, loadPricing, personView } from './queries';
 import { notifyPersonOfDebts } from './notify';
 import {
   debtFormSchema,
@@ -49,7 +49,7 @@ import {
   type PersonFormValues,
   type RepaymentFormValues,
 } from './schema';
-import type { PersonView } from './types';
+import type { DebtView, PersonView } from './types';
 
 /** Shared denomination fields, validated by `denomLineShape` in both schemas. */
 interface DenomLine {
@@ -256,7 +256,7 @@ export async function saveDebtAction(
  */
 export async function saveDebtsAction(
   values: NewDebtsValues,
-): Promise<FormState & { debtIds?: string[] }> {
+): Promise<FormState & { debtIds?: string[]; debts?: DebtView[] }> {
   const user = await requireUser();
   const parsed = newDebtsSchema.safeParse(values);
   if (!parsed.success) {
@@ -267,7 +267,7 @@ export async function saveDebtsAction(
     return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
   }
 
-  const debtIds: string[] = [];
+  const created: Awaited<ReturnType<typeof createDebt>>[] = [];
   for (const [i, line] of parsed.data.lines.entries()) {
     const denom = denomColumns(line);
     if (!denom.ok) {
@@ -291,8 +291,20 @@ export async function saveDebtsAction(
       notes: null,
     });
     if (!row) return { ok: false, error: 'Could not save the debts.' };
-    debtIds.push(row.id);
+    created.push(row);
   }
+
+  const rows = created.filter((r): r is NonNullable<typeof r> => r != null);
+  const debtIds = rows.map((r) => r.id);
+
+  // Shape the created debts so the list can render them optimistically.
+  const [px, existing] = await Promise.all([
+    loadPricing(user.displayCurrency),
+    listDebtsWithProgress(user.id),
+  ]);
+  const count = existing.filter((d) => d.personId === person.id).length;
+  const pv = personView(person, count);
+  const debts = rows.map((r) => buildDebtView(r, 0, 0, pv, px));
 
   revalidate();
   debtIds.forEach((id) => revalidate(id));
@@ -303,7 +315,7 @@ export async function saveDebtsAction(
       ? `${ownerName(user.name)} added a debt to keep things transparent between you.`
       : `${ownerName(user.name)} added ${debtIds.length} debts to keep things transparent between you.`,
   );
-  return { ok: true, debtIds };
+  return { ok: true, debtIds, debts };
 }
 
 export async function deleteDebtAction(id: string): Promise<FormState> {

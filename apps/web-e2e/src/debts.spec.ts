@@ -51,7 +51,10 @@ test('debts: create, repay, settle, and view via the OTP shared page', async ({
   await modal.getByLabel('Note (optional)').fill('Concert tickets');
   await modal.getByRole('button', { name: 'Add debt' }).click();
 
-  // Landed on the detail page.
+  // Stays on the list (optimistic) — open the new card for the detail page.
+  await expect(modal).toBeHidden();
+  await expect(page).toHaveURL(/\/debts$/);
+  await page.getByRole('link', { name: /Concert tickets/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
   await expect(
     page.getByRole('heading', { name: 'Sarah Cole owes you' }),
@@ -124,6 +127,8 @@ test('debts: a gold-denominated debt tracks quantity and shows on the shared pag
   await modal.getByLabel('Note (optional)').fill('Wedding gift');
   await modal.getByRole('button', { name: 'Add debt' }).click();
 
+  await expect(modal).toBeHidden();
+  await page.getByRole('link', { name: /Wedding gift/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
   await expect(
     page.getByText(/0 g of 21K gold repaid of 10 g of 21K gold/),
@@ -184,14 +189,14 @@ test('debts: several entries to one person in one go, grouped under a person pan
   await expect(page).toHaveURL(/\/debts$/);
   const panel = page.locator('section').filter({ hasText: 'Dana Roy' });
   await expect(panel).toBeVisible();
-  await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
+  await expect(panel.getByText(/€20\.00 to you/).first()).toBeVisible();
   await expect(panel.getByText(/5 g of 21K gold to you/)).toBeVisible();
   await expect(panel.getByRole('listitem')).toHaveCount(2);
 
   // The panel collapses — cards hide, the summary stays.
   await panel.getByRole('button', { expanded: true }).click();
   await expect(panel.getByRole('listitem')).toHaveCount(0);
-  await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
+  await expect(panel.getByText(/€20\.00 to you/).first()).toBeVisible();
   await panel.getByRole('button', { expanded: false }).click();
   await expect(panel.getByRole('listitem')).toHaveCount(2);
 
@@ -232,6 +237,8 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
   await modal.getByLabel('Amount').fill('80');
   await modal.getByLabel('Note (optional)').fill('Groceries');
   await modal.getByRole('button', { name: 'Add debt' }).click();
+  await expect(modal).toBeHidden();
+  await page.getByRole('link', { name: /Groceries/ }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
 
   // Attach a file to the debt itself (edit mode — hits the server now).
@@ -296,4 +303,53 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
   await expect(
     people.getByRole('button', { name: 'Delete Alexandra Kerr' }),
   ).toBeDisabled();
+});
+
+test('debts: optimistic add, gold icons, 50 g bar, app-currency equivalents', async ({
+  page,
+}) => {
+  await signUp(page);
+  const email = `omar-${Date.now()}@example.com`;
+
+  await page.goto('/debts');
+  await page.getByRole('button', { name: 'New debt' }).first().click();
+  const modal = page.getByRole('dialog', { name: 'New debt' });
+  await modal.getByRole('button', { name: 'New' }).click();
+  const pm = page.getByRole('dialog', { name: 'New person' });
+  await pm.getByLabel('Name').fill('Omar Said');
+  await pm.getByLabel('Email').fill(email);
+  await pm.getByRole('button', { name: 'Add person' }).click();
+
+  // 100 USD, while the app currency is EUR → an `≈ €` equivalent.
+  await modal.getByRole('button', { name: 'They owe me' }).click();
+  await modal.getByLabel('Amount').fill('100');
+  await modal.getByRole('button', { name: 'EUR' }).click();
+  const ccy = page.getByRole('dialog', { name: 'Choose currency' });
+  await ccy.getByPlaceholder('Search currencies…').fill('USD');
+  await ccy.getByRole('button', { name: /USD/ }).first().click();
+  await modal.locator('#nd-0-note').fill('cash loan');
+
+  const t0 = Date.now();
+  await modal.getByRole('button', { name: 'Add debt' }).click();
+  await expect(modal).toBeHidden();
+  await expect(page).toHaveURL(/\/debts$/); // stayed on the list
+  const card = page.getByRole('link', { name: /cash loan/ });
+  await expect(card).toBeVisible(); // optimistic — no reload
+  expect(Date.now() - t0).toBeLessThan(10_000);
+  await expect(card.getByText(/≈\s*€/)).toBeVisible();
+  await expect(page.getByText(/≈.*owed to you/)).toBeVisible();
+
+  // A 50 g gold bar, with an icon on the card.
+  const panel = page.locator('section').filter({ hasText: 'Omar Said' });
+  await panel.getByRole('button', { name: 'Add' }).click();
+  const add = page.getByRole('dialog', { name: /New debt · Omar Said/ });
+  await add.getByRole('button', { name: 'Gold', exact: true }).click();
+  await add.getByLabel('Gold type').selectOption('bar_50g');
+  await add.getByLabel('Quantity (pieces)').fill('1');
+  await add.getByRole('button', { name: 'Add debt' }).click();
+  await expect(add).toBeHidden();
+
+  const goldCard = page.getByRole('link', { name: /50 g bar/ });
+  await expect(goldCard).toBeVisible();
+  expect(await goldCard.locator('svg').count()).toBeGreaterThan(0);
 });

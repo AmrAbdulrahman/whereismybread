@@ -79,3 +79,74 @@ export async function getRates(): Promise<RateMap> {
   memo = { rates: fresh, at: Date.now() };
   return fresh;
 }
+
+// --- gold spot -----------------------------------------------------------
+//
+// Cached the same way as FX: one row in `exchange_rate_snapshots` keyed
+// `base = 'XAU'`, `rates = { USD: <price per troy ounce> }`. No migration.
+
+const GOLD_BASE = 'XAU';
+let goldRefreshing: Promise<number | null> | null = null;
+let goldMemo: { usdPerOz: number; at: number } | null = null;
+
+async function refreshGoldSpot(): Promise<number | null> {
+  try {
+    const res = await fetch('https://api.gold-api.com/price/XAU', {
+      signal: AbortSignal.timeout(2500),
+    });
+    const json = (await res.json()) as { price?: number };
+    const price = json.price;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+      return null;
+    }
+    await getDb()
+      .insert(exchangeRateSnapshots)
+      .values({ base: GOLD_BASE, rates: { USD: price }, fetchedAt: new Date() })
+      .onConflictDoUpdate({
+        target: exchangeRateSnapshots.base,
+        set: { rates: { USD: price }, fetchedAt: new Date() },
+      });
+    return price;
+  } catch {
+    return null;
+  }
+}
+
+function refreshGoldInBackground(): void {
+  if (goldRefreshing) return;
+  goldRefreshing = refreshGoldSpot().finally(() => {
+    goldRefreshing = null;
+  });
+  void goldRefreshing.catch(() => undefined);
+}
+
+/**
+ * Gold spot in USD per troy ounce, or `null` when it has never been fetched and
+ * the provider is unreachable. Serves the cached snapshot immediately, refreshes
+ * in the background when stale. Never throws.
+ */
+export async function getGoldSpotUsdPerOz(): Promise<number | null> {
+  if (goldMemo && Date.now() - goldMemo.at < MEMO_MS) return goldMemo.usdPerOz;
+
+  const rows = await getDb()
+    .select()
+    .from(exchangeRateSnapshots)
+    .where(eq(exchangeRateSnapshots.base, GOLD_BASE))
+    .limit(1);
+  const snap = rows[0];
+
+  if (snap) {
+    const price = snap.rates['USD'];
+    if (typeof price === 'number' && price > 0) {
+      if (Date.now() - snap.fetchedAt.getTime() >= STALE_MS) {
+        refreshGoldInBackground();
+      }
+      goldMemo = { usdPerOz: price, at: Date.now() };
+      return price;
+    }
+  }
+
+  const fresh = await refreshGoldSpot();
+  if (fresh != null) goldMemo = { usdPerOz: fresh, at: Date.now() };
+  return fresh;
+}
