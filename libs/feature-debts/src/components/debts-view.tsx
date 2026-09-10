@@ -3,12 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  debtHeadline,
-  formatMoney,
-  money,
-  summariseDebts,
-} from '@wib/domain';
+import { debtHeadline, formatDebtAmount, summariseDebts } from '@wib/domain';
 import { Button, Progress, ResponsiveModal, cn } from '@wib/ui';
 import { Plus, Scale, Users } from '@wib/ui/icons';
 import type { DebtsData, DebtView } from '../lib/types';
@@ -36,7 +31,7 @@ function DebtCard({ debt }: { debt: DebtView }) {
           </div>
           <div className="shrink-0 text-right">
             <p className="text-sm font-semibold text-ink">
-              {formatMoney(money(debt.remainingMinor, debt.currency))}
+              {formatDebtAmount(debt.remainingMinor, debt.denom)}
             </p>
             <p className="text-[11px] text-muted">
               {debt.settled ? 'settled' : 'left'}
@@ -51,8 +46,8 @@ function DebtCard({ debt }: { debt: DebtView }) {
           />
           <div className="flex items-center justify-between text-[11px] text-muted">
             <span>
-              {formatMoney(money(debt.paidMinor, debt.currency))} of{' '}
-              {formatMoney(money(debt.principalMinor, debt.currency))} repaid
+              {formatDebtAmount(debt.paidMinor, debt.denom)} of{' '}
+              {formatDebtAmount(debt.principalMinor, debt.denom)} repaid
             </span>
             {debt.settled ? (
               <span className="font-semibold text-teal">Settled</span>
@@ -74,7 +69,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
   const totals = summariseDebts(
     data.debts.map((d) => ({
       direction: d.direction,
-      currency: d.currency,
+      denom: d.denom,
       principalMinor: d.principalMinor,
       paidMinor: d.paidMinor,
     })),
@@ -116,18 +111,18 @@ export function DebtsView({ data }: { data: DebtsData }) {
 
       {totals.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {totals.map((t) => (
+          {totals.map((t, i) => (
             <li
-              key={t.currency}
-              className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm"
+              key={i}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line bg-surface px-3.5 py-3 text-sm"
             >
               <Scale size={16} className="shrink-0 text-muted" />
               <span className="text-teal">
-                {formatMoney(money(t.theyOweMinor, t.currency))} owed to you
+                {formatDebtAmount(t.theyOweMinor, t.denom)} owed to you
               </span>
               <span className="text-muted">·</span>
               <span className="text-warn">
-                {formatMoney(money(t.iOweMinor, t.currency))} you owe
+                {formatDebtAmount(t.iOweMinor, t.denom)} you owe
               </span>
               <span
                 className={cn(
@@ -136,7 +131,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
                 )}
               >
                 {t.netMinor >= 0 ? '+' : '−'}
-                {formatMoney(money(Math.abs(t.netMinor), t.currency))}
+                {formatDebtAmount(Math.abs(t.netMinor), t.denom)}
               </span>
             </li>
           ))}

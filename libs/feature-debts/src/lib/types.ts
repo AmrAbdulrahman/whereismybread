@@ -1,9 +1,9 @@
-import type { DebtDirection } from '@wib/domain';
+import type { DebtDenomination, DebtDirection } from '@wib/domain';
 import type { StoredAttachment } from '@wib/ui';
 
 /** Client-safe view models — no DB rows, no server-only imports. */
 
-export type { StoredAttachment };
+export type { StoredAttachment, DebtDenomination };
 
 export interface PersonView {
   id: string;
@@ -28,7 +28,7 @@ export interface DebtEntryView {
 export interface DebtView {
   id: string;
   direction: DebtDirection;
-  currency: string;
+  denom: DebtDenomination;
   principalMinor: number;
   paidMinor: number;
   remainingMinor: number;
@@ -67,7 +67,7 @@ export interface SharedView {
   debts: Array<{
     id: string;
     direction: DebtDirection;
-    currency: string;
+    denom: DebtDenomination;
     principalMinor: number;
     paidMinor: number;
     remainingMinor: number;

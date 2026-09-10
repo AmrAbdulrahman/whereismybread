@@ -44,6 +44,34 @@ describe('debtFormSchema', () => {
     expect(parsed.attachments).toEqual([]);
   });
 
+  it('accepts a gold debt and defaults the type', () => {
+    const parsed = debtFormSchema.parse({
+      personId: '11111111-1111-4111-8111-111111111111',
+      direction: 'they_owe',
+      denomKind: 'gold',
+      amount: '10',
+      incurredOn: '2026-09-10',
+    });
+    expect(parsed.denomKind).toBe('gold');
+    expect(parsed.goldType).toBe('k21');
+    expect(parsed.goldUnit).toBe('g');
+  });
+
+  it('needs a label for a custom gold type', () => {
+    const base = {
+      personId: '11111111-1111-4111-8111-111111111111',
+      direction: 'they_owe' as const,
+      denomKind: 'gold' as const,
+      goldType: 'custom',
+      amount: '3',
+      incurredOn: '2026-09-10',
+    };
+    expect(debtFormSchema.safeParse(base).success).toBe(false);
+    expect(
+      debtFormSchema.safeParse({ ...base, goldLabel: '22K bangle' }).success,
+    ).toBe(true);
+  });
+
   it('requires the incurred date', () => {
     expect(
       debtFormSchema.safeParse({

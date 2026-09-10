@@ -48,23 +48,40 @@ export const personFormSchema = z.object({
 });
 export type PersonFormValues = z.input<typeof personFormSchema>;
 
-/** A debt: who, which way, how much, what for. */
-export const debtFormSchema = z.object({
-  personId: z.string().uuid('Pick a person'),
-  direction: z.enum(['they_owe', 'i_owe']).default('they_owe'),
-  amount,
-  currency: z.string().trim().toUpperCase().length(3).default('EUR'),
-  incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
-  description: z.preprocess(
-    (v) => (typeof v === 'string' ? v.trim() : v),
-    z.string().max(120).default(''),
-  ),
-  notes: z.preprocess(
-    blankToNull,
-    z.string().trim().max(1000).nullable().default(null),
-  ),
-  attachments: z.array(attachmentDraftSchema).max(20).default([]),
-});
+/** A debt: who, which way, how much (money or gold), what for. */
+export const debtFormSchema = z
+  .object({
+    personId: z.string().uuid('Pick a person'),
+    direction: z.enum(['they_owe', 'i_owe']).default('they_owe'),
+    /** Money minor units, or a gold quantity — parsed per `denomKind`. */
+    amount,
+    denomKind: z.enum(['money', 'gold']).default('money'),
+    currency: z.string().trim().toUpperCase().length(3).default('EUR'),
+    /** A `@wib/domain` gold catalogue key, or `'custom'`. */
+    goldType: z.string().trim().min(1).max(40).default('k21'),
+    goldLabel: z.preprocess(
+      blankToNull,
+      z.string().trim().max(60).nullable().default(null),
+    ),
+    goldUnit: z.enum(['g', 'piece']).default('g'),
+    incurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
+    description: z.preprocess(
+      (v) => (typeof v === 'string' ? v.trim() : v),
+      z.string().max(120).default(''),
+    ),
+    notes: z.preprocess(
+      blankToNull,
+      z.string().trim().max(1000).nullable().default(null),
+    ),
+    attachments: z.array(attachmentDraftSchema).max(20).default([]),
+  })
+  .refine(
+    (v) =>
+      v.denomKind !== 'gold' ||
+      v.goldType !== 'custom' ||
+      (v.goldLabel != null && v.goldLabel.length > 0),
+    { path: ['goldLabel'], message: 'Name the gold type' },
+  );
 export type DebtFormValues = z.input<typeof debtFormSchema>;
 
 /** One repayment against a debt (currency is the debt's, not chosen here). */

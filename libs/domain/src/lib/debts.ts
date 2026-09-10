@@ -1,12 +1,41 @@
 /**
  * Debt tracking — pure helpers shared by the DB layer, the owner UI and the
- * external (OTP-verified) shared page. A debt has a fixed `principalMinor` in
- * one `currency`; repayments ("entries") are recorded in that same currency and
- * chip away at it. All amounts here are integer minor units.
+ * external (OTP-verified) shared page. A debt has a fixed principal in one
+ * *denomination* — a fiat currency, or a gold type (see `./gold`). Repayments
+ * ("entries") are in that same denomination and chip away at it. Amounts are
+ * always integers: minor currency units for money, thousandths of a gram /
+ * piece for gold — so the progress math below is denomination-agnostic.
  */
+
+import { formatGold, type GoldUnit } from './gold';
+import { formatMoney, money } from './money';
 
 /** `they_owe` — someone owes the user. `i_owe` — the user owes someone. */
 export type DebtDirection = 'they_owe' | 'i_owe';
+
+/** What a debt's principal + repayments are measured in. */
+export type DebtDenomination =
+  | { kind: 'money'; currency: string }
+  | {
+      kind: 'gold';
+      goldType: string;
+      goldLabel: string | null;
+      unit: GoldUnit;
+    };
+
+/** A stable key for grouping debts that share a denomination (no FX). */
+export function denomKey(d: DebtDenomination): string {
+  return d.kind === 'money'
+    ? `money:${d.currency.toUpperCase()}`
+    : `gold:${d.goldType}:${d.goldType === 'custom' ? (d.goldLabel ?? '').trim().toLowerCase() : ''}`;
+}
+
+/** The one place a debt amount is turned into display text. */
+export function formatDebtAmount(minor: number, d: DebtDenomination): string {
+  return d.kind === 'money'
+    ? formatMoney(money(Math.round(minor), d.currency))
+    : formatGold(minor, d.goldType, d.goldLabel, d.unit);
+}
 
 export interface DebtProgress {
   /** Sum of every repayment, clamped to `[0, principal]`. */
@@ -56,14 +85,14 @@ export function debtHeadlineForOther(
 
 export interface DebtLike {
   direction: DebtDirection;
-  currency: string;
+  denom: DebtDenomination;
   principalMinor: number;
   paidMinor: number;
   settledAt?: string | Date | null;
 }
 
-export interface DebtCurrencyTotals {
-  currency: string;
+export interface DebtDenominationTotals {
+  denom: DebtDenomination;
   /** Outstanding amount others owe the user. */
   theyOweMinor: number;
   /** Outstanding amount the user owes others. */
@@ -75,18 +104,20 @@ export interface DebtCurrencyTotals {
 }
 
 /**
- * Roll a list of debts up into per-currency outstanding totals. Only the
- * unsettled remainder counts. Debts are grouped by currency because v1 does
- * no FX conversion.
+ * Roll a list of debts up into per-denomination outstanding totals. Only the
+ * unsettled remainder counts. Grouped by denomination because there is no FX /
+ * gold conversion.
  */
-export function summariseDebts(debts: readonly DebtLike[]): DebtCurrencyTotals[] {
-  const byCurrency = new Map<string, DebtCurrencyTotals>();
+export function summariseDebts(
+  debts: readonly DebtLike[],
+): DebtDenominationTotals[] {
+  const byDenom = new Map<string, DebtDenominationTotals>();
   for (const d of debts) {
     const { remainingMinor } = debtProgress(d);
     if (remainingMinor <= 0) continue;
-    const key = d.currency.toUpperCase();
-    const bucket = byCurrency.get(key) ?? {
-      currency: key,
+    const key = denomKey(d.denom);
+    const bucket = byDenom.get(key) ?? {
+      denom: d.denom,
       theyOweMinor: 0,
       iOweMinor: 0,
       netMinor: 0,
@@ -96,11 +127,11 @@ export function summariseDebts(debts: readonly DebtLike[]): DebtCurrencyTotals[]
     else bucket.iOweMinor += remainingMinor;
     bucket.netMinor = bucket.theyOweMinor - bucket.iOweMinor;
     bucket.count += 1;
-    byCurrency.set(key, bucket);
+    byDenom.set(key, bucket);
   }
-  return [...byCurrency.values()].sort((a, b) =>
-    a.currency.localeCompare(b.currency),
-  );
+  return [...byDenom.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v);
 }
 
 /** A 6-digit numeric one-time code, as a zero-padded string. */

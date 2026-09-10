@@ -1,4 +1,4 @@
-import { debtHeadlineForOther, formatMoney, money } from '@wib/domain';
+import { debtHeadlineForOther, formatDebtAmount } from '@wib/domain';
 import {
   Progress,
   Wordmark,
@@ -98,7 +98,7 @@ export function SharedDebtView({
                       {debtHeadlineForOther(d.direction, view.ownerName)}
                     </p>
                     <p className="shrink-0 text-sm font-semibold text-ink">
-                      {formatMoney(money(d.remainingMinor, d.currency))}
+                      {formatDebtAmount(d.remainingMinor, d.denom)}
                       <span className="ml-1 text-[11px] font-normal text-muted">
                         {d.settled ? 'settled' : 'left'}
                       </span>
@@ -113,8 +113,8 @@ export function SharedDebtView({
                     indicatorClassName={d.settled ? 'bg-teal' : undefined}
                   />
                   <p className="text-[11px] text-muted">
-                    {formatMoney(money(d.paidMinor, d.currency))} repaid of{' '}
-                    {formatMoney(money(d.principalMinor, d.currency))} · {pct}%
+                    {formatDebtAmount(d.paidMinor, d.denom)} repaid of{' '}
+                    {formatDebtAmount(d.principalMinor, d.denom)} · {pct}%
                   </p>
 
                   <AttachmentChips files={d.attachments} />
@@ -129,7 +129,7 @@ export function SharedDebtView({
                               {e.note ? ` · ${e.note}` : ''}
                             </span>
                             <span className="font-medium text-ink">
-                              {formatMoney(money(e.amountMinor, d.currency))}
+                              {formatDebtAmount(e.amountMinor, d.denom)}
                             </span>
                           </div>
                           <AttachmentChips files={e.attachments} />

@@ -22,7 +22,12 @@ import {
   updateDebt,
   updateDebtPerson,
 } from '@wib/db';
-import { debtProgress, parseMoneyInput } from '@wib/domain';
+import {
+  debtProgress,
+  goldUnitFor,
+  parseGoldQuantity,
+  parseMoneyInput,
+} from '@wib/domain';
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_TYPES,
@@ -148,21 +153,32 @@ export async function saveDebtAction(
     return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
   }
 
+  const isGold = parsed.data.denomKind === 'gold';
   let principalMinor: number;
   try {
-    principalMinor = parseMoneyInput(
-      parsed.data.amount,
-      parsed.data.currency,
-    ).minorUnits;
+    principalMinor = isGold
+      ? parseGoldQuantity(parsed.data.amount)
+      : parseMoneyInput(parsed.data.amount, parsed.data.currency).minorUnits;
   } catch {
-    return { ok: false, fieldErrors: { amount: ['Not a valid amount'] } };
+    return {
+      ok: false,
+      fieldErrors: {
+        amount: [isGold ? 'Not a valid quantity' : 'Not a valid amount'],
+      },
+    };
   }
 
   const input = {
     personId: parsed.data.personId,
     direction: parsed.data.direction,
     principalMinor,
+    denomKind: parsed.data.denomKind,
     currency: parsed.data.currency,
+    goldType: isGold ? parsed.data.goldType : null,
+    goldLabel: isGold ? parsed.data.goldLabel : null,
+    goldUnit: isGold
+      ? goldUnitFor(parsed.data.goldType, parsed.data.goldUnit)
+      : null,
     incurredOn: parsed.data.incurredOn,
     description: parsed.data.description ?? '',
     notes: parsed.data.notes,
@@ -253,7 +269,10 @@ export async function recordRepaymentAction(
 
   let amountMinor: number;
   try {
-    amountMinor = parseMoneyInput(parsed.data.amount, debt.currency).minorUnits;
+    amountMinor =
+      debt.denomKind === 'gold'
+        ? parseGoldQuantity(parsed.data.amount)
+        : parseMoneyInput(parsed.data.amount, debt.currency).minorUnits;
   } catch {
     return { ok: false, fieldErrors: { amount: ['Not a valid amount'] } };
   }

@@ -101,6 +101,57 @@ test('debts: create, repay, settle, and view via the OTP shared page', async ({
   await outsider.close();
 });
 
+test('debts: a gold-denominated debt tracks quantity and shows on the shared page', async ({
+  page,
+  browser,
+}) => {
+  await signUp(page);
+  const personEmail = `nabil-${Date.now()}@example.com`;
+
+  await page.goto('/debts');
+  await page.getByRole('button', { name: 'New debt' }).first().click();
+  const modal = page.getByRole('dialog', { name: 'New debt' });
+  await modal.getByRole('button', { name: 'New' }).click();
+  const personModal = page.getByRole('dialog', { name: 'New person' });
+  await personModal.getByLabel('Name').fill('Nabil Fahmy');
+  await personModal.getByLabel('Email').fill(personEmail);
+  await personModal.getByRole('button', { name: 'Add person' }).click();
+
+  // Switch the denomination to Gold, 21K, 10 g.
+  await modal.getByRole('button', { name: 'Gold', exact: true }).click();
+  await modal.getByLabel('Gold type').selectOption('k21');
+  await modal.getByLabel('Quantity (g)').fill('10');
+  await modal.getByLabel("What's it for?").fill('Wedding gift');
+  await modal.getByRole('button', { name: 'Create debt' }).click();
+
+  await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
+  await expect(
+    page.getByText(/0 g of 21K gold repaid of 10 g of 21K gold/),
+  ).toBeVisible();
+
+  // Repay 4 g.
+  await page.getByRole('button', { name: 'Record repayment' }).click();
+  const repay = page.getByRole('dialog', { name: 'Record a repayment' });
+  await expect(repay.getByText(/Repay the rest · 10 g of 21K gold/)).toBeVisible();
+  await repay.getByLabel('Amount (g)').fill('4');
+  await repay.getByRole('button', { name: 'Record repayment' }).click();
+  await expect(
+    page.getByText(/4 g of 21K gold repaid of 10 g of 21K gold/),
+  ).toBeVisible();
+
+  const shareUrl = await page.getByLabel('Shared debt link').inputValue();
+  const outsider = await browser.newContext();
+  const guest = await outsider.newPage();
+  await guest.goto(shareUrl);
+  await guest.getByLabel('Email').fill(personEmail);
+  await guest.getByRole('button', { name: 'Send me a code' }).click();
+  await guest.getByRole('button', { name: 'View the debt' }).click();
+  await expect(
+    guest.getByText(/4 g of 21K gold repaid of 10 g of 21K gold/),
+  ).toBeVisible();
+  await outsider.close();
+});
+
 test('debts: attachments on debt + repayment, visible on the shared page; people manager', async ({
   page,
   browser,

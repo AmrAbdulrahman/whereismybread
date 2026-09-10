@@ -117,8 +117,14 @@ export async function updateDebtPerson(
 export interface DebtInput {
   personId: string;
   direction: DebtDirection;
+  /** Minor currency units, or thousandths of a gram/piece for gold. */
   principalMinor: number;
+  /** `'money'` or `'gold'`. */
+  denomKind: string;
   currency: string;
+  goldType: string | null;
+  goldLabel: string | null;
+  goldUnit: string | null;
   description: string;
   notes: string | null;
   /** `YYYY-MM-DD` — when the debt was incurred. */
@@ -275,7 +281,11 @@ export async function createDebt(
       personId: input.personId,
       direction: input.direction,
       principalMinor: input.principalMinor,
+      denomKind: input.denomKind,
       currency: input.currency,
+      goldType: input.goldType,
+      goldLabel: input.goldLabel,
+      goldUnit: input.goldUnit,
       description: input.description.trim(),
       notes: input.notes,
       incurredOn: input.incurredOn,
@@ -296,7 +306,11 @@ export async function updateDebt(
       personId: input.personId,
       direction: input.direction,
       principalMinor: input.principalMinor,
+      denomKind: input.denomKind,
       currency: input.currency,
+      goldType: input.goldType,
+      goldLabel: input.goldLabel,
+      goldUnit: input.goldUnit,
       description: input.description.trim(),
       notes: input.notes,
       incurredOn: input.incurredOn,

@@ -3,7 +3,11 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { formatMoney, money } from '@wib/domain';
+import {
+  formatDebtAmount,
+  goldQuantityString,
+  type DebtDenomination,
+} from '@wib/domain';
 import {
   AttachmentsField,
   Button,
@@ -22,20 +26,30 @@ import { repaymentFormSchema, type RepaymentFormValues } from '../lib/schema';
 
 export function RepaymentForm({
   debtId,
-  currency,
+  denom,
   remainingMinor,
   today,
   onDone,
   onCancel,
 }: {
   debtId: string;
-  currency: string;
+  denom: DebtDenomination;
   remainingMinor: number;
   today: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
   const [formError, setFormError] = useState<string>();
+
+  const isGold = denom.kind === 'gold';
+  const unitLabel = isGold
+    ? denom.unit === 'piece'
+      ? 'pieces'
+      : 'g'
+    : denom.currency;
+  const restValue = isGold
+    ? goldQuantityString(remainingMinor)
+    : (remainingMinor / 100).toFixed(2);
 
   const {
     register,
@@ -75,27 +89,25 @@ export function RepaymentForm({
       ) : null}
 
       <Field>
-        <Label htmlFor="repayment-amount">Amount ({currency})</Label>
+        <Label htmlFor="repayment-amount">Amount ({unitLabel})</Label>
         <Input
           id="repayment-amount"
           inputMode="decimal"
-          placeholder="0.00"
+          placeholder={isGold ? '0' : '0.00'}
           {...register('amount')}
         />
         {remainingMinor > 0 ? (
           <button
             type="button"
             onClick={() =>
-              setValue(
-                'amount',
-                (remainingMinor / 100).toFixed(2),
-                { shouldDirty: true, shouldValidate: true },
-              )
+              setValue('amount', restValue, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
             }
             className="self-start text-[11px] font-medium text-accent underline-offset-2 hover:underline"
           >
-            Repay the rest ·{' '}
-            {formatMoney(money(remainingMinor, currency))}
+            Repay the rest · {formatDebtAmount(remainingMinor, denom)}
           </button>
         ) : null}
         {errors.amount?.message ? (

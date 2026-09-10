@@ -63,8 +63,21 @@ export const debts = pgTable(
       .notNull()
       .references(() => debtPeople.id, { onDelete: 'cascade' }),
     direction: text('direction').$type<DebtDirection>().notNull(),
+    /**
+     * The principal, as an integer in the denomination's smallest tracked
+     * unit: minor currency units for `denom_kind = 'money'`, thousandths of a
+     * gram / piece for `'gold'`.
+     */
     principalMinor: integer('principal_minor').notNull(),
+    /** `'money'` (uses `currency`) or `'gold'` (uses `gold_*`). */
+    denomKind: text('denom_kind').notNull().default('money'),
     currency: text('currency').notNull().default('EUR'),
+    /** A `@wib/domain` gold catalogue key, or `'custom'`. Null for money debts. */
+    goldType: text('gold_type'),
+    /** The user's label when `gold_type = 'custom'`. */
+    goldLabel: text('gold_label'),
+    /** `'g'` or `'piece'` — denormalised (fixed for built-ins). */
+    goldUnit: text('gold_unit'),
     description: text('description').notNull().default(''),
     notes: text('notes'),
     /** `YYYY-MM-DD` — when the debt was incurred. */

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { debtHeadline, formatMoney, money } from '@wib/domain';
+import { debtHeadline, formatDebtAmount } from '@wib/domain';
 import {
   AttachmentViewer,
   AttachmentsField,
@@ -103,8 +103,8 @@ export function DebtDetail({
     id: debt.id,
     personId: debt.person.id,
     direction: debt.direction,
-    amountMinor: debt.principalMinor,
-    currency: debt.currency,
+    principalMinor: debt.principalMinor,
+    denom: debt.denom,
     incurredOn: debt.incurredOn,
     description: debt.description,
     notes: debt.notes,
@@ -160,7 +160,7 @@ export function DebtDetail({
       <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
         <div className="flex items-baseline justify-between">
           <span className="text-2xl font-bold text-ink">
-            {formatMoney(money(debt.remainingMinor, debt.currency))}
+            {formatDebtAmount(debt.remainingMinor, debt.denom)}
           </span>
           <span className="text-sm text-muted">
             {debt.settled ? 'settled' : 'still owed'}
@@ -172,8 +172,8 @@ export function DebtDetail({
         />
         <div className="flex items-center justify-between text-xs text-muted">
           <span>
-            {formatMoney(money(debt.paidMinor, debt.currency))} repaid of{' '}
-            {formatMoney(money(debt.principalMinor, debt.currency))}
+            {formatDebtAmount(debt.paidMinor, debt.denom)} repaid of{' '}
+            {formatDebtAmount(debt.principalMinor, debt.denom)}
           </span>
           <span>{pct}%</span>
         </div>
@@ -279,7 +279,7 @@ export function DebtDetail({
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink">
-                      {formatMoney(money(e.amountMinor, debt.currency))}
+                      {formatDebtAmount(e.amountMinor, debt.denom)}
                     </p>
                     <p className="truncate text-[11px] text-muted">
                       {fmtDate(e.occurredOn)}
@@ -338,7 +338,7 @@ export function DebtDetail({
         {repayOpen ? (
           <RepaymentForm
             debtId={debt.id}
-            currency={debt.currency}
+            denom={debt.denom}
             remainingMinor={debt.remainingMinor}
             today={today}
             onDone={() => {

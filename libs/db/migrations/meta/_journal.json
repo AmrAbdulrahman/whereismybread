@@ -351,6 +351,13 @@
       "when": 1789053933043,
       "tag": "0049_debts_dates_and_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789060912176,
+      "tag": "0050_debt_gold",
+      "breakpoints": true
     }
   ]
 }

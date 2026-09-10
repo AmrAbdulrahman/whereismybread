@@ -11,7 +11,13 @@ import {
   type DebtEntry,
   type DebtPerson,
 } from '@wib/db';
-import { debtProgress, todayIn, type DebtDirection } from '@wib/domain';
+import {
+  debtProgress,
+  goldUnitFor,
+  todayIn,
+  type DebtDenomination,
+  type DebtDirection,
+} from '@wib/domain';
 import { serverEnv } from '@wib/config';
 import type { StoredAttachment } from '@wib/ui';
 import type {
@@ -32,6 +38,19 @@ function att(a: DebtAttachment): StoredAttachment {
     url: a.url,
     pathname: a.pathname,
   };
+}
+
+function denomOf(d: Debt): DebtDenomination {
+  if (d.denomKind === 'gold') {
+    const goldType = d.goldType ?? 'k21';
+    return {
+      kind: 'gold',
+      goldType,
+      goldLabel: d.goldLabel,
+      unit: goldUnitFor(goldType, d.goldUnit),
+    };
+  }
+  return { kind: 'money', currency: d.currency };
 }
 
 function personView(p: DebtPerson, debtCount = 0): PersonView {
@@ -71,7 +90,7 @@ function debtView(
   return {
     id: d.id,
     direction: d.direction as DebtDirection,
-    currency: d.currency,
+    denom: denomOf(d),
     principalMinor: d.principalMinor,
     paidMinor: p.paidMinor,
     remainingMinor: p.remainingMinor,
@@ -112,7 +131,12 @@ export async function getDebtsData(): Promise<DebtsData> {
     debts,
     people: peopleViews,
     usedCurrencies: [
-      ...new Set([...debts.map((d) => d.currency), user.defaultCurrency]),
+      ...new Set([
+        ...debts
+          .map((d) => (d.denom.kind === 'money' ? d.denom.currency : null))
+          .filter((c): c is string => c != null),
+        user.defaultCurrency,
+      ]),
     ],
     defaultCurrency: user.defaultCurrency,
     today: todayIn(user.timezone),
@@ -162,7 +186,7 @@ export async function getSharedView(shareId: string): Promise<SharedView | null>
       return {
         id: d.id,
         direction: d.direction as DebtDirection,
-        currency: d.currency,
+        denom: denomOf(d),
         principalMinor: d.principalMinor,
         paidMinor: p.paidMinor,
         remainingMinor: p.remainingMinor,
