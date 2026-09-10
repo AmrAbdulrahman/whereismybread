@@ -188,6 +188,13 @@ test('debts: several entries to one person in one go, grouped under a person pan
   await expect(panel.getByText(/5 g of 21K gold to you/)).toBeVisible();
   await expect(panel.getByRole('listitem')).toHaveCount(2);
 
+  // The panel collapses — cards hide, the summary stays.
+  await panel.getByRole('button', { expanded: true }).click();
+  await expect(panel.getByRole('listitem')).toHaveCount(0);
+  await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
+  await panel.getByRole('button', { expanded: false }).click();
+  await expect(panel.getByRole('listitem')).toHaveCount(2);
+
   // The panel's own "Add" appends a third to the same person.
   await panel.getByRole('button', { name: 'Add' }).click();
   const add = page.getByRole('dialog', { name: /New debt · Dana Roy/ });

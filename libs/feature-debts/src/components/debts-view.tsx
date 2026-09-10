@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { debtHeadline, formatDebtAmount, summariseDebts } from '@wib/domain';
 import { Button, Progress, ResponsiveModal, cn } from '@wib/ui';
-import { Plus, Scale, Users } from '@wib/ui/icons';
+import { ChevronDown, Plus, Scale, Users } from '@wib/ui/icons';
 import type { DebtsData, DebtView } from '../lib/types';
 import { NewDebtsForm } from './new-debts-form';
 import { PeopleManager } from './people-manager';
@@ -97,6 +97,15 @@ export function DebtsView({ data }: { data: DebtsData }) {
     { person?: DebtsData['people'][number] } | null
   >(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const toggleCollapsed = (personId: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(personId)) next.delete(personId);
+      else next.add(personId);
+      return next;
+    });
 
   const totals = summariseDebts(
     data.debts.map((d) => ({
@@ -204,37 +213,59 @@ export function DebtsView({ data }: { data: DebtsData }) {
         </div>
       ) : (
         <>
-          {groups.map((g) => (
-            <section
-              key={g.person.id}
-              className="flex flex-col gap-3 rounded-xl border border-line/70 bg-surface/40 p-3 sm:p-4"
-            >
-              <div className="flex items-start gap-3">
-                <PersonAvatar person={g.person} size={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">
-                    {g.person.name}
-                  </p>
-                  <PersonSummary debts={g.debts} />
+          {groups.map((g) => {
+            const isCollapsed = collapsed.has(g.person.id);
+            return (
+              <section
+                key={g.person.id}
+                className="flex flex-col gap-3 rounded-xl border border-line/70 bg-surface/40 p-3 sm:p-4"
+              >
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(g.person.id)}
+                    aria-expanded={!isCollapsed}
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                  >
+                    <ChevronDown
+                      size={16}
+                      className={cn(
+                        'mt-2.5 shrink-0 text-muted transition-transform',
+                        isCollapsed && '-rotate-90',
+                      )}
+                    />
+                    <PersonAvatar person={g.person} size={36} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-ink">
+                        {g.person.name}
+                        <span className="ml-1.5 font-normal text-muted">
+                          {g.debts.length}
+                        </span>
+                      </p>
+                      <PersonSummary debts={g.debts} />
+                    </div>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setNewDebts({ person: g.person })}
+                  >
+                    <Plus size={14} strokeWidth={2.5} />
+                    Add
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => setNewDebts({ person: g.person })}
-                >
-                  <Plus size={14} strokeWidth={2.5} />
-                  Add
-                </Button>
-              </div>
-              <ul className="flex flex-col gap-2">
-                {g.debts.map((d) => (
-                  <DebtCard key={d.id} debt={d} />
-                ))}
-              </ul>
-            </section>
-          ))}
+                {isCollapsed ? null : (
+                  <ul className="flex flex-col gap-2">
+                    {g.debts.map((d) => (
+                      <DebtCard key={d.id} debt={d} />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
           {settled.length > 0 ? (
             <div className="flex flex-col gap-3">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
