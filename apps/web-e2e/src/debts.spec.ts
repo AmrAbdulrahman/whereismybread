@@ -47,9 +47,9 @@ test('debts: create, repay, settle, and view via the OTP shared page', async ({
   // Back on the debt form.
   await modal.getByRole('button', { name: 'They owe me' }).click();
   await modal.getByLabel('Amount').fill('120');
-  await modal.getByLabel('Date incurred').fill('2026-02-14');
-  await modal.getByLabel("What's it for?").fill('Concert tickets');
-  await modal.getByRole('button', { name: 'Create debt' }).click();
+  await modal.getByLabel('Date').fill('2026-02-14');
+  await modal.getByLabel('Note (optional)').fill('Concert tickets');
+  await modal.getByRole('button', { name: 'Add debt' }).click();
 
   // Landed on the detail page.
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
@@ -121,8 +121,8 @@ test('debts: a gold-denominated debt tracks quantity and shows on the shared pag
   await modal.getByRole('button', { name: 'Gold', exact: true }).click();
   await modal.getByLabel('Gold type').selectOption('k21');
   await modal.getByLabel('Quantity (g)').fill('10');
-  await modal.getByLabel("What's it for?").fill('Wedding gift');
-  await modal.getByRole('button', { name: 'Create debt' }).click();
+  await modal.getByLabel('Note (optional)').fill('Wedding gift');
+  await modal.getByRole('button', { name: 'Add debt' }).click();
 
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
   await expect(
@@ -152,6 +152,59 @@ test('debts: a gold-denominated debt tracks quantity and shows on the shared pag
   await outsider.close();
 });
 
+test('debts: several entries to one person in one go, grouped under a person panel', async ({
+  page,
+}) => {
+  await signUp(page);
+  const personEmail = `dana-${Date.now()}@example.com`;
+
+  await page.goto('/debts');
+  await page.getByRole('button', { name: 'New debt' }).first().click();
+  const modal = page.getByRole('dialog', { name: 'New debt' });
+  await modal.getByRole('button', { name: 'New' }).click();
+  const personModal = page.getByRole('dialog', { name: 'New person' });
+  await personModal.getByLabel('Name').fill('Dana Roy');
+  await personModal.getByLabel('Email').fill(personEmail);
+  await personModal.getByRole('button', { name: 'Add person' }).click();
+
+  // Entry 1 — €20 money, with a note.
+  await modal.getByLabel('Amount').fill('20');
+  await modal.locator('#nd-0-note').fill('lunch');
+
+  // Entry 2 — 5 g of 21K gold.
+  await modal.getByRole('button', { name: 'Add another entry' }).click();
+  await modal.getByRole('button', { name: 'Gold', exact: true }).nth(1).click();
+  await modal.getByLabel('Gold type').selectOption('k21');
+  await modal.getByLabel('Quantity (g)').fill('5');
+
+  await modal.getByRole('button', { name: 'Add 2 debts' }).click();
+
+  // Back on the list — both debts sit under one "Dana Roy" panel.
+  await expect(page).toHaveURL(/\/debts$/);
+  const panel = page.locator('section').filter({ hasText: 'Dana Roy' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
+  await expect(panel.getByText(/5 g of 21K gold to you/)).toBeVisible();
+  await expect(panel.getByRole('listitem')).toHaveCount(2);
+
+  // The panel's own "Add" appends a third to the same person.
+  await panel.getByRole('button', { name: 'Add' }).click();
+  const add = page.getByRole('dialog', { name: /New debt · Dana Roy/ });
+  await add.getByRole('button', { name: 'Gold', exact: true }).click();
+  await add.getByLabel('Gold type').selectOption('bar_oz');
+  await add.getByLabel('Quantity (pieces)').fill('2');
+  await add.getByRole('button', { name: 'Add debt' }).click();
+  // The modal closes on success (single line → navigates to the debt).
+  await expect(add).toBeHidden();
+
+  await page.goto('/debts');
+  const panel2 = page.locator('section').filter({ hasText: 'Dana Roy' });
+  await expect(panel2.getByRole('listitem')).toHaveCount(3);
+  await expect(
+    panel2.getByRole('link').filter({ hasText: '1 oz bar (999)' }),
+  ).toHaveCount(1);
+});
+
 test('debts: attachments on debt + repayment, visible on the shared page; people manager', async ({
   page,
   browser,
@@ -169,8 +222,8 @@ test('debts: attachments on debt + repayment, visible on the shared page; people
   await personModal.getByRole('button', { name: 'Add person' }).click();
 
   await modal.getByLabel('Amount').fill('80');
-  await modal.getByLabel("What's it for?").fill('Groceries');
-  await modal.getByRole('button', { name: 'Create debt' }).click();
+  await modal.getByLabel('Note (optional)').fill('Groceries');
+  await modal.getByRole('button', { name: 'Add debt' }).click();
   await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
 
   // Attach a file to the debt itself (edit mode — hits the server now).

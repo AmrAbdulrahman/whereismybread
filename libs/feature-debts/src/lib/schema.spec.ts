@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   debtFormSchema,
+  newDebtsSchema,
   otpVerifySchema,
   personFormSchema,
   repaymentFormSchema,
@@ -94,6 +95,65 @@ describe('debtFormSchema', () => {
     expect(debtFormSchema.safeParse({ ...base, amount: '-5' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('newDebtsSchema', () => {
+  const PERSON = '11111111-1111-4111-8111-111111111111';
+  const line = (over: Record<string, unknown> = {}) => ({
+    amount: '10',
+    denomKind: 'money',
+    currency: 'usd',
+    occurredOn: '2026-09-10',
+    ...over,
+  });
+
+  it('accepts several mixed-denomination lines with per-line note + date', () => {
+    const parsed = newDebtsSchema.parse({
+      personId: PERSON,
+      direction: 'they_owe',
+      lines: [
+        line({ amount: '10', currency: 'usd', note: '  lunch ' }),
+        line({ amount: '30', currency: 'eur' }),
+        line({ denomKind: 'gold', goldType: 'bar_oz', amount: '1' }),
+      ],
+    });
+    expect(parsed.lines).toHaveLength(3);
+    expect(parsed.lines.map((l) => l.currency)).toEqual(['USD', 'EUR', 'USD']);
+    expect(parsed.lines.map((l) => l.note)).toEqual(['lunch', '', '']);
+    expect(parsed.lines.map((l) => l.denomKind)).toEqual([
+      'money',
+      'money',
+      'gold',
+    ]);
+  });
+
+  it('needs at least one line', () => {
+    expect(
+      newDebtsSchema.safeParse({ personId: PERSON, direction: 'they_owe', lines: [] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('requires a label on a custom-gold line', () => {
+    const bad = {
+      personId: PERSON,
+      direction: 'i_owe',
+      lines: [line({ denomKind: 'gold', goldType: 'custom', amount: '2' })],
+    };
+    expect(newDebtsSchema.safeParse(bad).success).toBe(false);
+    const good = {
+      ...bad,
+      lines: [
+        line({
+          denomKind: 'gold',
+          goldType: 'custom',
+          amount: '2',
+          goldLabel: 'scrap',
+        }),
+      ],
+    };
+    expect(newDebtsSchema.safeParse(good).success).toBe(true);
   });
 });
 

@@ -11,6 +11,7 @@ export {
   deletePersonAction,
   listPeopleAction,
   saveDebtAction,
+  saveDebtsAction,
   deleteDebtAction,
   settleDebtAction,
   recordRepaymentAction,

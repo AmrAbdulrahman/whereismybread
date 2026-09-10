@@ -7,7 +7,7 @@ import { debtHeadline, formatDebtAmount, summariseDebts } from '@wib/domain';
 import { Button, Progress, ResponsiveModal, cn } from '@wib/ui';
 import { Plus, Scale, Users } from '@wib/ui/icons';
 import type { DebtsData, DebtView } from '../lib/types';
-import { DebtForm } from './debt-form';
+import { NewDebtsForm } from './new-debts-form';
 import { PeopleManager } from './people-manager';
 import { PersonAvatar } from './person-avatar';
 
@@ -20,7 +20,6 @@ function DebtCard({ debt }: { debt: DebtView }) {
         className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3.5 transition-colors hover:border-line-strong sm:p-4"
       >
         <div className="flex items-start gap-3">
-          <PersonAvatar person={debt.person} size={38} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-ink">
               {debtHeadline(debt.direction, debt.person.name)}
@@ -61,9 +60,42 @@ function DebtCard({ debt }: { debt: DebtView }) {
   );
 }
 
+/** The per-denomination outstanding line(s) for one person. */
+function PersonSummary({ debts }: { debts: DebtView[] }) {
+  const totals = summariseDebts(
+    debts.map((d) => ({
+      direction: d.direction,
+      denom: d.denom,
+      principalMinor: d.principalMinor,
+      paidMinor: d.paidMinor,
+    })),
+  );
+  if (totals.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+      {totals.map((t, i) => (
+        <span key={i} className="flex flex-wrap gap-x-2">
+          {t.theyOweMinor > 0 ? (
+            <span className="text-teal">
+              {formatDebtAmount(t.theyOweMinor, t.denom)} to you
+            </span>
+          ) : null}
+          {t.iOweMinor > 0 ? (
+            <span className="text-warn">
+              {formatDebtAmount(t.iOweMinor, t.denom)} you owe
+            </span>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function DebtsView({ data }: { data: DebtsData }) {
   const router = useRouter();
-  const [formOpen, setFormOpen] = useState(false);
+  const [newDebts, setNewDebts] = useState<
+    { person?: DebtsData['people'][number] } | null
+  >(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
 
   const totals = summariseDebts(
@@ -79,13 +111,33 @@ export function DebtsView({ data }: { data: DebtsData }) {
   const settled = data.debts.filter((d) => d.settled);
   const empty = data.debts.length === 0;
 
+  // Group the open debts under one panel per person (most-recent activity first).
+  const groups: { person: DebtView['person']; debts: DebtView[] }[] = [];
+  const byPerson = new Map<string, { person: DebtView['person']; debts: DebtView[] }>();
+  for (const d of open) {
+    let group = byPerson.get(d.person.id);
+    if (!group) {
+      group = { person: d.person, debts: [] };
+      byPerson.set(d.person.id, group);
+      groups.push(group);
+    }
+    group.debts.push(d);
+  }
+
+  const finishNew = (debtIds: string[]) => {
+    setNewDebts(null);
+    const only = debtIds.length === 1 ? debtIds[0] : null;
+    if (only) router.push(`/debts/${only}`);
+    else router.refresh();
+  };
+
   return (
     <div className="flex max-w-2xl flex-col gap-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold sm:text-2xl">Debts</h1>
           <p className="mt-0.5 text-[13px] text-ink-soft sm:text-sm">
-            Money owed, and how repayment is going.
+            What&apos;s owed, and how repayment is going.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -101,7 +153,7 @@ export function DebtsView({ data }: { data: DebtsData }) {
           <Button
             size="sm"
             className="sm:h-10 sm:px-4"
-            onClick={() => setFormOpen(true)}
+            onClick={() => setNewDebts({})}
           >
             <Plus size={16} strokeWidth={3} />
             New debt
@@ -145,20 +197,44 @@ export function DebtsView({ data }: { data: DebtsData }) {
             Add a debt — who it&apos;s with and how much — and they&apos;ll get a
             private link to follow the repayments.
           </p>
-          <Button size="lg" onClick={() => setFormOpen(true)}>
+          <Button size="lg" onClick={() => setNewDebts({})}>
             <Plus size={18} strokeWidth={3} />
             New debt
           </Button>
         </div>
       ) : (
         <>
-          {open.length > 0 ? (
-            <ul className="flex flex-col gap-3">
-              {open.map((d) => (
-                <DebtCard key={d.id} debt={d} />
-              ))}
-            </ul>
-          ) : null}
+          {groups.map((g) => (
+            <section
+              key={g.person.id}
+              className="flex flex-col gap-3 rounded-xl border border-line/70 bg-surface/40 p-3 sm:p-4"
+            >
+              <div className="flex items-start gap-3">
+                <PersonAvatar person={g.person} size={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">
+                    {g.person.name}
+                  </p>
+                  <PersonSummary debts={g.debts} />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setNewDebts({ person: g.person })}
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  Add
+                </Button>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {g.debts.map((d) => (
+                  <DebtCard key={d.id} debt={d} />
+                ))}
+              </ul>
+            </section>
+          ))}
           {settled.length > 0 ? (
             <div className="flex flex-col gap-3">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -175,21 +251,19 @@ export function DebtsView({ data }: { data: DebtsData }) {
       )}
 
       <ResponsiveModal
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        title="New debt"
+        open={newDebts != null}
+        onOpenChange={(o) => !o && setNewDebts(null)}
+        title={newDebts?.person ? `New debt · ${newDebts.person.name}` : 'New debt'}
       >
-        {formOpen ? (
-          <DebtForm
+        {newDebts ? (
+          <NewDebtsForm
             people={data.people}
+            person={newDebts.person}
             today={data.today}
             defaultCurrency={data.defaultCurrency}
             usedCurrencies={data.usedCurrencies}
-            onDone={(debtId) => {
-              setFormOpen(false);
-              router.push(`/debts/${debtId}`);
-            }}
-            onCancel={() => setFormOpen(false)}
+            onDone={finishNew}
+            onCancel={() => setNewDebts(null)}
           />
         ) : null}
       </ResponsiveModal>

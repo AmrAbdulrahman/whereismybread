@@ -3,15 +3,8 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { goldQuantityString, type DebtDenomination } from '@wib/domain';
 import {
-  GOLD_CUSTOM_KEY,
-  GOLD_TYPES,
-  goldQuantityString,
-  goldUnitFor,
-  type DebtDenomination,
-} from '@wib/domain';
-import {
-  AmountField,
   AttachmentsField,
   Button,
   Field,
@@ -31,6 +24,7 @@ import {
 } from '../lib/actions';
 import { debtFormSchema, type DebtFormValues } from '../lib/schema';
 import type { PersonView } from '../lib/types';
+import { DenominationFields, type DenomValue } from './denomination-fields';
 import { PersonForm } from './person-form';
 
 export interface DebtFormInitial {
@@ -45,12 +39,6 @@ export interface DebtFormInitial {
   notes: string | null;
   attachments: StoredAttachment[];
 }
-
-const GOLD_GROUPS: { label: string; group: 'carat' | 'coin' | 'bar' }[] = [
-  { label: 'Purity (grams)', group: 'carat' },
-  { label: 'Coins', group: 'coin' },
-  { label: 'Bars (999)', group: 'bar' },
-];
 
 export function DebtForm({
   people,
@@ -114,23 +102,19 @@ export function DebtForm({
 
   const direction = watch('direction');
   const personId = watch('personId');
-  const currency = watch('currency');
-  const denomKind = watch('denomKind');
-  const goldType = watch('goldType');
-  const goldUnit = watch('goldUnit');
   const drafts = watch('attachments') ?? [];
 
-  const isGold = denomKind === 'gold';
-  const goldTypeKey = goldType ?? 'k21';
-  const isCustomGold = goldTypeKey === GOLD_CUSTOM_KEY;
-  const effUnit = isCustomGold
-    ? (goldUnit ?? 'g')
-    : goldUnitFor(goldTypeKey, null);
-
-  const pickGoldType = (key: string) => {
-    setValue('goldType', key, { shouldDirty: true, shouldValidate: true });
-    if (key !== GOLD_CUSTOM_KEY) {
-      setValue('goldUnit', goldUnitFor(key, null), { shouldDirty: true });
+  const denomValue: DenomValue = {
+    amount: watch('amount') ?? '',
+    denomKind: watch('denomKind') ?? 'money',
+    currency: watch('currency') ?? defaultCurrency,
+    goldType: watch('goldType') ?? 'k21',
+    goldLabel: (watch('goldLabel') as string | null) ?? null,
+    goldUnit: watch('goldUnit') ?? 'g',
+  };
+  const onDenomChange = (patch: Partial<DenomValue>) => {
+    for (const [k, v] of Object.entries(patch)) {
+      setValue(k as keyof DebtFormValues, v as never, { shouldDirty: true });
     }
   };
 
@@ -229,135 +213,14 @@ export function DebtForm({
           </div>
         </Field>
 
-        <Field>
-          <Label>Owed in</Label>
-          <div className="flex gap-1">
-            {(
-              [
-                ['money', 'Money'],
-                ['gold', 'Gold'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setValue('denomKind', value, { shouldDirty: true })
-                }
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  denomKind === value
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-line-strong text-muted hover:text-ink',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        {isGold ? (
-          <>
-            <Field>
-              <Label htmlFor="debt-gold-type">Gold type</Label>
-              <select
-                id="debt-gold-type"
-                className="h-10 rounded-md border border-line-strong bg-surface px-2 text-sm text-ink"
-                value={goldTypeKey}
-                onChange={(e) => pickGoldType(e.target.value)}
-              >
-                {GOLD_GROUPS.map((g) => (
-                  <optgroup key={g.group} label={g.label}>
-                    {GOLD_TYPES.filter((t) => t.group === g.group).map((t) => (
-                      <option key={t.key} value={t.key}>
-                        {t.label}
-                        {t.hint ? ` — ${t.hint}` : ''}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-                <option value={GOLD_CUSTOM_KEY}>Custom…</option>
-              </select>
-            </Field>
-
-            {isCustomGold ? (
-              <Field>
-                <Label htmlFor="debt-gold-label">Name it</Label>
-                <Input
-                  id="debt-gold-label"
-                  placeholder="e.g. 22K, mixed scrap, bangle"
-                  {...register('goldLabel')}
-                />
-                <div className="mt-1 flex gap-1">
-                  {(
-                    [
-                      ['g', 'Grams'],
-                      ['piece', 'Pieces'],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() =>
-                        setValue('goldUnit', value, { shouldDirty: true })
-                      }
-                      className={cn(
-                        'rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors',
-                        goldUnit === value
-                          ? 'border-accent bg-accent/15 text-accent'
-                          : 'border-line-strong text-muted hover:text-ink',
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {errors.goldLabel?.message ? (
-                  <p className="text-xs text-danger">
-                    {errors.goldLabel.message}
-                  </p>
-                ) : null}
-              </Field>
-            ) : null}
-
-            <Field>
-              <Label htmlFor="debt-amount">
-                Quantity ({effUnit === 'piece' ? 'pieces' : 'g'})
-              </Label>
-              <Input
-                id="debt-amount"
-                inputMode="decimal"
-                placeholder="0"
-                aria-invalid={errors.amount ? true : undefined}
-                {...register('amount')}
-              />
-              {errors.amount?.message ? (
-                <p className="text-xs text-danger">{errors.amount.message}</p>
-              ) : null}
-            </Field>
-          </>
-        ) : (
-          <Field>
-            <Label htmlFor="debt-amount">Amount</Label>
-            <AmountField
-              id="debt-amount"
-              amount={watch('amount') ?? ''}
-              onAmountChange={(v) =>
-                setValue('amount', v, { shouldDirty: true })
-              }
-              currency={currency ?? defaultCurrency}
-              onCurrencyChange={(c) =>
-                setValue('currency', c, { shouldDirty: true })
-              }
-              usedCurrencies={usedCurrencies}
-              invalid={!!errors.amount}
-            />
-            {errors.amount?.message ? (
-              <p className="text-xs text-danger">{errors.amount.message}</p>
-            ) : null}
-          </Field>
-        )}
+        <DenominationFields
+          idPrefix="debt"
+          value={denomValue}
+          onChange={onDenomChange}
+          usedCurrencies={usedCurrencies}
+          amountError={errors.amount?.message}
+          goldLabelError={errors.goldLabel?.message}
+        />
 
         <Field>
           <Label htmlFor="debt-date">Date incurred</Label>

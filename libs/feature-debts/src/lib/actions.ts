@@ -41,13 +41,61 @@ import { getDebtPeople } from './queries';
 import { notifyPersonOfDebts } from './notify';
 import {
   debtFormSchema,
+  newDebtsSchema,
   personFormSchema,
   repaymentFormSchema,
   type DebtFormValues,
+  type NewDebtsValues,
   type PersonFormValues,
   type RepaymentFormValues,
 } from './schema';
 import type { PersonView } from './types';
+
+/** Shared denomination fields, validated by `denomLineShape` in both schemas. */
+interface DenomLine {
+  amount: string;
+  denomKind: string;
+  currency: string;
+  goldType: string;
+  goldLabel: string | null;
+  goldUnit: string;
+}
+
+/** Parse a line's typed amount + denomination into the columns `createDebt` writes. */
+function denomColumns(line: DenomLine):
+  | {
+      ok: true;
+      value: {
+        principalMinor: number;
+        denomKind: string;
+        currency: string;
+        goldType: string | null;
+        goldLabel: string | null;
+        goldUnit: string | null;
+      };
+    }
+  | { ok: false } {
+  const isGold = line.denomKind === 'gold';
+  let principalMinor: number;
+  try {
+    principalMinor = isGold
+      ? parseGoldQuantity(line.amount)
+      : parseMoneyInput(line.amount, line.currency).minorUnits;
+  } catch {
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    value: {
+      principalMinor,
+      denomKind: line.denomKind,
+      currency: line.currency,
+      goldType: isGold ? line.goldType : null,
+      goldLabel: isGold ? line.goldLabel : null,
+      goldUnit: isGold ? goldUnitFor(line.goldType, line.goldUnit) : null,
+    },
+  };
+}
 
 function revalidate(debtId?: string) {
   revalidatePath('/debts');
@@ -153,17 +201,16 @@ export async function saveDebtAction(
     return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
   }
 
-  const isGold = parsed.data.denomKind === 'gold';
-  let principalMinor: number;
-  try {
-    principalMinor = isGold
-      ? parseGoldQuantity(parsed.data.amount)
-      : parseMoneyInput(parsed.data.amount, parsed.data.currency).minorUnits;
-  } catch {
+  const denom = denomColumns(parsed.data);
+  if (!denom.ok) {
     return {
       ok: false,
       fieldErrors: {
-        amount: [isGold ? 'Not a valid quantity' : 'Not a valid amount'],
+        amount: [
+          parsed.data.denomKind === 'gold'
+            ? 'Not a valid quantity'
+            : 'Not a valid amount',
+        ],
       },
     };
   }
@@ -171,14 +218,7 @@ export async function saveDebtAction(
   const input = {
     personId: parsed.data.personId,
     direction: parsed.data.direction,
-    principalMinor,
-    denomKind: parsed.data.denomKind,
-    currency: parsed.data.currency,
-    goldType: isGold ? parsed.data.goldType : null,
-    goldLabel: isGold ? parsed.data.goldLabel : null,
-    goldUnit: isGold
-      ? goldUnitFor(parsed.data.goldType, parsed.data.goldUnit)
-      : null,
+    ...denom.value,
     incurredOn: parsed.data.incurredOn,
     description: parsed.data.description ?? '',
     notes: parsed.data.notes,
@@ -208,6 +248,62 @@ export async function saveDebtAction(
       : `${ownerName(user.name)} added a debt to keep things transparent between you.`,
   );
   return { ok: true, debtId: row.id };
+}
+
+/**
+ * Create several debts with one person in one go — each line its own
+ * denomination + optional note + date. One notification email at the end.
+ */
+export async function saveDebtsAction(
+  values: NewDebtsValues,
+): Promise<FormState & { debtIds?: string[] }> {
+  const user = await requireUser();
+  const parsed = newDebtsSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+  const person = await getDebtPersonById(user.id, parsed.data.personId);
+  if (!person) {
+    return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
+  }
+
+  const debtIds: string[] = [];
+  for (const [i, line] of parsed.data.lines.entries()) {
+    const denom = denomColumns(line);
+    if (!denom.ok) {
+      return {
+        ok: false,
+        fieldErrors: {
+          [`lines.${i}.amount`]: [
+            line.denomKind === 'gold'
+              ? 'Not a valid quantity'
+              : 'Not a valid amount',
+          ],
+        },
+      };
+    }
+    const row = await createDebt(user.id, {
+      personId: parsed.data.personId,
+      direction: parsed.data.direction,
+      ...denom.value,
+      incurredOn: line.occurredOn,
+      description: line.note ?? '',
+      notes: null,
+    });
+    if (!row) return { ok: false, error: 'Could not save the debts.' };
+    debtIds.push(row.id);
+  }
+
+  revalidate();
+  debtIds.forEach((id) => revalidate(id));
+  await notifyPersonOfDebts(
+    person,
+    ownerName(user.name),
+    debtIds.length === 1
+      ? `${ownerName(user.name)} added a debt to keep things transparent between you.`
+      : `${ownerName(user.name)} added ${debtIds.length} debts to keep things transparent between you.`,
+  );
+  return { ok: true, debtIds };
 }
 
 export async function deleteDebtAction(id: string): Promise<FormState> {
