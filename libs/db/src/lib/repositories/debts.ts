@@ -123,7 +123,9 @@ export interface DebtLineInput {
   goldType: string | null;
   goldLabel: string | null;
   goldUnit: string | null;
-  /** Minor currency units, or thousandths of a gram/piece for gold. */
+  thingId: string | null;
+  thingName: string | null;
+  /** Minor currency units, or thousandths of a gram/piece for gold/things. */
   amountMinor: number;
 }
 
@@ -320,6 +322,8 @@ function lineValues(debtId: string, userId: string, l: DebtLineInput, i: number)
     goldType: l.goldType,
     goldLabel: l.goldLabel,
     goldUnit: l.goldUnit,
+    thingId: l.thingId,
+    thingName: l.thingName,
     amountMinor: l.amountMinor,
     sortOrder: i,
   };
@@ -461,6 +465,8 @@ export interface DebtEntryInput {
   goldType: string | null;
   goldLabel: string | null;
   goldUnit: string | null;
+  thingId: string | null;
+  thingName: string | null;
 }
 
 export async function addDebtEntry(
@@ -483,6 +489,8 @@ export async function addDebtEntry(
       goldType: input.goldType,
       goldLabel: input.goldLabel,
       goldUnit: input.goldUnit,
+      thingId: input.thingId,
+      thingName: input.thingName,
     })
     .returning();
   return rows[0] ?? null;

@@ -5,6 +5,7 @@ export {
   getDebtsData,
   getDebt,
   getDebtPeople,
+  getDebtThings,
   getSharedView,
 } from './lib/queries';
 export { hasDebtGrant } from './lib/grant';

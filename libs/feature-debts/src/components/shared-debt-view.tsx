@@ -4,7 +4,6 @@ import {
   denomKey,
   formatDebtAmount,
   formatMoney,
-  goldTypeLabel,
   money,
 } from '@wib/domain';
 import {
@@ -16,7 +15,7 @@ import {
 } from '@wib/ui';
 import { Paperclip } from '@wib/ui/icons';
 import type { SharedView } from '../lib/types';
-import { GoldMark } from './gold-mark';
+import { DenomMark, denomLabel } from './denom-mark';
 
 function fmtDate(d: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -65,6 +64,7 @@ export function SharedDebtView({
 }) {
   const open = view.debts.filter((d) => !d.settled);
   const settled = view.debts.filter((d) => d.settled);
+  const logos = new Map(view.things.map((t) => [t.id, t.logoUrl]));
   const eq = debtEquivalentTotals(
     open.map((d) => ({
       direction: d.direction,
@@ -133,18 +133,14 @@ export function SharedDebtView({
                     <div key={denomKey(b.denom)} className="flex flex-col gap-1">
                       <div className="flex items-baseline justify-between gap-2 text-sm">
                         <span className="flex items-center gap-1.5 font-semibold text-ink">
-                          {b.denom.kind === 'gold' ? (
-                            <GoldMark type={b.denom.goldType} size={12} />
-                          ) : null}
+                          <DenomMark denom={b.denom} size={12} logos={logos} />
                           {formatDebtAmount(b.outstandingMinor, b.denom)}
                           <span className="text-[11px] font-normal text-muted">
                             {b.settled ? 'settled' : 'left'}
                           </span>
                         </span>
                         <span className="text-[11px] text-muted">
-                          {b.denom.kind === 'money'
-                            ? b.denom.currency
-                            : goldTypeLabel(b.denom.goldType, b.denom.goldLabel)}
+                          {denomLabel(b.denom)}
                         </span>
                       </div>
                       <Progress
@@ -171,9 +167,7 @@ export function SharedDebtView({
                             {e.note ? ` · ${e.note}` : ''}
                           </span>
                           <span className="flex items-center gap-1 font-medium text-ink">
-                            {e.denom.kind === 'gold' ? (
-                              <GoldMark type={e.denom.goldType} size={11} />
-                            ) : null}
+                            <DenomMark denom={e.denom} size={11} logos={logos} />
                             {formatDebtAmount(e.amountMinor, e.denom)}
                           </span>
                         </div>

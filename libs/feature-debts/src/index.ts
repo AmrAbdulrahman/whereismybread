@@ -10,6 +10,9 @@ export {
   savePersonAction,
   deletePersonAction,
   listPeopleAction,
+  saveThingAction,
+  deleteThingAction,
+  listThingsAction,
   saveDebtAction,
   addLineAction,
   updateLineAction,
@@ -37,5 +40,6 @@ export type {
   DebtRowView,
   DenomBalanceView,
   PersonView,
+  ThingView,
   SharedView,
 } from './lib/types';

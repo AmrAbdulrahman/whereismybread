@@ -15,6 +15,19 @@ export interface PersonView {
   debtCount: number;
 }
 
+/** A user-defined denomination from the debt-things catalogue. */
+export interface ThingView {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  unit: 'g' | 'piece';
+  /** Per-unit reference value (minor units of `valueCurrency`). */
+  valueMinor: number;
+  valueCurrency: string;
+  /** How many debt rows / repayments use it (manager / delete guard). */
+  useCount: number;
+}
+
 /** One principal row of a debt basket. */
 export interface DebtRowView {
   id: string;
@@ -73,6 +86,7 @@ export interface DebtDetail extends DebtView {
 export interface DebtsData {
   debts: DebtView[];
   people: PersonView[];
+  things: ThingView[];
   usedCurrencies: string[];
   defaultCurrency: string;
   /** The currency amounts are shown converted into. */
@@ -89,6 +103,8 @@ export interface SharedView {
   ownerName: string;
   /** The owner's display currency — equivalents are shown in it. */
   displayCurrency: string;
+  /** The owner's things (id → name/logo), for rendering marks on shared rows. */
+  things: Array<{ id: string; name: string; logoUrl: string | null }>;
   debts: Array<{
     id: string;
     direction: DebtDirection;

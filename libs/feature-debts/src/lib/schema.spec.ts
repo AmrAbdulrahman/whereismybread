@@ -6,6 +6,7 @@ import {
   otpVerifySchema,
   personFormSchema,
   repaymentFormSchema,
+  thingFormSchema,
 } from './schema';
 
 const PERSON = '11111111-1111-4111-8111-111111111111';
@@ -48,12 +49,17 @@ describe('debtLineSchema', () => {
     expect(gold.goldUnit).toBe('g');
   });
 
-  it('needs a label for a custom gold type', () => {
-    const base = { amount: '3', denomKind: 'gold' as const, goldType: 'custom' };
-    expect(debtLineSchema.safeParse(base).success).toBe(false);
-    expect(
-      debtLineSchema.safeParse({ ...base, goldLabel: '22K bangle' }).success,
-    ).toBe(true);
+  it('carries a thing denomination', () => {
+    const parsed = debtLineSchema.parse({
+      amount: '2',
+      denomKind: 'thing',
+      thingId: PERSON,
+      thingName: 'Rolex Submariner',
+      goldUnit: 'piece',
+    });
+    expect(parsed.denomKind).toBe('thing');
+    expect(parsed.thingId).toBe(PERSON);
+    expect(parsed.thingName).toBe('Rolex Submariner');
   });
 
   it('rejects a zero or negative amount', () => {
@@ -109,14 +115,28 @@ describe('debtFormSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects a custom-gold row with no label', () => {
+});
+
+describe('thingFormSchema', () => {
+  it('normalises name + currency and defaults value to 0', () => {
+    const parsed = thingFormSchema.parse({
+      name: '  Rolex Submariner ',
+      logoUrl: '',
+      valueCurrency: 'usd',
+    });
+    expect(parsed).toMatchObject({
+      name: 'Rolex Submariner',
+      logoUrl: null,
+      unit: 'piece',
+      value: '0',
+      valueCurrency: 'USD',
+    });
+  });
+
+  it('rejects a nameless thing and a non-image logo', () => {
+    expect(thingFormSchema.safeParse({ name: '' }).success).toBe(false);
     expect(
-      debtFormSchema.safeParse({
-        personId: PERSON,
-        direction: 'i_owe',
-        incurredOn: '2026-09-10',
-        lines: [line({ denomKind: 'gold', goldType: 'custom', amount: '2' })],
-      }).success,
+      thingFormSchema.safeParse({ name: 'x', logoUrl: 'http://nope' }).success,
     ).toBe(false);
   });
 });

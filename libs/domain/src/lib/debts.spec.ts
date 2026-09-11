@@ -6,6 +6,7 @@ import {
   debtIsSettled,
   debtProgress,
   denomBalances,
+  denomKey,
   formatDebtAmount,
   isOtpCode,
   summariseDebts,
@@ -50,6 +51,12 @@ const gold21 = {
   goldLabel: null,
   unit: 'g',
 } as const;
+const rolex = {
+  kind: 'thing',
+  thingId: '11111111-1111-4111-8111-111111111111',
+  thingName: 'Rolex Submariner',
+  unit: 'piece',
+} as const;
 
 describe('denomBalances', () => {
   it('nets principal rows against free-form repayments per denomination', () => {
@@ -78,6 +85,19 @@ describe('denomBalances', () => {
       [{ denom: eur, amountMinor: 4000 }],
     );
     expect(bal[0]).toMatchObject({ outstandingMinor: 0, progress: 1, settled: true });
+  });
+
+  it('tracks a thing denomination and sorts it after money + gold', () => {
+    const bal = denomBalances(
+      [
+        { denom: eur, amountMinor: 1000 },
+        { denom: gold21, amountMinor: 5000 },
+        { denom: rolex, amountMinor: 2000 },
+      ],
+      [{ denom: rolex, amountMinor: 1000 }],
+    );
+    expect(bal.map((b) => b.denom.kind)).toEqual(['money', 'gold', 'thing']);
+    expect(bal[2]).toMatchObject({ owedMinor: 2000, repaidMinor: 1000, outstandingMinor: 1000 });
   });
 });
 
@@ -116,7 +136,7 @@ describe('summariseDebts', () => {
 });
 
 describe('formatDebtAmount', () => {
-  it('formats money and gold', () => {
+  it('formats money, gold and things', () => {
     expect(formatDebtAmount(12345, { kind: 'money', currency: 'GBP' })).toMatch(
       /£123\.45/,
     );
@@ -129,6 +149,18 @@ describe('formatDebtAmount', () => {
         unit: 'piece',
       }),
     ).toBe('2.5 × Gold sovereign (King George)');
+    expect(formatDebtAmount(2000, rolex)).toBe('2 × Rolex Submariner');
+    expect(formatDebtAmount(3500, { ...rolex, unit: 'g' })).toBe(
+      '3.5 g of Rolex Submariner',
+    );
+  });
+});
+
+describe('denomKey', () => {
+  it('is stable per denomination and keys things by id', () => {
+    expect(denomKey({ kind: 'money', currency: 'eur' })).toBe('money:EUR');
+    expect(denomKey(rolex)).toBe(`thing:${rolex.thingId}`);
+    expect(denomKey(gold21)).toBe('gold:k21:');
   });
 });
 

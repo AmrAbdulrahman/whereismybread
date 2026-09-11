@@ -22,6 +22,7 @@ export default async function DebtPage({
     <DebtDetail
       debt={debt}
       people={data.people}
+      things={data.things}
       today={data.today}
       usedCurrencies={data.usedCurrencies}
       defaultCurrency={data.defaultCurrency}

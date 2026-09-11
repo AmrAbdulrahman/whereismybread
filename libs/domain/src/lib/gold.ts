@@ -140,3 +140,40 @@ export function formatGold(
   const label = goldTypeLabel(key, customLabel);
   return unit === 'piece' ? `${q} × ${label}` : `${q} g of ${label}`;
 }
+
+/** How a built-in gold type draws as a small mark. */
+export interface GoldMarkSpec {
+  /** A round coin, or a rectangular bar. */
+  shape: 'coin' | 'bar';
+  /** The primary glyph inside the mark (1–3 chars). */
+  glyph: string;
+  /** A second line, for bars (weight). */
+  sub?: string;
+  /** The full name, shown on hover. */
+  title: string;
+}
+
+const GOLD_MARKS: Readonly<Record<string, GoldMarkSpec>> = {
+  k24: { shape: 'bar', glyph: '24K', title: '24K gold' },
+  k21: { shape: 'bar', glyph: '21K', title: '21K gold' },
+  k18: { shape: 'bar', glyph: '18K', title: '18K gold' },
+  coin_egp: { shape: 'coin', glyph: 'ج', title: 'Egyptian gold pound' },
+  coin_sovereign: {
+    shape: 'coin',
+    glyph: 'G',
+    title: 'Gold sovereign (King George)',
+  },
+  coin_islamic: { shape: 'coin', glyph: 'د', title: 'Islamic gold dinar' },
+  bar_1g: { shape: 'bar', glyph: '999', sub: '1g', title: '1 g bar (999)' },
+  bar_2g: { shape: 'bar', glyph: '999', sub: '2g', title: '2 g bar (999)' },
+  bar_5g: { shape: 'bar', glyph: '999', sub: '5g', title: '5 g bar (999)' },
+  bar_10g: { shape: 'bar', glyph: '999', sub: '10g', title: '10 g bar (999)' },
+  bar_20g: { shape: 'bar', glyph: '999', sub: '20g', title: '20 g bar (999)' },
+  bar_50g: { shape: 'bar', glyph: '999', sub: '50g', title: '50 g bar (999)' },
+  bar_oz: { shape: 'bar', glyph: '999', sub: '1oz', title: '1 oz bar (999)' },
+};
+
+/** The mark spec for a built-in gold key, or `null` for a custom/unknown type. */
+export function goldMarkSpec(key: string): GoldMarkSpec | null {
+  return GOLD_MARKS[key] ?? null;
+}

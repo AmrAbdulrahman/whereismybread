@@ -11,7 +11,7 @@
  * thousandths of a gram / piece for gold.
  */
 
-import { formatGold, type GoldUnit } from './gold';
+import { formatGold, goldQuantityString, type GoldUnit } from './gold';
 import { formatMoney, money } from './money';
 
 /** `they_owe` — someone owes the user. `i_owe` — the user owes someone. */
@@ -25,20 +25,37 @@ export type DebtDenomination =
       goldType: string;
       goldLabel: string | null;
       unit: GoldUnit;
+    }
+  | {
+      /** A user-defined "thing" from their debt-things catalogue. */
+      kind: 'thing';
+      thingId: string;
+      thingName: string;
+      unit: GoldUnit;
     };
 
 /** A stable key for grouping debts that share a denomination (no FX). */
 export function denomKey(d: DebtDenomination): string {
-  return d.kind === 'money'
-    ? `money:${d.currency.toUpperCase()}`
-    : `gold:${d.goldType}:${d.goldType === 'custom' ? (d.goldLabel ?? '').trim().toLowerCase() : ''}`;
+  if (d.kind === 'money') return `money:${d.currency.toUpperCase()}`;
+  if (d.kind === 'thing') return `thing:${d.thingId}`;
+  return `gold:${d.goldType}:${d.goldType === 'custom' ? (d.goldLabel ?? '').trim().toLowerCase() : ''}`;
+}
+
+/** "2.5 × Rolex" (pieces) / "3.5 g of Scrap" (grams). */
+export function formatThing(
+  thousandths: number,
+  name: string,
+  unit: GoldUnit,
+): string {
+  const q = goldQuantityString(thousandths);
+  return unit === 'piece' ? `${q} × ${name}` : `${q} g of ${name}`;
 }
 
 /** The one place a debt amount is turned into display text. */
 export function formatDebtAmount(minor: number, d: DebtDenomination): string {
-  return d.kind === 'money'
-    ? formatMoney(money(Math.round(minor), d.currency))
-    : formatGold(minor, d.goldType, d.goldLabel, d.unit);
+  if (d.kind === 'money') return formatMoney(money(Math.round(minor), d.currency));
+  if (d.kind === 'thing') return formatThing(minor, d.thingName, d.unit);
+  return formatGold(minor, d.goldType, d.goldLabel, d.unit);
 }
 
 export interface DebtProgress {
@@ -107,9 +124,11 @@ export interface DenomBalance {
   settled: boolean;
 }
 
-/** Sort key: money denominations first (by currency), then gold (by key). */
+/** Sort key: money first (by currency), then gold, then things (by key). */
 function denomSortKey(d: DebtDenomination): string {
-  return d.kind === 'money' ? `0:${d.currency.toUpperCase()}` : `1:${denomKey(d)}`;
+  if (d.kind === 'money') return `0:${d.currency.toUpperCase()}`;
+  if (d.kind === 'gold') return `1:${denomKey(d)}`;
+  return `2:${d.thingName.toLowerCase()}:${denomKey(d)}`;
 }
 
 /**

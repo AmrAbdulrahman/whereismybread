@@ -79,17 +79,55 @@ export const debts = pgTable(
   ],
 );
 
+/**
+ * A user-defined denomination — a watch, a non-standard gold type, anything
+ * counted in its own units. `valueMinor` / `valueCurrency` is a per-unit
+ * reference price, used only for the app-currency `≈` equivalent.
+ */
+export const debtThings = pgTable(
+  'debt_things',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** A downscaled `data:image/...` URI, or null. */
+    logoUrl: text('logo_url'),
+    /** `'g'` or `'piece'`. */
+    unit: text('unit').notNull().default('piece'),
+    /** Per-unit reference value, in minor units of `valueCurrency`. */
+    valueMinor: integer('value_minor').notNull().default(0),
+    valueCurrency: text('value_currency').notNull().default('EUR'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...audit,
+  },
+  (t) => [
+    index('debt_things_user_idx').on(t.userId),
+    uniqueIndex('debt_things_user_name_idx').on(
+      t.userId,
+      sql`lower(${t.name})`,
+    ),
+  ],
+);
+
 /** Denomination fields, shared by principal rows and repayments. */
 const denomCols = {
-  /** `'money'` (uses `currency`) or `'gold'` (uses `gold_*`). */
+  /** `'money'` (uses `currency`), `'gold'` (uses `gold_*`), `'thing'` (uses `thing_*`). */
   denomKind: text('denom_kind').notNull().default('money'),
   currency: text('currency').notNull().default('EUR'),
-  /** A `@wib/domain` gold catalogue key, or `'custom'`. Null for money. */
+  /** A `@wib/domain` gold catalogue key. Null for money / thing. */
   goldType: text('gold_type'),
-  /** The user's label when `gold_type = 'custom'`. */
+  /** Legacy: a custom-gold label. Superseded by `debt_things` — always null now. */
   goldLabel: text('gold_label'),
-  /** `'g'` or `'piece'` — denormalised (fixed for built-ins). */
+  /** `'g'` or `'piece'` — the unit for a gold or thing denomination. */
   goldUnit: text('gold_unit'),
+  /** The `debt_things` row when `denom_kind = 'thing'` (kept on delete, name below). */
+  thingId: uuid('thing_id').references(() => debtThings.id, {
+    onDelete: 'set null',
+  }),
+  /** Denormalised thing name — survives the thing being deleted. */
+  thingName: text('thing_name'),
 };
 
 /**
@@ -223,6 +261,8 @@ export type DebtPerson = typeof debtPeople.$inferSelect;
 export type NewDebtPerson = typeof debtPeople.$inferInsert;
 export type Debt = typeof debts.$inferSelect;
 export type NewDebt = typeof debts.$inferInsert;
+export type DebtThing = typeof debtThings.$inferSelect;
+export type NewDebtThing = typeof debtThings.$inferInsert;
 export type DebtLine = typeof debtLines.$inferSelect;
 export type NewDebtLine = typeof debtLines.$inferInsert;
 export type DebtEntry = typeof debtEntries.$inferSelect;

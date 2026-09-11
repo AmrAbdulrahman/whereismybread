@@ -9,21 +9,26 @@ import {
   addDebtLine,
   createDebt,
   createDebtPerson,
+  createDebtThing,
   deleteDebt as deleteDebtRow,
   deleteDebtAttachment,
   deleteDebtEntry,
   deleteDebtLine,
   deleteDebtPerson,
+  deleteDebtThing,
   getDebtPersonById,
   getDebtRow,
   getDebtWithDetail,
+  listDebtThings,
   listDebtsWithLines,
   personHasDebts,
   reconcileDebtAttachments,
   setDebtSettled,
+  thingInUse,
   updateDebt,
   updateDebtLine,
   updateDebtPerson,
+  updateDebtThing,
   type DebtLineInput,
 } from '@wib/db';
 import {
@@ -47,6 +52,7 @@ import {
   buildDebtView,
   denomOf,
   getDebtPeople,
+  getDebtThings,
   loadPricing,
   personView,
 } from './queries';
@@ -57,13 +63,15 @@ import {
   debtMetaSchema,
   personFormSchema,
   repaymentFormSchema,
+  thingFormSchema,
   type DebtFormValues,
   type DebtLineValue,
   type DebtMetaValues,
   type PersonFormValues,
   type RepaymentFormValues,
+  type ThingFormValues,
 } from './schema';
-import type { DebtView, PersonView } from './types';
+import type { DebtView, PersonView, ThingView } from './types';
 
 /** The denomination + quantity fields every row / repayment form submits. */
 interface DenomLine {
@@ -71,52 +79,84 @@ interface DenomLine {
   denomKind: string;
   currency: string;
   goldType: string;
-  goldLabel: string | null;
+  thingId: string | null;
+  thingName: string | null;
   goldUnit: string;
 }
 
+const BLANK_DENOM: Omit<DebtLineInput, 'amountMinor' | 'denomKind'> = {
+  currency: 'EUR',
+  goldType: null,
+  goldLabel: null,
+  goldUnit: null,
+  thingId: null,
+  thingName: null,
+};
+
 /** Parse a form line's typed amount + denomination into the DB columns. */
 function parseDenomLine(line: DenomLine): DebtLineInput | null {
-  const isGold = line.denomKind === 'gold';
+  const isQty = line.denomKind === 'gold' || line.denomKind === 'thing';
   let amountMinor: number;
   try {
-    amountMinor = isGold
+    amountMinor = isQty
       ? parseGoldQuantity(line.amount)
       : parseMoneyInput(line.amount, line.currency).minorUnits;
   } catch {
     return null;
   }
+  if (line.denomKind === 'thing') {
+    if (!line.thingId) return null;
+    return {
+      ...BLANK_DENOM,
+      amountMinor,
+      denomKind: 'thing',
+      thingId: line.thingId,
+      thingName: line.thingName,
+      goldUnit: line.goldUnit === 'piece' ? 'piece' : 'g',
+    };
+  }
+  if (line.denomKind === 'gold') {
+    return {
+      ...BLANK_DENOM,
+      amountMinor,
+      denomKind: 'gold',
+      goldType: line.goldType,
+      goldUnit: goldUnitFor(line.goldType, line.goldUnit),
+    };
+  }
   return {
+    ...BLANK_DENOM,
     amountMinor,
-    denomKind: line.denomKind,
+    denomKind: 'money',
     currency: line.currency,
-    goldType: isGold ? line.goldType : null,
-    goldLabel: isGold ? line.goldLabel : null,
-    goldUnit: isGold ? goldUnitFor(line.goldType, line.goldUnit) : null,
   };
 }
 
 /** A resolved denomination back into the DB columns (for covering repayments). */
 function denomColumns(d: DebtDenomination): Omit<DebtLineInput, 'amountMinor'> {
-  return d.kind === 'money'
-    ? {
-        denomKind: 'money',
-        currency: d.currency,
-        goldType: null,
-        goldLabel: null,
-        goldUnit: null,
-      }
-    : {
-        denomKind: 'gold',
-        currency: 'EUR',
-        goldType: d.goldType,
-        goldLabel: d.goldLabel,
-        goldUnit: d.unit,
-      };
+  if (d.kind === 'money') {
+    return { ...BLANK_DENOM, denomKind: 'money', currency: d.currency };
+  }
+  if (d.kind === 'thing') {
+    return {
+      ...BLANK_DENOM,
+      denomKind: 'thing',
+      thingId: d.thingId,
+      thingName: d.thingName,
+      goldUnit: d.unit,
+    };
+  }
+  return {
+    ...BLANK_DENOM,
+    denomKind: 'gold',
+    goldType: d.goldType,
+    goldLabel: d.goldLabel,
+    goldUnit: d.unit,
+  };
 }
 
 const amountErrorFor = (denomKind: string) =>
-  denomKind === 'gold' ? 'Not a valid quantity' : 'Not a valid amount';
+  denomKind === 'money' ? 'Not a valid amount' : 'Not a valid quantity';
 
 function revalidate(debtId?: string) {
   revalidatePath('/debts');
@@ -230,6 +270,84 @@ export async function listPeopleAction(): Promise<PersonView[]> {
   return getDebtPeople();
 }
 
+// --- things ----------------------------------------------------------
+
+export async function saveThingAction(
+  id: string | null,
+  values: ThingFormValues,
+): Promise<FormState & { thing?: ThingView }> {
+  const user = await requireUser();
+  const parsed = thingFormSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, fieldErrors: fieldErrors(parsed.error) };
+  }
+  let valueMinor = 0;
+  const raw = parsed.data.value.trim();
+  if (raw && raw !== '0') {
+    try {
+      valueMinor = Math.max(
+        0,
+        parseMoneyInput(raw, parsed.data.valueCurrency).minorUnits,
+      );
+    } catch {
+      return { ok: false, fieldErrors: { value: ['Not a valid amount'] } };
+    }
+  }
+  const input = {
+    name: parsed.data.name,
+    logoUrl: parsed.data.logoUrl,
+    unit: parsed.data.unit,
+    valueMinor,
+    valueCurrency: parsed.data.valueCurrency,
+  };
+  try {
+    const row = id
+      ? await updateDebtThing(user.id, id, input)
+      : await createDebtThing(user.id, input);
+    if (!row) return { ok: false, error: 'That thing no longer exists.' };
+    revalidate();
+    const uses = id ? (await thingInUse(user.id, row.id)) ? 1 : 0 : 0;
+    return {
+      ok: true,
+      thing: {
+        id: row.id,
+        name: row.name,
+        logoUrl: row.logoUrl,
+        unit: row.unit === 'piece' ? 'piece' : 'g',
+        valueMinor: row.valueMinor,
+        valueCurrency: row.valueCurrency,
+        useCount: uses,
+      },
+    };
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === '23505') {
+      return {
+        ok: false,
+        fieldErrors: { name: ['You already have a thing with that name'] },
+      };
+    }
+    throw error;
+  }
+}
+
+export async function deleteThingAction(id: string): Promise<FormState> {
+  const user = await requireUser();
+  if (await thingInUse(user.id, id)) {
+    return {
+      ok: false,
+      error: 'Remove it from every debt first, then delete the thing.',
+    };
+  }
+  await deleteDebtThing(user.id, id);
+  revalidate();
+  return { ok: true };
+}
+
+/** Things + use counts, for the manager's optimistic refresh + the denom picker. */
+export async function listThingsAction(): Promise<ThingView[]> {
+  return getDebtThings();
+}
+
 // --- debts -------------------------------------------------------------
 
 /**
@@ -309,7 +427,9 @@ export async function saveDebtAction(
   revalidate(row.id);
 
   const [px, detail] = await Promise.all([
-    loadPricing(user.displayCurrency),
+    listDebtThings(user.id).then((t) =>
+      loadPricing(user.displayCurrency, t),
+    ),
     getDebtWithDetail(user.id, row.id),
   ]);
   const debt = detail
@@ -528,6 +648,8 @@ export async function recordRepaymentAction(
     goldType: line.goldType,
     goldLabel: line.goldLabel,
     goldUnit: line.goldUnit,
+    thingId: line.thingId,
+    thingName: line.thingName,
   });
   if (!entry) return { ok: false, error: 'Could not record the repayment.' };
 

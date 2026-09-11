@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GOLD_TYPE_BY_KEY,
   goldFineGrams,
+  goldMarkSpec,
   formatGold,
   goldQuantityString,
   goldTypeLabel,
@@ -81,5 +82,23 @@ describe('formatGold', () => {
     expect(formatGold(1500, 'custom', 'Bracelet', 'piece')).toBe(
       '1.5 × Bracelet',
     );
+  });
+});
+
+describe('goldMarkSpec', () => {
+  it('describes coins and bars, null for custom/unknown', () => {
+    expect(goldMarkSpec('coin_sovereign')).toMatchObject({
+      shape: 'coin',
+      glyph: 'G',
+      title: 'Gold sovereign (King George)',
+    });
+    expect(goldMarkSpec('bar_5g')).toMatchObject({
+      shape: 'bar',
+      glyph: '999',
+      sub: '5g',
+    });
+    expect(goldMarkSpec('k21')).toMatchObject({ shape: 'bar', glyph: '21K' });
+    expect(goldMarkSpec('custom')).toBeNull();
+    expect(goldMarkSpec('nope')).toBeNull();
   });
 });

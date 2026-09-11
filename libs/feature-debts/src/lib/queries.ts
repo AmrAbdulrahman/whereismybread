@@ -7,11 +7,14 @@ import {
   getRates,
   getSharedPersonDebts,
   listDebtPeople,
+  listDebtThings,
   listDebtsWithLines,
+  thingUseCounts,
   type DebtAttachment,
   type DebtEntry,
   type DebtLine,
   type DebtPerson,
+  type DebtThing,
   type DebtWithLines,
 } from '@wib/db';
 import {
@@ -25,7 +28,7 @@ import {
 } from '@wib/domain';
 import { serverEnv } from '@wib/config';
 import type { StoredAttachment } from '@wib/ui';
-import { debtEquivalentMinor } from './pricing';
+import { debtEquivalentMinor, type ThingValueMap } from './pricing';
 import type {
   DebtDetail,
   DebtEntryView,
@@ -34,19 +37,34 @@ import type {
   DenomBalanceView,
   PersonView,
   SharedView,
+  ThingView,
 } from './types';
 
 export interface PricingCtx {
   rates: RateMap;
   usdPerOz: number | null;
   displayCurrency: string;
+  things: ThingValueMap;
 }
 
-/** rates + gold spot + the user's display currency, fetched once per request. */
-export async function loadPricing(displayCurrency: string): Promise<PricingCtx> {
+/** Per-unit reference values keyed by thing id, for `debtEquivalentMinor`. */
+export function thingValueMap(things: readonly DebtThing[]): ThingValueMap {
+  return new Map(
+    things.map((t) => [
+      t.id,
+      { valueMinor: t.valueMinor, valueCurrency: t.valueCurrency },
+    ]),
+  );
+}
+
+/** rates + gold spot + the user's display currency + thing values, once per request. */
+export async function loadPricing(
+  displayCurrency: string,
+  things: readonly DebtThing[] = [],
+): Promise<PricingCtx> {
   const rates = await getRates();
   const usdPerOz = await getGoldSpotUsdPerOz();
-  return { rates, usdPerOz, displayCurrency };
+  return { rates, usdPerOz, displayCurrency, things: thingValueMap(things) };
 }
 
 function att(a: DebtAttachment): StoredAttachment {
@@ -66,10 +84,20 @@ interface DenomCols {
   goldType: string | null;
   goldLabel: string | null;
   goldUnit: string | null;
+  thingId: string | null;
+  thingName: string | null;
 }
 
 /** Resolve the denomination stored on a `debt_lines` / `debt_entries` row. */
 export function denomOf(r: DenomCols): DebtDenomination {
+  if (r.denomKind === 'thing') {
+    return {
+      kind: 'thing',
+      thingId: r.thingId ?? '',
+      thingName: r.thingName ?? 'Item',
+      unit: r.goldUnit === 'piece' ? 'piece' : 'g',
+    };
+  }
   if (r.denomKind === 'gold') {
     const goldType = r.goldType ?? 'k21';
     return {
@@ -90,6 +118,18 @@ export function personView(p: DebtPerson, debtCount = 0): PersonView {
     photoUrl: p.photoUrl,
     shareId: p.shareId,
     debtCount,
+  };
+}
+
+export function thingView(t: DebtThing, useCount = 0): ThingView {
+  return {
+    id: t.id,
+    name: t.name,
+    logoUrl: t.logoUrl,
+    unit: t.unit === 'piece' ? 'piece' : 'g',
+    valueMinor: t.valueMinor,
+    valueCurrency: t.valueCurrency,
+    useCount,
   };
 }
 
@@ -140,6 +180,7 @@ export function buildDebtView(
       px.rates,
       px.usdPerOz,
       px.displayCurrency,
+      px.things,
     );
     if (b.outstandingMinor > 0 && equivalentMinor == null) anyUnpriced = true;
     return { ...b, equivalentMinor };
@@ -167,14 +208,27 @@ export function buildDebtView(
   };
 }
 
-/** Every debt + person the signed-in user owns. */
+/** Count how many loaded rows/entries reference each thing id. */
+function thingUseCountsFromDebts(rows: DebtWithLines[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    for (const l of r.lines)
+      if (l.thingId) out.set(l.thingId, (out.get(l.thingId) ?? 0) + 1);
+    for (const e of r.entries)
+      if (e.thingId) out.set(e.thingId, (out.get(e.thingId) ?? 0) + 1);
+  }
+  return out;
+}
+
+/** Every debt + person + thing the signed-in user owns. */
 export async function getDebtsData(): Promise<DebtsData> {
   const user = await requireUser();
-  const [rows, people] = await Promise.all([
+  const [rows, people, things] = await Promise.all([
     listDebtsWithLines(user.id),
     listDebtPeople(user.id),
+    listDebtThings(user.id),
   ]);
-  const px = await loadPricing(user.displayCurrency);
+  const px = await loadPricing(user.displayCurrency, things);
 
   const countByPerson = new Map<string, number>();
   for (const r of rows) {
@@ -192,6 +246,9 @@ export async function getDebtsData(): Promise<DebtsData> {
     })
     .filter((d): d is DebtView => d != null);
 
+  const thingUse = thingUseCountsFromDebts(rows);
+  const thingsView = things.map((t) => thingView(t, thingUse.get(t.id) ?? 0));
+
   const usedCurrencies = new Set<string>([user.defaultCurrency]);
   for (const d of debts)
     for (const b of d.balances)
@@ -200,6 +257,7 @@ export async function getDebtsData(): Promise<DebtsData> {
   return {
     debts,
     people: peopleViews,
+    things: thingsView,
     usedCurrencies: [...usedCurrencies],
     defaultCurrency: user.defaultCurrency,
     displayCurrency: user.displayCurrency,
@@ -220,12 +278,23 @@ export async function getDebtPeople(): Promise<PersonView[]> {
   return people.map((p) => personView(p, count.get(p.id) ?? 0));
 }
 
+/** Things + their use counts, for the things manager's optimistic refresh. */
+export async function getDebtThings(): Promise<ThingView[]> {
+  const user = await requireUser();
+  const [things, uses] = await Promise.all([
+    listDebtThings(user.id),
+    thingUseCounts(user.id),
+  ]);
+  return things.map((t) => thingView(t, uses.get(t.id) ?? 0));
+}
+
 /** One debt with its rows + repayment timeline, or `null`. */
 export async function getDebt(id: string): Promise<DebtDetail | null> {
   const user = await requireUser();
   const row = await getDebtWithDetail(user.id, id);
   if (!row) return null;
-  const px = await loadPricing(user.displayCurrency);
+  const things = await listDebtThings(user.id);
+  const px = await loadPricing(user.displayCurrency, things);
   return {
     ...buildDebtView(row, row.lines, row.entries, personView(row.person), px),
     entries: row.entries.map(entryView),
@@ -243,12 +312,14 @@ export async function getSharedView(shareId: string): Promise<SharedView | null>
   const owner = await findUserById(bundle.person.userId);
   const ownerName = owner?.name?.trim() || 'Someone';
   const displayCurrency = owner?.displayCurrency ?? 'EUR';
-  const px = await loadPricing(displayCurrency);
+  const things = await listDebtThings(bundle.person.userId);
+  const px = await loadPricing(displayCurrency, things);
   const stub = personView(bundle.person);
   return {
     personName: bundle.person.name,
     ownerName,
     displayCurrency,
+    things: things.map((t) => ({ id: t.id, name: t.name, logoUrl: t.logoUrl })),
     debts: bundle.debts.map((d) => {
       const v = buildDebtView(d, d.lines, d.entries, stub, px);
       return {

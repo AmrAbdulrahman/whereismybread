@@ -7,8 +7,8 @@ import { goldQuantityString } from '@wib/domain';
 import { Button } from '@wib/ui';
 import { addLineAction, updateLineAction } from '../lib/actions';
 import { debtLineSchema, type DebtLineValue } from '../lib/schema';
-import type { DebtRowView } from '../lib/types';
-import { DenominationFields, type DenomValue } from './denomination-fields';
+import type { DebtRowView, ThingView } from '../lib/types';
+import { DenomField, type DenomValue } from './denom-field';
 
 /** Add a row to a debt basket, or edit / fix an existing one. */
 export function LineForm({
@@ -16,6 +16,8 @@ export function LineForm({
   line,
   defaultCurrency,
   usedCurrencies = [],
+  things = [],
+  onCreateThing,
   onDone,
   onCancel,
 }: {
@@ -23,6 +25,8 @@ export function LineForm({
   line?: DebtRowView;
   defaultCurrency: string;
   usedCurrencies?: string[];
+  things?: ThingView[];
+  onCreateThing?: () => void;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -40,29 +44,37 @@ export function LineForm({
     mode: 'onTouched',
     defaultValues: {
       amount: line
-        ? d?.kind === 'gold'
+        ? d && d.kind !== 'money'
           ? goldQuantityString(line.amountMinor)
           : (line.amountMinor / 100).toFixed(2)
         : '',
       denomKind: d?.kind ?? 'money',
       currency: d?.kind === 'money' ? d.currency : defaultCurrency,
       goldType: d?.kind === 'gold' ? d.goldType : 'k21',
-      goldLabel: d?.kind === 'gold' ? d.goldLabel : null,
-      goldUnit: d?.kind === 'gold' ? d.unit : 'g',
+      thingId: d?.kind === 'thing' ? d.thingId : null,
+      thingName: d?.kind === 'thing' ? d.thingName : null,
+      goldUnit: d && d.kind !== 'money' ? d.unit : 'g',
     },
   });
 
   const value: DenomValue = {
     amount: watch('amount') ?? '',
-    denomKind: watch('denomKind') ?? 'money',
+    kind: watch('denomKind') ?? 'money',
     currency: watch('currency') ?? defaultCurrency,
     goldType: watch('goldType') ?? 'k21',
-    goldLabel: (watch('goldLabel') as string | null) ?? null,
-    goldUnit: watch('goldUnit') ?? 'g',
+    thingId: (watch('thingId') as string | null) ?? null,
+    thingName: (watch('thingName') as string | null) ?? null,
+    unit: watch('goldUnit') ?? 'g',
   };
   const onChange = (patch: Partial<DenomValue>) => {
+    const map: Record<string, keyof DebtLineValue> = {
+      kind: 'denomKind',
+      unit: 'goldUnit',
+    };
     for (const [k, v] of Object.entries(patch)) {
-      setValue(k as keyof DebtLineValue, v as never, { shouldDirty: true });
+      setValue((map[k] ?? k) as keyof DebtLineValue, v as never, {
+        shouldDirty: true,
+      });
     }
   };
 
@@ -89,13 +101,14 @@ export function LineForm({
         </p>
       ) : null}
 
-      <DenominationFields
+      <DenomField
         idPrefix="line"
         value={value}
         onChange={onChange}
         usedCurrencies={usedCurrencies}
+        things={things}
+        onCreateThing={onCreateThing}
         amountError={errors.amount?.message}
-        goldLabelError={errors.goldLabel?.message}
       />
 
       <div className="flex justify-end gap-2 pt-1">

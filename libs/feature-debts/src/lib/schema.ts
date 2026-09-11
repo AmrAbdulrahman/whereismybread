@@ -52,37 +52,31 @@ export type PersonFormValues = z.input<typeof personFormSchema>;
 
 /**
  * One denomination + quantity — shared by every row of a debt basket and by
- * each free-form repayment. `amount` is money minor units or a gold quantity,
- * parsed per `denomKind` in the action.
+ * each free-form repayment. `amount` is money minor units or a quantity
+ * (gold / thing), parsed per `denomKind` in the action.
  */
 const denomLineShape = {
   amount,
-  denomKind: z.enum(['money', 'gold']).default('money'),
+  denomKind: z.enum(['money', 'gold', 'thing']).default('money'),
   currency: z.string().trim().toUpperCase().length(3).default('EUR'),
-  /** A `@wib/domain` gold catalogue key, or `'custom'`. */
+  /** A `@wib/domain` built-in gold catalogue key. */
   goldType: z.string().trim().min(1).max(40).default('k21'),
-  goldLabel: z.preprocess(
+  /** The `debt_things` row id when `denomKind === 'thing'`. */
+  thingId: z.preprocess(
+    blankToNull,
+    z.string().uuid().nullable().default(null),
+  ),
+  /** Denormalised thing name (display + history). */
+  thingName: z.preprocess(
     blankToNull,
     z.string().trim().max(60).nullable().default(null),
   ),
+  /** `'g'` or `'piece'` — the unit for a gold or thing denomination. */
   goldUnit: z.enum(['g', 'piece']).default('g'),
 } as const;
 
-/** Custom gold needs a label — applied after `.object()` (which returns a plain schema). */
-const customGoldNeedsLabel = (v: {
-  denomKind: string;
-  goldType: string;
-  goldLabel: string | null;
-}) =>
-  v.denomKind !== 'gold' ||
-  v.goldType !== 'custom' ||
-  (v.goldLabel != null && v.goldLabel.length > 0);
-const customGoldMsg = { path: ['goldLabel'], message: 'Name the gold type' };
-
 /** One principal row of a debt basket. Also used by the add/edit-row form. */
-export const debtLineSchema = z
-  .object({ ...denomLineShape })
-  .refine(customGoldNeedsLabel, customGoldMsg);
+export const debtLineSchema = z.object({ ...denomLineShape });
 export type DebtLineValue = z.input<typeof debtLineSchema>;
 
 /** Create a debt basket: who, which way, when, what for, and one-or-more rows. */
@@ -114,18 +108,42 @@ export const debtMetaSchema = z.object({
 export type DebtMetaValues = z.input<typeof debtMetaSchema>;
 
 /** One repayment against a debt — carries its own denomination. */
-export const repaymentFormSchema = z
-  .object({
-    ...denomLineShape,
-    occurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
-    note: z.preprocess(
-      blankToNull,
-      z.string().trim().max(200).nullable().default(null),
-    ),
-    attachments: z.array(attachmentDraftSchema).max(20).default([]),
-  })
-  .refine(customGoldNeedsLabel, customGoldMsg);
+export const repaymentFormSchema = z.object({
+  ...denomLineShape,
+  occurredOn: z.string().regex(ISO_DATE, 'Pick a date'),
+  note: z.preprocess(
+    blankToNull,
+    z.string().trim().max(200).nullable().default(null),
+  ),
+  attachments: z.array(attachmentDraftSchema).max(20).default([]),
+});
 export type RepaymentFormValues = z.input<typeof repaymentFormSchema>;
+
+/** A user-defined denomination: name, logo, unit, per-unit reference value. */
+export const thingFormSchema = z.object({
+  name: z.string().trim().min(1, 'Give it a name').max(60),
+  logoUrl: z.preprocess(
+    blankToNull,
+    z
+      .string()
+      .max(400_000)
+      .startsWith('data:image/', 'That does not look like an image')
+      .nullable()
+      .default(null),
+  ),
+  unit: z.enum(['g', 'piece']).default('piece'),
+  /** A per-unit reference price — 0 is allowed (no equivalent shown). */
+  value: z
+    .string()
+    .trim()
+    .default('0')
+    .refine(
+      (v) => v === '' || Number.isFinite(Number(v.replace(/[, ]/g, ''))),
+      'Not a number',
+    ),
+  valueCurrency: z.string().trim().toUpperCase().length(3).default('EUR'),
+});
+export type ThingFormValues = z.input<typeof thingFormSchema>;
 
 // --- external OTP flow ---
 

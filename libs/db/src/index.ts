@@ -347,11 +347,23 @@ export {
   type DebtAttachmentInput,
   type DebtAttachmentGrantCheck,
 } from './lib/repositories/debt-attachments';
+export {
+  listDebtThings,
+  getDebtThing,
+  createDebtThing,
+  updateDebtThing,
+  deleteDebtThing,
+  thingInUse,
+  thingUseCounts,
+  type DebtThingInput,
+} from './lib/repositories/debt-things';
 export type {
   DebtPerson,
   NewDebtPerson,
   Debt,
   NewDebt,
+  DebtThing,
+  NewDebtThing,
   DebtLine,
   NewDebtLine,
   DebtEntry,

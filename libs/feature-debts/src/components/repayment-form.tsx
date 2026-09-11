@@ -24,18 +24,20 @@ import {
   uploadDebtAttachmentAction,
 } from '../lib/actions';
 import { repaymentFormSchema, type RepaymentFormValues } from '../lib/schema';
-import type { DenomBalanceView } from '../lib/types';
-import { DenominationFields, type DenomValue } from './denomination-fields';
+import type { DenomBalanceView, ThingView } from '../lib/types';
+import { DenomField, type DenomValue } from './denom-field';
 import { GoldMark } from './gold-mark';
+import { ThingMark } from './thing-mark';
 
 function denomToValue(d: DebtDenomination, fallbackCurrency: string): DenomValue {
   return {
     amount: '',
-    denomKind: d.kind,
+    kind: d.kind,
     currency: d.kind === 'money' ? d.currency : fallbackCurrency,
     goldType: d.kind === 'gold' ? d.goldType : 'k21',
-    goldLabel: d.kind === 'gold' ? d.goldLabel : null,
-    goldUnit: d.kind === 'gold' ? d.unit : 'g',
+    thingId: d.kind === 'thing' ? d.thingId : null,
+    thingName: d.kind === 'thing' ? d.thingName : null,
+    unit: d.kind === 'money' ? 'g' : d.unit,
   };
 }
 
@@ -46,6 +48,7 @@ export function RepaymentForm({
   today,
   defaultCurrency,
   usedCurrencies = [],
+  things = [],
   onDone,
   onCancel,
 }: {
@@ -56,6 +59,7 @@ export function RepaymentForm({
   today: string;
   defaultCurrency: string;
   usedCurrencies?: string[];
+  things?: ThingView[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -71,14 +75,15 @@ export function RepaymentForm({
     ({ kind: 'money', currency: defaultCurrency } as const);
   const init = denomToValue(baseDenom, defaultCurrency);
 
-  const isGold = baseDenom.kind === 'gold';
-  const unitLabel = isGold
-    ? baseDenom.unit === 'piece'
-      ? 'pieces'
-      : 'g'
-    : baseDenom.currency;
+  const isQty = baseDenom.kind !== 'money';
+  const unitLabel =
+    baseDenom.kind === 'money'
+      ? baseDenom.currency
+      : baseDenom.unit === 'piece'
+        ? 'pieces'
+        : 'g';
   const restValue = preset
-    ? isGold
+    ? isQty
       ? goldQuantityString(preset.outstandingMinor)
       : (preset.outstandingMinor / 100).toFixed(2)
     : null;
@@ -95,11 +100,12 @@ export function RepaymentForm({
     mode: 'onTouched',
     defaultValues: {
       amount: '',
-      denomKind: init.denomKind,
+      denomKind: init.kind,
       currency: init.currency,
       goldType: init.goldType,
-      goldLabel: init.goldLabel,
-      goldUnit: init.goldUnit,
+      thingId: init.thingId,
+      thingName: init.thingName,
+      goldUnit: init.unit,
       occurredOn: today,
       note: null,
       attachments: [],
@@ -110,15 +116,20 @@ export function RepaymentForm({
 
   const denomValue: DenomValue = {
     amount: watch('amount') ?? '',
-    denomKind: watch('denomKind') ?? init.denomKind,
+    kind: watch('denomKind') ?? init.kind,
     currency: watch('currency') ?? init.currency,
     goldType: watch('goldType') ?? init.goldType,
-    goldLabel: (watch('goldLabel') as string | null) ?? null,
-    goldUnit: watch('goldUnit') ?? init.goldUnit,
+    thingId: (watch('thingId') as string | null) ?? null,
+    thingName: (watch('thingName') as string | null) ?? null,
+    unit: watch('goldUnit') ?? init.unit,
   };
   const onDenomChange = (patch: Partial<DenomValue>) => {
+    const map: Record<string, keyof RepaymentFormValues> = {
+      kind: 'denomKind',
+      unit: 'goldUnit',
+    };
     for (const [k, v] of Object.entries(patch)) {
-      setValue(k as keyof RepaymentFormValues, v as never, {
+      setValue((map[k] ?? k) as keyof RepaymentFormValues, v as never, {
         shouldDirty: true,
       });
     }
@@ -152,12 +163,22 @@ export function RepaymentForm({
           <div className="flex items-center gap-2">
             {baseDenom.kind === 'gold' ? (
               <GoldMark type={baseDenom.goldType} size={16} />
+            ) : baseDenom.kind === 'thing' ? (
+              <ThingMark
+                thing={{
+                  name: baseDenom.thingName,
+                  logoUrl:
+                    things.find((t) => t.id === baseDenom.thingId)?.logoUrl ??
+                    null,
+                }}
+                size={16}
+              />
             ) : null}
             <Input
               id="repayment-amount"
               className="flex-1"
               inputMode="decimal"
-              placeholder={isGold ? '0' : '0.00'}
+              placeholder={isQty ? '0' : '0.00'}
               aria-invalid={errors.amount ? true : undefined}
               {...register('amount')}
             />
@@ -182,13 +203,13 @@ export function RepaymentForm({
           ) : null}
         </Field>
       ) : (
-        <DenominationFields
+        <DenomField
           idPrefix="repayment"
           value={denomValue}
           onChange={onDenomChange}
           usedCurrencies={usedCurrencies}
+          things={things}
           amountError={errors.amount?.message}
-          goldLabelError={errors.goldLabel?.message}
         />
       )}
 

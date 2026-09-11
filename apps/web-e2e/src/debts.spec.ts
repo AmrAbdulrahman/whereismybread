@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // eslint-disable-next-line playwright/no-skipped-test -- env-gated: needs a live DB
 test.skip(
@@ -34,6 +34,16 @@ async function addPerson(page: Page, modalName: string | RegExp, name: string) {
   return modal;
 }
 
+/** Open the unified unit picker from `trigger` and choose the row matching `name`. */
+async function pickUnit(page: Page, trigger: Locator, name: string | RegExp) {
+  await trigger.click();
+  const dlg = page.getByRole('dialog', { name: 'Amount in…' });
+  const search = typeof name === 'string' ? name : '';
+  if (search) await dlg.getByPlaceholder(/Search/).fill(search);
+  await dlg.getByRole('button', { name }).first().click();
+  await expect(dlg).toBeHidden();
+}
+
 /** Person panels start collapsed — expand the one for `personName`. */
 async function expandPanel(page: Page, personName: string) {
   const panel = page.locator('section').filter({ hasText: personName });
@@ -46,7 +56,8 @@ async function unlockShared(page: Page, shareUrl: string, email: string) {
   await page.goto(shareUrl);
   await page.getByLabel('Email').fill(email);
   await page.getByRole('button', { name: 'Send me a code' }).click();
-  // Under AUTH_E2E the code is pre-filled into the field.
+  // Under AUTH_E2E the code is pre-filled into the field — wait for it.
+  await expect(page.getByLabel('Code')).not.toHaveValue('', { timeout: 15_000 });
   await page.getByRole('button', { name: 'View the debt' }).click();
 }
 
@@ -54,6 +65,7 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
   page,
   browser,
 }) => {
+  test.slow();
   await signUp(page);
   const personEmail = `sarah-${Date.now()}@example.com`;
 
@@ -77,24 +89,23 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
 
   // Row 0 — 100 USD.
   await modal.locator('#row-0-amount').fill('100');
-  await modal.getByRole('button', { name: 'EUR' }).first().click();
-  const ccy = page.getByRole('dialog', { name: 'Choose currency' });
-  await ccy.getByPlaceholder('Search currencies…').fill('USD');
-  await ccy.getByRole('button', { name: /USD/ }).first().click();
+  await pickUnit(page, modal.getByRole('button', { name: 'Change unit' }).nth(0), 'US Dollar');
 
-  // Row 1 — 30 EUR.
+  // Row 1 — 30 EUR (default).
   await modal.getByRole('button', { name: 'Add a row' }).click();
   await modal.locator('#row-1-amount').fill('30');
 
   // Row 2 — a 50 g gold bar.
   await modal.getByRole('button', { name: 'Add a row' }).click();
-  await modal.getByRole('button', { name: 'Gold', exact: true }).nth(2).click();
-  await modal.getByLabel('Gold type').selectOption('bar_50g');
-  await modal.getByLabel('Quantity (pieces)').fill('1');
+  await pickUnit(page, modal.getByRole('button', { name: 'Change unit' }).nth(2), '50 g bar (999)');
+  await modal.locator('#row-2-amount').fill('1');
 
   await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
   await expect(page).toHaveURL(/\/debts$/);
+
+  // The totals card shows a row per denomination.
+  await expect(page.getByText(/\$100\.00 to you/).first()).toBeVisible();
 
   // The card shows a chip per denomination + an app-currency equivalent.
   await expandPanel(page, 'Sarah Cole');
@@ -102,7 +113,7 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
   await expect(card).toBeVisible();
   await expect(card.getByText(/\$100\.00/)).toBeVisible();
   await expect(card.getByText(/€30\.00/)).toBeVisible();
-  await expect(card.getByText(/50 g bar/)).toBeVisible();
+  await expect(card.getByText(/1 × 50 g bar/)).toBeVisible();
   await expect(card.getByText(/≈\s*€/)).toBeVisible();
 
   await card.click();
@@ -119,10 +130,11 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
   expect(shareUrl).toMatch(/\/d\/[0-9a-f-]{36}$/);
 
   // Record a $50 repayment from the USD balance.
-  const usdBlock = page
+  await page
     .getByRole('listitem')
-    .filter({ hasText: '$100.00' });
-  await usdBlock.getByRole('button', { name: 'Record repayment' }).click();
+    .filter({ hasText: '$100.00' })
+    .getByRole('button', { name: 'Record repayment' })
+    .click();
   const repay = page.getByRole('dialog', { name: 'Record a repayment' });
   await repay.getByLabel(/^Amount/).fill('50');
   await repay.getByRole('button', { name: 'Record repayment' }).click();
@@ -143,16 +155,11 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
   await expect(page.getByRole('button', { name: 'Reopen' })).toBeVisible();
   await expect(page.getByText(/\$100\.00 repaid of \$100\.00/)).toBeVisible();
 
-  // Add a fourth row on the detail page.
-  await page
-    .getByRole('button', { name: 'Add a row' })
-    .click();
+  // Add a fourth row (10 GBP) on the detail page.
+  await page.getByRole('button', { name: 'Add a row' }).click();
   const lineModal = page.getByRole('dialog', { name: 'Add a row' });
   await lineModal.locator('#line-amount').fill('10');
-  await lineModal.getByRole('button', { name: /USD|EUR|GBP/ }).first().click();
-  const ccy2 = page.getByRole('dialog', { name: 'Choose currency' });
-  await ccy2.getByPlaceholder('Search currencies…').fill('GBP');
-  await ccy2.getByRole('button', { name: /GBP/ }).first().click();
+  await pickUnit(page, lineModal.getByRole('button', { name: 'Change unit' }), 'British Pound');
   await lineModal.getByRole('button', { name: 'Add row' }).click();
   await expect(lineModal).toBeHidden();
   await expect(page.getByText(/£0\.00 repaid of £10\.00/)).toBeVisible();
@@ -165,7 +172,6 @@ test('debts: a basket with several denomination rows — repay, settle, add a ro
     guest.getByRole('heading', { name: 'Hi Sarah Cole' }),
   ).toBeVisible();
   await expect(guest.getByText('You owe Debt Tester').first()).toBeVisible();
-  // USD + EUR were settled; the GBP row added afterwards is still outstanding.
   await expect(guest.getByText(/\$100\.00 repaid of \$100\.00/)).toBeVisible();
   await expect(guest.getByText(/£0\.00 repaid of £10\.00/)).toBeVisible();
   await outsider.close();
@@ -188,9 +194,8 @@ test('debts: a gold-denominated row tracks quantity and shows on the shared page
   await personModal.getByRole('button', { name: 'Add person' }).click();
   await expect(personModal).toBeHidden();
 
-  await modal.getByRole('button', { name: 'Gold', exact: true }).click();
-  await modal.getByLabel('Gold type').selectOption('k21');
-  await modal.getByLabel('Quantity (g)').fill('10');
+  await pickUnit(page, modal.getByRole('button', { name: 'Change unit' }), '21K gold');
+  await modal.locator('#row-0-amount').fill('10');
   await modal.getByLabel("What's it for?").fill('Wedding gift');
   await modal.getByRole('button', { name: 'Create debt' }).click();
   await expect(modal).toBeHidden();
@@ -224,6 +229,65 @@ test('debts: a gold-denominated row tracks quantity and shows on the shared page
   await unlockShared(guest, shareUrl, personEmail);
   await expect(
     guest.getByText(/4 g of 21K gold repaid of 10 g of 21K gold/),
+  ).toBeVisible();
+  await outsider.close();
+});
+
+test('debts: a custom "thing" — catalogue, use as a denomination, ≈ from its value', async ({
+  page,
+  browser,
+}) => {
+  await signUp(page);
+  const personEmail = `omar-${Date.now()}@example.com`;
+
+  await page.goto('/debts');
+
+  // Add a thing via the Things manager.
+  await page.getByRole('button', { name: 'Things' }).click();
+  const things = page.getByRole('dialog', { name: 'Things' });
+  await things.getByRole('button', { name: 'Add a thing' }).click();
+  const tf = page.getByRole('dialog', { name: 'New thing' });
+  await tf.getByLabel('Name').fill('Rolex Submariner');
+  await tf.getByLabel(/Reference value/).fill('12000');
+  await tf.getByRole('button', { name: 'Add thing' }).click();
+  await expect(tf).toBeHidden();
+  await expect(things.getByText('Rolex Submariner')).toBeVisible();
+  await things.getByRole('button', { name: 'Done' }).click();
+
+  // New debt denominated in that thing.
+  await page.getByRole('button', { name: 'New debt' }).first().click();
+  const modal = page.getByRole('dialog', { name: 'New debt' });
+  await modal.getByRole('button', { name: 'New' }).click();
+  const pm = page.getByRole('dialog', { name: 'New person' });
+  await pm.getByLabel('Name').fill('Omar Said');
+  await pm.getByLabel('Email').fill(personEmail);
+  await pm.getByRole('button', { name: 'Add person' }).click();
+  await expect(pm).toBeHidden();
+
+  await modal.getByRole('button', { name: 'They owe me' }).click();
+  await pickUnit(page, modal.getByRole('button', { name: 'Change unit' }), 'Rolex Submariner');
+  await modal.locator('#row-0-amount').fill('2');
+  await modal.getByLabel("What's it for?").fill('Borrowed pieces');
+  await modal.getByRole('button', { name: 'Create debt' }).click();
+  await expect(modal).toBeHidden();
+
+  await expect(page.getByText(/2 × Rolex Submariner to you/).first()).toBeVisible();
+  await expandPanel(page, 'Omar Said');
+  const card = page.getByRole('link', { name: /Borrowed pieces/ });
+  await expect(card.getByText(/2 × Rolex Submariner/)).toBeVisible();
+  await expect(card.getByText(/≈\s*€/)).toBeVisible();
+
+  await card.click();
+  await expect(
+    page.getByText(/0 × Rolex Submariner repaid of 2 × Rolex Submariner/),
+  ).toBeVisible();
+
+  const shareUrl = await page.getByLabel('Shared debt link').inputValue();
+  const outsider = await browser.newContext();
+  const guest = await outsider.newPage();
+  await unlockShared(guest, shareUrl, personEmail);
+  await expect(
+    guest.getByText(/0 × Rolex Submariner repaid of 2 × Rolex Submariner/),
   ).toBeVisible();
   await outsider.close();
 });
@@ -340,9 +404,8 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   // The panel's own "Add" appends a second gold debt to the same person.
   await panel.getByRole('button', { name: 'Add' }).click();
   const add = page.getByRole('dialog', { name: /New debt · Dana Roy/ });
-  await add.getByRole('button', { name: 'Gold', exact: true }).click();
-  await add.getByLabel('Gold type').selectOption('bar_oz');
-  await add.getByLabel('Quantity (pieces)').fill('2');
+  await pickUnit(page, add.getByRole('button', { name: 'Change unit' }), '1 oz bar (999)');
+  await add.locator('#row-0-amount').fill('2');
   await add.getByRole('button', { name: 'Create debt' }).click();
   await expect(add).toBeHidden();
 
@@ -355,5 +418,5 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   // Expand — both cards appear.
   await panel2.getByRole('button', { expanded: false }).click();
   await expect(panel2.getByRole('listitem')).toHaveCount(2);
-  await expect(panel2.getByText(/1 oz bar/).first()).toBeVisible();
+  await expect(panel2.getByText(/2 × 1 oz bar/).first()).toBeVisible();
 });

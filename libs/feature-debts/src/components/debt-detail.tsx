@@ -8,7 +8,6 @@ import {
   denomKey,
   formatDebtAmount,
   formatMoney,
-  goldTypeLabel,
   money,
 } from '@wib/domain';
 import {
@@ -47,12 +46,14 @@ import type {
   DebtRowView,
   DenomBalanceView,
   PersonView,
+  ThingView,
 } from '../lib/types';
 import { DebtForm, type DebtFormInitial } from './debt-form';
-import { GoldMark } from './gold-mark';
+import { DenomMark, denomLabel } from './denom-mark';
 import { LineForm } from './line-form';
 import { PersonAvatar } from './person-avatar';
 import { RepaymentForm } from './repayment-form';
+import { ThingForm } from './thing-form';
 
 function fmtDate(d: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -63,17 +64,12 @@ function fmtDate(d: string): string {
   }).format(new Date(`${d}T00:00:00Z`));
 }
 
-function denomLabel(denom: DebtRowView['denom']): string {
-  return denom.kind === 'money'
-    ? denom.currency
-    : goldTypeLabel(denom.goldType, denom.goldLabel);
-}
-
 type RunResult = { ok: boolean; error?: string; message?: string };
 
 export function DebtDetail({
   debt,
   people,
+  things,
   today,
   usedCurrencies,
   defaultCurrency,
@@ -82,6 +78,7 @@ export function DebtDetail({
 }: {
   debt: DebtDetailData;
   people: PersonView[];
+  things: ThingView[];
   today: string;
   usedCurrencies: string[];
   defaultCurrency: string;
@@ -93,7 +90,9 @@ export function DebtDetail({
   const [repay, setRepay] = useState<{ presetKey?: string } | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [lineEdit, setLineEdit] = useState<DebtRowView | 'new' | null>(null);
+  const [addingThing, setAddingThing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const thingLogos = new Map(things.map((t) => [t.id, t.logoUrl]));
   const [busy, setBusy] = useState(false);
   const [debtFiles, setDebtFiles] = useState<StoredAttachment[]>(
     debt.attachments,
@@ -246,9 +245,7 @@ export function DebtDetail({
                 >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-lg font-bold text-ink">
-                      {b.denom.kind === 'gold' ? (
-                        <GoldMark type={b.denom.goldType} size={16} />
-                      ) : null}
+                      <DenomMark denom={b.denom} size={16} logos={thingLogos} />
                       {formatDebtAmount(b.outstandingMinor, b.denom)}
                     </span>
                     <span className="text-xs text-muted">
@@ -326,9 +323,7 @@ export function DebtDetail({
               className="flex items-center gap-3 rounded-lg border border-line/60 bg-surface px-3 py-2"
             >
               <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-ink">
-                {r.denom.kind === 'gold' ? (
-                  <GoldMark type={r.denom.goldType} size={13} />
-                ) : null}
+                <DenomMark denom={r.denom} size={13} logos={thingLogos} />
                 {formatDebtAmount(r.amountMinor, r.denom)}
                 <span className="text-[11px] text-muted">
                   · {denomLabel(r.denom)}
@@ -439,9 +434,7 @@ export function DebtDetail({
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
-                      {e.denom.kind === 'gold' ? (
-                        <GoldMark type={e.denom.goldType} size={12} />
-                      ) : null}
+                      <DenomMark denom={e.denom} size={12} logos={thingLogos} />
                       {formatDebtAmount(e.amountMinor, e.denom)}
                     </p>
                     <p className="truncate text-[11px] text-muted">
@@ -503,6 +496,7 @@ export function DebtDetail({
             today={today}
             defaultCurrency={defaultCurrency}
             usedCurrencies={usedCurrencies}
+            things={things}
             onDone={() => {
               setRepay(null);
               router.refresh();
@@ -523,11 +517,31 @@ export function DebtDetail({
             line={lineEdit === 'new' ? undefined : lineEdit}
             defaultCurrency={defaultCurrency}
             usedCurrencies={usedCurrencies}
+            things={things}
+            onCreateThing={() => setAddingThing(true)}
             onDone={() => {
               setLineEdit(null);
               router.refresh();
             }}
             onCancel={() => setLineEdit(null)}
+          />
+        ) : null}
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        open={addingThing}
+        onOpenChange={setAddingThing}
+        title="New thing"
+      >
+        {addingThing ? (
+          <ThingForm
+            defaultCurrency={defaultCurrency}
+            usedCurrencies={usedCurrencies}
+            onDone={() => {
+              setAddingThing(false);
+              router.refresh();
+            }}
+            onCancel={() => setAddingThing(false)}
           />
         ) : null}
       </ResponsiveModal>
@@ -540,6 +554,7 @@ export function DebtDetail({
             today={today}
             defaultCurrency={defaultCurrency}
             usedCurrencies={usedCurrencies}
+            things={things}
             onDone={() => {
               setEditOpen(false);
               router.refresh();

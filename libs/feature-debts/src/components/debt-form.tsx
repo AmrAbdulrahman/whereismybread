@@ -25,10 +25,11 @@ import {
   debtMetaSchema,
   type DebtFormValues,
 } from '../lib/schema';
-import type { DebtView, PersonView } from '../lib/types';
-import { DenominationFields, type DenomValue } from './denomination-fields';
+import type { DebtView, PersonView, ThingView } from '../lib/types';
+import { DenomField, useThings, type DenomValue } from './denom-field';
 import { DirectionToggle } from './direction-toggle';
 import { PersonForm } from './person-form';
+import { ThingForm } from './thing-form';
 
 /** Editing an existing debt — metadata only (rows are managed on the detail page). */
 export interface DebtFormInitial {
@@ -46,7 +47,8 @@ function emptyLine(currency: string) {
     denomKind: 'money' as const,
     currency,
     goldType: 'k21',
-    goldLabel: null,
+    thingId: null,
+    thingName: null,
     goldUnit: 'g' as const,
   };
 }
@@ -59,6 +61,7 @@ export function DebtForm({
   today,
   defaultCurrency,
   usedCurrencies = [],
+  things: initialThings = [],
   onDone,
   onCancel,
 }: {
@@ -71,6 +74,7 @@ export function DebtForm({
   today: string;
   defaultCurrency: string;
   usedCurrencies?: string[];
+  things?: ThingView[];
   onDone: (result: { debtId: string; debt?: DebtView }) => void;
   onCancel: () => void;
 }) {
@@ -78,6 +82,8 @@ export function DebtForm({
   const [formError, setFormError] = useState<string>();
   const [roster, setRoster] = useState(people);
   const [addingPerson, setAddingPerson] = useState(false);
+  const [things, upsertThing] = useThings(initialThings);
+  const [addingThing, setAddingThing] = useState<number | null>(null);
   const [saved, setSaved] = useState<StoredAttachment[]>([]);
 
   const {
@@ -121,17 +127,34 @@ export function DebtForm({
     const l = lines[i] ?? emptyLine(defaultCurrency);
     return {
       amount: l.amount ?? '',
-      denomKind: (l.denomKind as 'money' | 'gold') ?? 'money',
+      kind: (l.denomKind as 'money' | 'gold' | 'thing') ?? 'money',
       currency: l.currency ?? defaultCurrency,
       goldType: l.goldType ?? 'k21',
-      goldLabel: (l.goldLabel as string | null) ?? null,
-      goldUnit: (l.goldUnit as 'g' | 'piece') ?? 'g',
+      thingId: (l.thingId as string | null) ?? null,
+      thingName: (l.thingName as string | null) ?? null,
+      unit: (l.goldUnit as 'g' | 'piece') ?? 'g',
     };
   };
   const patchDenom = (i: number, patch: Partial<DenomValue>) => {
+    const map: Record<string, string> = { kind: 'denomKind', unit: 'goldUnit' };
     for (const [k, v] of Object.entries(patch)) {
-      setValue(`lines.${i}.${k}` as never, v as never, { shouldDirty: true });
+      setValue(`lines.${i}.${map[k] ?? k}` as never, v as never, {
+        shouldDirty: true,
+      });
     }
+  };
+
+  const onThingAdded = (t: ThingView) => {
+    upsertThing(t);
+    if (addingThing != null) {
+      patchDenom(addingThing, {
+        kind: 'thing',
+        thingId: t.id,
+        thingName: t.name,
+        unit: t.unit,
+      });
+    }
+    setAddingThing(null);
   };
 
   const submit = handleSubmit(async (values) => {
@@ -245,13 +268,14 @@ export function DebtForm({
                     </div>
                   ) : null}
 
-                  <DenominationFields
+                  <DenomField
                     idPrefix={`row-${i}`}
                     value={denomAt(i)}
                     onChange={(patch) => patchDenom(i, patch)}
                     usedCurrencies={usedCurrencies}
+                    things={things}
+                    onCreateThing={() => setAddingThing(i)}
                     amountError={lineErr?.amount?.message}
-                    goldLabelError={lineErr?.goldLabel?.message}
                   />
                 </div>
               );
@@ -350,6 +374,21 @@ export function DebtForm({
           <PersonForm
             onDone={onPersonAdded}
             onCancel={() => setAddingPerson(false)}
+          />
+        ) : null}
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        open={addingThing != null}
+        onOpenChange={(o) => !o && setAddingThing(null)}
+        title="New thing"
+      >
+        {addingThing != null ? (
+          <ThingForm
+            defaultCurrency={defaultCurrency}
+            usedCurrencies={usedCurrencies}
+            onDone={onThingAdded}
+            onCancel={() => setAddingThing(null)}
           />
         ) : null}
       </ResponsiveModal>
