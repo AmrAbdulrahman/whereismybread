@@ -172,6 +172,20 @@ function PersonSummary({
   );
 }
 
+/** What each debt is for (+ its notes), shown while the person panel is collapsed. */
+function CollapsedDebtsSummary({ debts }: { debts: DebtView[] }) {
+  return (
+    <ul className="mt-1 flex flex-col gap-0.5">
+      {debts.map((d) => (
+        <li key={d.id} className="truncate text-[11px] text-ink-soft">
+          {d.description || 'No description'}
+          {d.notes ? <span className="text-muted"> — {d.notes}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** One card summarising every outstanding balance — one row per denomination. */
 function TotalsCard({
   debts,
@@ -399,6 +413,9 @@ export function DebtsView({ data }: { data: DebtsData }) {
                         debts={g.debts}
                         displayCurrency={data.displayCurrency}
                       />
+                      {isCollapsed ? (
+                        <CollapsedDebtsSummary debts={g.debts} />
+                      ) : null}
                     </div>
                   </button>
                   <Button

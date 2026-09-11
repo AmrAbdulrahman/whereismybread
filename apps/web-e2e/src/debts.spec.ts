@@ -430,6 +430,7 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   await modal.getByRole('button', { name: 'They owe me' }).click();
   await modal.locator('#row-0-amount').fill('20');
   await modal.getByLabel("What's it for?").fill('lunch');
+  await modal.getByLabel('Notes (optional)').fill('split with the group');
 
   const t0 = Date.now();
   await modal.getByRole('button', { name: 'Create debt' }).click();
@@ -441,8 +442,16 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
   expect(Date.now() - t0).toBeLessThan(10_000);
 
+  // Collapsed panels also summarise what each debt is for + its notes.
+  await expect(panel.getByText('lunch — split with the group')).toBeVisible();
+
   // Panels start collapsed — expand to see the card.
   await panel.getByRole('button', { expanded: false }).click();
+  // The collapsed-only summary line drops once expanded (the card shows the
+  // description itself; notes stay on the detail page).
+  await expect(
+    panel.getByText('lunch — split with the group'),
+  ).toBeHidden();
   const card = page.getByRole('link', { name: /lunch/ });
   await expect(card).toBeVisible();
   await expect(card.getByText(/€20\.00/)).toBeVisible();
