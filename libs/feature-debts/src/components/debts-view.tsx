@@ -99,6 +99,9 @@ function DebtCard({
             <p className="truncate text-xs text-ink-soft">
               {debt.description || 'No description'}
             </p>
+            {debt.notes ? (
+              <p className="truncate text-[11px] text-muted">{debt.notes}</p>
+            ) : null}
           </div>
           {approx || drift?.pct != null ? (
             <p className="shrink-0 text-[11px] text-muted">
@@ -169,20 +172,6 @@ function PersonSummary({
         </span>
       ) : null}
     </div>
-  );
-}
-
-/** What each debt is for (+ its notes), shown while the person panel is collapsed. */
-function CollapsedDebtsSummary({ debts }: { debts: DebtView[] }) {
-  return (
-    <ul className="mt-1 flex flex-col gap-0.5">
-      {debts.map((d) => (
-        <li key={d.id} className="truncate text-[11px] text-ink-soft">
-          {d.description || 'No description'}
-          {d.notes ? <span className="text-muted"> — {d.notes}</span> : null}
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -413,9 +402,6 @@ export function DebtsView({ data }: { data: DebtsData }) {
                         debts={g.debts}
                         displayCurrency={data.displayCurrency}
                       />
-                      {isCollapsed ? (
-                        <CollapsedDebtsSummary debts={g.debts} />
-                      ) : null}
                     </div>
                   </button>
                   <Button

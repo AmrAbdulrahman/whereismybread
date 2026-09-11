@@ -442,19 +442,16 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   await expect(panel.getByText(/€20\.00 to you/)).toBeVisible();
   expect(Date.now() - t0).toBeLessThan(10_000);
 
-  // Collapsed panels also summarise what each debt is for + its notes.
-  await expect(panel.getByText('lunch — split with the group')).toBeVisible();
+  // While collapsed, no per-debt description/notes — just the balance summary.
+  await expect(panel.getByText('lunch')).toBeHidden();
+  await expect(panel.getByText('split with the group')).toBeHidden();
 
-  // Panels start collapsed — expand to see the card.
+  // Panels start collapsed — expand to see the card, description and notes.
   await panel.getByRole('button', { expanded: false }).click();
-  // The collapsed-only summary line drops once expanded (the card shows the
-  // description itself; notes stay on the detail page).
-  await expect(
-    panel.getByText('lunch — split with the group'),
-  ).toBeHidden();
   const card = page.getByRole('link', { name: /lunch/ });
   await expect(card).toBeVisible();
   await expect(card.getByText(/€20\.00/)).toBeVisible();
+  await expect(card.getByText('split with the group')).toBeVisible();
 
   // The panel's own "Add" appends a second gold debt to the same person.
   await panel.getByRole('button', { name: 'Add' }).click();

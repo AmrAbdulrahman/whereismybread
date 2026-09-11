@@ -386,7 +386,10 @@ export function DebtForm({
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting || roster.length === 0}>
+          <Button
+            type="submit"
+            disabled={isSubmitting || (!person && roster.length === 0)}
+          >
             {isSubmitting
               ? 'Saving…'
               : isEdit
@@ -394,7 +397,7 @@ export function DebtForm({
                 : 'Create debt'}
           </Button>
         </div>
-        {roster.length === 0 ? (
+        {!person && roster.length === 0 ? (
           <p className="-mt-2 text-[11px] text-muted">
             Add a person first — that&apos;s who the debt is with.
           </p>
