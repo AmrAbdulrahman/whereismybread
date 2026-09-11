@@ -89,7 +89,10 @@ function DebtCard({
     <li>
       <Link
         href={`/debts/${debt.id}`}
-        className="flex flex-col gap-2.5 rounded-xl border border-line bg-surface p-3.5 transition-colors hover:border-line-strong sm:p-4"
+        className={cn(
+          'flex flex-col gap-2.5 rounded-xl border border-line border-l-4 bg-surface p-3.5 transition-colors hover:border-line-strong sm:p-4',
+          debt.direction === 'i_owe' ? 'border-l-warn' : 'border-l-teal',
+        )}
       >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
