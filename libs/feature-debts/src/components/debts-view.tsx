@@ -12,7 +12,7 @@ import {
   money,
   summariseDebts,
 } from '@wib/domain';
-import { Button, ResponsiveModal, cn } from '@wib/ui';
+import { Button, Progress, ResponsiveModal, cn } from '@wib/ui';
 import { ChevronDown, Package, Plus, Scale, Users } from '@wib/ui/icons';
 import type { DebtsData, DebtView, DenomBalanceView } from '../lib/types';
 import { DebtForm } from './debt-form';
@@ -32,6 +32,45 @@ function outstandingRows(debts: DebtView[]) {
       outstandingMinor: b.outstandingMinor,
     })),
   );
+}
+
+/**
+ * Combine repayment progress across possibly-several denominations, by
+ * revaluing each item's owed vs. outstanding amount into one currency — the
+ * same equivalents already computed for the `≈` figures. `null` when that
+ * can't be done for every item (a mixed basket with something unpriced).
+ */
+function combinedProgress(
+  items: readonly {
+    principalEquivalentMinor: number | null;
+    equivalentMinor: number | null;
+  }[],
+): number | null {
+  let owed = 0;
+  let outstanding = 0;
+  for (const it of items) {
+    if (it.principalEquivalentMinor == null || it.equivalentMinor == null) {
+      return null;
+    }
+    owed += it.principalEquivalentMinor;
+    outstanding += it.equivalentMinor;
+  }
+  if (owed <= 0) return null;
+  return Math.min(1, Math.max(0, 1 - outstanding / owed));
+}
+
+/** One debt's repayment progress (0–1), or `null` when it can't be shown. */
+function debtProgress(debt: DebtView): number | null {
+  const combined = combinedProgress([debt]);
+  if (combined != null) return combined;
+  // A single-denomination debt doesn't need FX/gold-spot/thing pricing at
+  // all — fall back to that balance's own exact progress.
+  return debt.balances.length === 1 ? (debt.balances[0]?.progress ?? null) : null;
+}
+
+/** A person's repayment progress across every one of their debts (0–1). */
+function personProgress(debts: DebtView[]): number | null {
+  return combinedProgress(debts);
 }
 
 /** Show a `≈` equivalent only when it adds information. */
@@ -85,6 +124,7 @@ function DebtCard({
       ? `≈ ${formatMoney(money(debt.equivalentMinor, displayCurrency))}`
       : null;
   const drift = debt.valueDrift;
+  const progress = debtProgress(debt);
   return (
     <li>
       <Link
@@ -123,6 +163,12 @@ function DebtCard({
             </p>
           ) : null}
         </div>
+        {progress != null ? (
+          <Progress
+            value={Math.round(progress * 100)}
+            indicatorClassName={progress >= 1 ? 'bg-teal' : undefined}
+          />
+        ) : null}
         <div className="flex flex-wrap gap-1.5">
           {debt.balances.map((b) => (
             <BalanceChip key={denomKey(b.denom)} balance={b} logos={logos} />
@@ -152,27 +198,37 @@ function PersonSummary({
     })),
   );
   if (totals.length === 0) return null;
+  const progress = personProgress(debts);
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
-      {totals.map((t, i) => (
-        <span key={i} className="flex flex-wrap gap-x-2">
-          {t.theyOweMinor > 0 ? (
-            <span className="text-teal">
-              {formatDebtAmount(t.theyOweMinor, t.denom)} to you
-            </span>
-          ) : null}
-          {t.iOweMinor > 0 ? (
-            <span className="text-warn">
-              {formatDebtAmount(t.iOweMinor, t.denom)} you owe
-            </span>
-          ) : null}
-        </span>
-      ))}
-      {eq.priced > 0 && (totals.length > 1 || eq.priced > 1) ? (
-        <span className="text-muted">
-          net ≈ {formatMoney(money(Math.abs(eq.netMinor), displayCurrency))}
-          {eq.netMinor >= 0 ? ' to you' : ' you owe'}
-        </span>
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+        {totals.map((t, i) => (
+          <span key={i} className="flex flex-wrap gap-x-2">
+            {t.theyOweMinor > 0 ? (
+              <span className="text-teal">
+                {formatDebtAmount(t.theyOweMinor, t.denom)} to you
+              </span>
+            ) : null}
+            {t.iOweMinor > 0 ? (
+              <span className="text-warn">
+                {formatDebtAmount(t.iOweMinor, t.denom)} you owe
+              </span>
+            ) : null}
+          </span>
+        ))}
+        {eq.priced > 0 && (totals.length > 1 || eq.priced > 1) ? (
+          <span className="text-muted">
+            net ≈ {formatMoney(money(Math.abs(eq.netMinor), displayCurrency))}
+            {eq.netMinor >= 0 ? ' to you' : ' you owe'}
+          </span>
+        ) : null}
+      </div>
+      {progress != null ? (
+        <Progress
+          value={Math.round(progress * 100)}
+          className="h-1.5"
+          indicatorClassName={progress >= 1 ? 'bg-teal' : undefined}
+        />
       ) : null}
     </div>
   );
@@ -253,6 +309,29 @@ function TotalsCard({
   );
 }
 
+// Remember which panels were open and how far down the page you'd scrolled,
+// across a visit to a debt's detail page and back. sessionStorage (not the
+// URL or a cookie) — per-tab, and irrelevant once the tab closes.
+const EXPANDED_KEY = 'wib:debts:expanded';
+const SCROLL_KEY = 'wib:debts:scroll';
+
+function loadExpanded(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(EXPANDED_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveExpanded(expanded: Set<string>) {
+  try {
+    sessionStorage.setItem(EXPANDED_KEY, JSON.stringify([...expanded]));
+  } catch {
+    /* private/blocked storage — just don't persist */
+  }
+}
+
 export function DebtsView({ data }: { data: DebtsData }) {
   const router = useRouter();
   const [newDebt, setNewDebt] = useState<
@@ -260,7 +339,10 @@ export function DebtsView({ data }: { data: DebtsData }) {
   >(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [thingsOpen, setThingsOpen] = useState(false);
-  // Person panels start collapsed — expand on click.
+  // Person panels start collapsed by default — restored from sessionStorage
+  // just after mount (see the effect below), so the very first paint always
+  // matches the server-rendered (all-collapsed) HTML and never fights React
+  // hydration.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const thingLogos: Logos = new Map(data.things.map((t) => [t.id, t.logoUrl]));
   const [pending, setPending] = useState<DebtView[]>([]);
@@ -274,11 +356,72 @@ export function DebtsView({ data }: { data: DebtsData }) {
     });
   }, [data.debts]);
 
+  // Restore expanded panels + scroll position once, after the first paint —
+  // e.g. coming back from a debt's detail page shouldn't re-collapse
+  // everything and dump you at the top.
+  useEffect(() => {
+    const restored = loadExpanded();
+    if (restored.size > 0) setExpanded(restored);
+
+    const y = Number(sessionStorage.getItem(SCROLL_KEY) ?? 0);
+    if (y > 0) {
+      // Wait for the (possibly just-triggered) re-expand to render and lay
+      // out before jumping, or we'd land at the wrong spot. Layout can take
+      // a while to settle (slower devices, a busy machine), so keep nudging
+      // it back into place for a bit rather than jumping once — but stop the
+      // instant the user actually tries to scroll themselves.
+      let cancelled = false;
+      const cancel = () => {
+        cancelled = true;
+      };
+      const opts = { passive: true, once: true } as const;
+      window.addEventListener('wheel', cancel, opts);
+      window.addEventListener('touchstart', cancel, opts);
+
+      const deadline = Date.now() + 500;
+      const settle = () => {
+        if (cancelled) return;
+        window.scrollTo(0, y);
+        if (Date.now() < deadline) requestAnimationFrame(settle);
+      };
+      requestAnimationFrame(settle);
+
+      return () => {
+        window.removeEventListener('wheel', cancel);
+        window.removeEventListener('touchstart', cancel);
+      };
+    }
+    return undefined;
+  }, []);
+
+  // Keep the scroll position fresh continuously — a <Link> navigation away
+  // never fires beforeunload, so this is the only reliable place to save it.
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        try {
+          sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+        } catch {
+          /* ignore */
+        }
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   const toggleExpanded = (personId: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(personId)) next.delete(personId);
       else next.add(personId);
+      saveExpanded(next);
       return next;
     });
 

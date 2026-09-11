@@ -461,14 +461,67 @@ test('debts: optimistic add, per-person grouping, collapse', async ({ page }) =>
   await add.getByRole('button', { name: 'Create debt' }).click();
   await expect(add).toBeHidden();
 
+  // Expanded state is remembered per tab (sessionStorage) — even a full
+  // reload keeps this panel open, not just an in-app back-navigation.
   await page.goto('/debts');
   const panel2 = page.locator('section').filter({ hasText: 'Dana Roy' });
-  // Collapsed by default — the summary shows, the cards don't.
-  await expect(panel2.getByRole('listitem')).toHaveCount(0);
-  await expect(panel2.getByText(/€20\.00 to you/)).toBeVisible();
-
-  // Expand — both cards appear.
-  await panel2.getByRole('button', { expanded: false }).click();
   await expect(panel2.getByRole('listitem')).toHaveCount(2);
   await expect(panel2.getByText(/2 × 1 oz bar/).first()).toBeVisible();
+
+  // Collapsing it also persists across a reload.
+  await panel2.getByRole('button', { expanded: true }).click();
+  await expect(panel2.getByRole('listitem')).toHaveCount(0);
+  await expect(panel2.getByText(/€20\.00 to you/)).toBeVisible();
+  await page.goto('/debts');
+  const panel3 = page.locator('section').filter({ hasText: 'Dana Roy' });
+  await expect(panel3.getByRole('listitem')).toHaveCount(0);
+});
+
+test('debts: back-navigation from a debt keeps the /debts scroll position and expanded panels', async ({
+  page,
+}) => {
+  await signUp(page);
+  await page.goto('/debts');
+
+  // Four people, every panel expanded — tall enough to overflow any
+  // viewport (including mobile) without needing a large, pooler-unfriendly
+  // batch of creates.
+  const names = Array.from({ length: 4 }, (_, i) => `Nav Person ${i}`);
+  for (const name of names) {
+    await page.getByRole('button', { name: 'New debt' }).first().click();
+    await addPerson(page, 'New debt', name);
+    const modal = page.getByRole('dialog', { name: 'New debt' });
+    await modal.locator('#row-0-amount').fill('15');
+    await modal.getByLabel("What's it for?").fill(`For ${name}`);
+    await modal.getByRole('button', { name: 'Create debt' }).click();
+    await expect(modal).toBeHidden();
+  }
+
+  for (const name of names) {
+    await page
+      .locator('section')
+      .filter({ hasText: name })
+      .getByRole('button', { expanded: false })
+      .click();
+  }
+  const panelA = page.locator('section').filter({ hasText: 'Nav Person 0' });
+  const panelB = page.locator('section').filter({ hasText: 'Nav Person 1' });
+
+  // page.mouse.wheel doesn't reliably scroll under mobile/touch emulation.
+  await page.evaluate('window.scrollBy(0, 300)');
+  await page.waitForTimeout(150);
+  const scrollBefore = await page.evaluate<number>('window.scrollY');
+  expect(scrollBefore).toBeGreaterThan(0);
+
+  await page.getByRole('link', { name: /For Nav Person 1/ }).click();
+  await expect(page).toHaveURL(/\/debts\/[0-9a-f-]{36}/);
+  await page.getByRole('link', { name: 'All debts' }).click();
+  await expect(page).toHaveURL(/\/debts$/);
+
+  // Both panels are still expanded, and the scroll position held.
+  await expect(panelA.getByRole('button', { expanded: true })).toBeVisible();
+  await expect(panelB.getByRole('button', { expanded: true })).toBeVisible();
+  await page.waitForTimeout(200);
+  const scrollAfter = await page.evaluate<number>('window.scrollY');
+  expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(150);
 });
