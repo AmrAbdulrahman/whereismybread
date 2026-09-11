@@ -139,6 +139,8 @@ export function DebtDetail({
     incurredOn: debt.incurredOn,
     description: debt.description,
     notes: debt.notes,
+    originalValueMinor: debt.originalValue?.amountMinor ?? null,
+    originalValueCurrency: debt.originalValue?.currency ?? null,
   };
 
   const showBalanceEquivalent = (b: DenomBalanceView) =>
@@ -173,6 +175,45 @@ export function DebtDetail({
           </p>
           {debt.notes ? (
             <p className="mt-1 text-xs text-muted">{debt.notes}</p>
+          ) : null}
+          {debt.originalValue ? (
+            <p className="mt-1 text-xs text-muted">
+              Lending value{' '}
+              {formatMoney(
+                money(
+                  debt.originalValue.amountMinor,
+                  debt.originalValue.currency,
+                ),
+              )}
+              {debt.valueDrift ? (
+                <>
+                  {' · '}
+                  <span
+                    className={
+                      debt.valueDrift.deltaMinor >= 0
+                        ? 'font-medium text-teal'
+                        : 'font-medium text-danger'
+                    }
+                  >
+                    {debt.valueDrift.deltaMinor >= 0 ? '+' : '−'}
+                    {formatMoney(
+                      money(
+                        Math.abs(debt.valueDrift.deltaMinor),
+                        displayCurrency,
+                      ),
+                    )}
+                    {debt.valueDrift.pct != null
+                      ? ` (${debt.valueDrift.pct >= 0 ? '+' : ''}${(
+                          debt.valueDrift.pct * 100
+                        ).toFixed(1)}%)`
+                      : ''}
+                  </span>{' '}
+                  since lending
+                </>
+              ) : (
+                " · today's value not available"
+              )}
+            </p>
           ) : null}
         </div>
         <div className="flex shrink-0 gap-1">

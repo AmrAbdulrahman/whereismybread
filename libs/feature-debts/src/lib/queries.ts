@@ -18,10 +18,13 @@ import {
   type DebtWithLines,
 } from '@wib/db';
 import {
+  convertMoney,
   debtIsSettled,
   denomBalances,
   goldUnitFor,
+  money,
   todayIn,
+  valueDrift,
   type DebtDenomination,
   type DebtDirection,
   type RateMap,
@@ -157,6 +160,8 @@ export function buildDebtView(
     incurredOn: string;
     createdAt: unknown;
     settledAt: unknown;
+    originalValueMinor: number | null;
+    originalValueCurrency: string | null;
   },
   lines: DebtLine[],
   entries: DebtEntry[],
@@ -189,6 +194,41 @@ export function buildDebtView(
     ? null
     : balances.reduce((s, b) => s + (b.equivalentMinor ?? 0), 0);
 
+  // The full basket revalued at today's rates — independent of repayment
+  // progress, so it can be compared against `originalValue` at lending.
+  let anyPrincipalUnpriced = false;
+  let principalTotal = 0;
+  for (const b of balances0) {
+    const v = debtEquivalentMinor(
+      b.denom,
+      b.owedMinor,
+      px.rates,
+      px.usdPerOz,
+      px.displayCurrency,
+      px.things,
+    );
+    if (v == null) anyPrincipalUnpriced = true;
+    else principalTotal += v;
+  }
+  const principalEquivalentMinor = anyPrincipalUnpriced ? null : principalTotal;
+
+  const originalValue =
+    debt.originalValueMinor != null && debt.originalValueCurrency
+      ? { amountMinor: debt.originalValueMinor, currency: debt.originalValueCurrency }
+      : null;
+  let drift: DebtView['valueDrift'] = null;
+  if (originalValue && principalEquivalentMinor != null) {
+    const target = px.displayCurrency.toUpperCase();
+    const conv = convertMoney(
+      money(originalValue.amountMinor, originalValue.currency),
+      target,
+      px.rates,
+    );
+    if (conv.currency === target) {
+      drift = valueDrift(conv.minorUnits, principalEquivalentMinor);
+    }
+  }
+
   return {
     id: debt.id,
     direction: debt.direction as DebtDirection,
@@ -205,6 +245,9 @@ export function buildDebtView(
     balances,
     entryCount: entries.length,
     equivalentMinor,
+    principalEquivalentMinor,
+    originalValue,
+    valueDrift: drift,
   };
 }
 

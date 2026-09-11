@@ -179,45 +179,14 @@ export function DenomField({
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="max-h-[55dvh] overflow-y-auto">
-            {matchedThings.length > 0 || onCreateThing ? (
-              <>
-                <SectionLabel>Your things</SectionLabel>
-                {matchedThings.map((t) => (
-                  <PickRow
-                    key={t.id}
-                    selected={value.kind === 'thing' && value.thingId === t.id}
-                    onClick={() => pickThing(t)}
-                    icon={<ThingMark thing={t} size={20} />}
-                    label={t.name}
-                    hint={t.unit === 'piece' ? 'pieces' : 'grams'}
-                  />
-                ))}
-                {onCreateThing ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      close();
-                      onCreateThing();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-accent hover:bg-surface-2"
-                  >
-                    <Plus size={16} strokeWidth={2.5} />
-                    New thing…
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-
-            {(used.length > 0 || rest.length > 0) && (
-              <SectionLabel>Currencies</SectionLabel>
-            )}
-            {[...used, ...rest].slice(0, 60).map((c) => (
+            {used.length > 0 ? <SectionLabel>Used</SectionLabel> : null}
+            {used.map((c) => (
               <PickRow
                 key={c.code}
                 selected={value.kind === 'money' && value.currency === c.code}
                 onClick={() => pickCurrency(c.code)}
                 icon={
-                  <span className="w-5 text-center text-muted">{c.symbol}</span>
+                  <span className="w-7 text-center text-muted">{c.symbol}</span>
                 }
                 label={c.name}
                 hint={c.code}
@@ -240,7 +209,7 @@ export function DenomField({
                         value.kind === 'gold' && value.goldType === t.key
                       }
                       onClick={() => pickGold(t.key)}
-                      icon={<GoldMark type={t.key} size={20} />}
+                      icon={<GoldMark type={t.key} size={26} />}
                       label={t.label}
                       hint={t.hint}
                     />
@@ -248,6 +217,49 @@ export function DenomField({
                 </div>
               );
             })}
+
+            {rest.length > 0 ? <SectionLabel>Other currencies</SectionLabel> : null}
+            {rest.slice(0, 60).map((c) => (
+              <PickRow
+                key={c.code}
+                selected={value.kind === 'money' && value.currency === c.code}
+                onClick={() => pickCurrency(c.code)}
+                icon={
+                  <span className="w-7 text-center text-muted">{c.symbol}</span>
+                }
+                label={c.name}
+                hint={c.code}
+              />
+            ))}
+
+            {matchedThings.length > 0 || onCreateThing ? (
+              <>
+                <SectionLabel>Your things</SectionLabel>
+                {matchedThings.map((t) => (
+                  <PickRow
+                    key={t.id}
+                    selected={value.kind === 'thing' && value.thingId === t.id}
+                    onClick={() => pickThing(t)}
+                    icon={<ThingMark thing={t} size={24} />}
+                    label={t.name}
+                    hint={t.unit === 'piece' ? 'pieces' : 'grams'}
+                  />
+                ))}
+                {onCreateThing ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close();
+                      onCreateThing();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-accent hover:bg-surface-2"
+                  >
+                    <Plus size={16} strokeWidth={2.5} />
+                    New thing…
+                  </button>
+                ) : null}
+              </>
+            ) : null}
 
             {used.length + rest.length + golds.length + matchedThings.length ===
             0 ? (
@@ -330,7 +342,7 @@ function PickRow({
         selected && 'bg-surface-2',
       )}
     >
-      <span className="grid h-5 w-5 shrink-0 place-items-center">{icon}</span>
+      <span className="grid h-7 w-7 shrink-0 place-items-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate text-ink-soft">{label}</span>
       {hint ? (
         <span className="shrink-0 font-mono text-xs text-muted">{hint}</span>

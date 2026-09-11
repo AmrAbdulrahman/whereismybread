@@ -10,6 +10,7 @@ import {
   formatDebtAmount,
   isOtpCode,
   summariseDebts,
+  valueDrift,
 } from './debts';
 
 describe('debtProgress', () => {
@@ -109,6 +110,17 @@ describe('debtIsSettled', () => {
     expect(debtIsSettled(open, null)).toBe(false);
     expect(debtIsSettled(open, new Date())).toBe(true);
     expect(debtIsSettled([], null)).toBe(false);
+  });
+});
+
+describe('valueDrift', () => {
+  it('reports the delta and percentage change', () => {
+    expect(valueDrift(60000, 65000)).toEqual({ deltaMinor: 5000, pct: 5000 / 60000 });
+    expect(valueDrift(60000, 50000)).toEqual({ deltaMinor: -10000, pct: -10000 / 60000 });
+  });
+
+  it("can't take a ratio against a zero original value", () => {
+    expect(valueDrift(0, 5000)).toEqual({ deltaMinor: 5000, pct: null });
   });
 });
 

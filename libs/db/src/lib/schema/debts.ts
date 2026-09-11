@@ -71,6 +71,13 @@ export const debts = pgTable(
       .notNull()
       .default(sql`CURRENT_DATE`),
     settledAt: timestamp('settled_at', { withTimezone: true }),
+    /**
+     * What the whole debt was worth when it was lent, in money — optional,
+     * always the owner's own estimate. Used only to show how that value has
+     * drifted against today's recalculated value (`principalEquivalentMinor`).
+     */
+    originalValueMinor: integer('original_value_minor'),
+    originalValueCurrency: text('original_value_currency'),
     ...audit,
   },
   (t) => [

@@ -84,6 +84,7 @@ function DebtCard({
     showEquivalent(debt, displayCurrency) && debt.equivalentMinor != null
       ? `≈ ${formatMoney(money(debt.equivalentMinor, displayCurrency))}`
       : null;
+  const drift = debt.valueDrift;
   return (
     <li>
       <Link
@@ -99,8 +100,21 @@ function DebtCard({
               {debt.description || 'No description'}
             </p>
           </div>
-          {approx ? (
-            <p className="shrink-0 text-[11px] text-muted">{approx}</p>
+          {approx || drift?.pct != null ? (
+            <p className="shrink-0 text-[11px] text-muted">
+              {approx}
+              {drift?.pct != null ? (
+                <span
+                  className={cn(
+                    'ml-1 font-medium',
+                    drift.deltaMinor >= 0 ? 'text-teal' : 'text-danger',
+                  )}
+                >
+                  {drift.pct >= 0 ? '+' : ''}
+                  {(drift.pct * 100).toFixed(1)}%
+                </span>
+              ) : null}
+            </p>
           ) : null}
         </div>
         <div className="flex flex-wrap gap-1.5">

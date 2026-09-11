@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFieldArray, useForm } from 'react-hook-form';
 import {
+  AmountField,
   AttachmentsField,
   Button,
   Field,
@@ -39,6 +40,8 @@ export interface DebtFormInitial {
   incurredOn: string;
   description: string;
   notes: string | null;
+  originalValueMinor: number | null;
+  originalValueCurrency: string | null;
 }
 
 function emptyLine(currency: string) {
@@ -105,6 +108,11 @@ export function DebtForm({
       incurredOn: initial?.incurredOn ?? today,
       description: initial?.description ?? '',
       notes: initial?.notes ?? null,
+      originalValueAmount:
+        initial?.originalValueMinor != null
+          ? (initial.originalValueMinor / 100).toFixed(2)
+          : null,
+      originalValueCurrency: initial?.originalValueCurrency ?? defaultCurrency,
       attachments: [],
       lines: isEdit ? [] : [emptyLine(defaultCurrency)],
     },
@@ -323,6 +331,34 @@ export function DebtForm({
             placeholder="Anything worth remembering"
             {...register('notes')}
           />
+        </Field>
+
+        <Field>
+          <Label htmlFor="debt-original-value">
+            Original value at lending (optional)
+          </Label>
+          <AmountField
+            id="debt-original-value"
+            amount={(watch('originalValueAmount') as string | null) ?? ''}
+            onAmountChange={(v) =>
+              setValue('originalValueAmount', v, { shouldDirty: true })
+            }
+            currency={watch('originalValueCurrency') ?? defaultCurrency}
+            onCurrencyChange={(c) =>
+              setValue('originalValueCurrency', c, { shouldDirty: true })
+            }
+            usedCurrencies={usedCurrencies}
+            invalid={!!errors.originalValueAmount}
+          />
+          <p className="text-[11px] text-muted">
+            What this was worth when lent — shows how that value has drifted
+            since. Only you see this.
+          </p>
+          {errors.originalValueAmount?.message ? (
+            <p className="text-xs text-danger">
+              {errors.originalValueAmount.message}
+            </p>
+          ) : null}
         </Field>
 
         {isEdit ? null : (

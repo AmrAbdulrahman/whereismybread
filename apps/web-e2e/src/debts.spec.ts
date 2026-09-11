@@ -233,6 +233,52 @@ test('debts: a gold-denominated row tracks quantity and shows on the shared page
   await outsider.close();
 });
 
+test('debts: an original value at lending shows a value-drift badge', async ({
+  page,
+}) => {
+  await signUp(page);
+
+  await page.goto('/debts');
+  await page.getByRole('button', { name: 'New debt' }).first().click();
+  const modal = page.getByRole('dialog', { name: 'New debt' });
+  await modal.getByRole('button', { name: 'New' }).click();
+  const pm = page.getByRole('dialog', { name: 'New person' });
+  await pm.getByLabel('Name').fill('Drift Test');
+  await pm.getByLabel('Email').fill(`drift-${Date.now()}@example.com`);
+  await pm.getByRole('button', { name: 'Add person' }).click();
+  await expect(pm).toBeHidden();
+
+  await modal.getByRole('button', { name: 'They owe me' }).click();
+  await modal.locator('#row-0-amount').fill('100');
+  await modal.getByLabel("What's it for?").fill('Loan with history');
+  await modal.getByLabel(/Original value at lending/).fill('50');
+  await modal.getByRole('button', { name: 'Create debt' }).click();
+  await expect(modal).toBeHidden();
+
+  // Both amounts are EUR (the default) — same-currency drift is exact: +100%.
+  await expandPanel(page, 'Drift Test');
+  const card = page.getByRole('link', { name: /Loan with history/ });
+  await expect(card).toBeVisible();
+  await expect(card.getByText('+100.0%')).toBeVisible();
+
+  await card.click();
+  await expect(page.getByText('Lending value €50.00')).toBeVisible();
+  await expect(
+    page.getByText('+€50.00 (+100.0%) since lending'),
+  ).toBeVisible();
+
+  // Clearing it in the edit form drops the whole line.
+  await page.getByRole('button', { name: 'Edit debt' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit debt' });
+  await expect(edit.getByLabel(/Original value at lending/)).toHaveValue(
+    '50.00',
+  );
+  await edit.getByLabel(/Original value at lending/).fill('');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText(/Lending value/)).toBeHidden();
+});
+
 test('debts: a custom "thing" — catalogue, use as a denomination, ≈ from its value', async ({
   page,
   browser,

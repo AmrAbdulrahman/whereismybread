@@ -59,6 +59,12 @@ export interface DenomBalanceView {
   equivalentMinor: number | null;
 }
 
+/** What the debt was declared worth when lent — always money, owner-only. */
+export interface OriginalValueView {
+  amountMinor: number;
+  currency: string;
+}
+
 export interface DebtView {
   id: string;
   direction: DebtDirection;
@@ -75,6 +81,14 @@ export interface DebtView {
   /** Sum of every balance's equivalent (display currency); `null` if any
    * outstanding balance couldn't be converted. */
   equivalentMinor: number | null;
+  /** Sum of every row's *owed* amount, revalued at today's rates — independent
+   * of repayment progress. `null` if any row couldn't be priced. */
+  principalEquivalentMinor: number | null;
+  /** The owner's own estimate of value at lending, or `null`. */
+  originalValue: OriginalValueView | null;
+  /** How `principalEquivalentMinor` compares to `originalValue` (converted to
+   * the display currency) — `null` unless both are known. */
+  valueDrift: { deltaMinor: number; pct: number | null } | null;
 }
 
 export interface DebtDetail extends DebtView {

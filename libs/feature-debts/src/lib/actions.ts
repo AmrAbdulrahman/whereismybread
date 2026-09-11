@@ -158,6 +158,22 @@ function denomColumns(d: DebtDenomination): Omit<DebtLineInput, 'amountMinor'> {
 const amountErrorFor = (denomKind: string) =>
   denomKind === 'money' ? 'Not a valid amount' : 'Not a valid quantity';
 
+/** Parse the optional "original value at lending" field — always money. */
+function parseOriginalValue(
+  amountStr: string | null | undefined,
+  currency: string,
+): { minor: number; currency: string } | null | 'invalid' {
+  if (!amountStr) return null;
+  try {
+    return {
+      minor: parseMoneyInput(amountStr, currency).minorUnits,
+      currency: currency.toUpperCase(),
+    };
+  } catch {
+    return 'invalid';
+  }
+}
+
 function revalidate(debtId?: string) {
   revalidatePath('/debts');
   if (debtId) revalidatePath(`/debts/${debtId}`);
@@ -369,12 +385,24 @@ export async function saveDebtAction(
     if (!person) {
       return { ok: false, fieldErrors: { personId: ['Pick a person'] } };
     }
+    const originalValue = parseOriginalValue(
+      parsed.data.originalValueAmount,
+      parsed.data.originalValueCurrency,
+    );
+    if (originalValue === 'invalid') {
+      return {
+        ok: false,
+        fieldErrors: { originalValueAmount: ['Not a valid amount'] },
+      };
+    }
     const row = await updateDebt(user.id, id, {
       personId: parsed.data.personId,
       direction: parsed.data.direction,
       description: parsed.data.description ?? '',
       notes: parsed.data.notes,
       incurredOn: parsed.data.incurredOn,
+      originalValueMinor: originalValue?.minor ?? null,
+      originalValueCurrency: originalValue?.currency ?? null,
     });
     if (!row) return { ok: false, error: 'Could not save the debt.' };
     revalidate(id);
@@ -407,12 +435,25 @@ export async function saveDebtAction(
     lines.push(parsedLine);
   }
 
+  const originalValue = parseOriginalValue(
+    parsed.data.originalValueAmount,
+    parsed.data.originalValueCurrency,
+  );
+  if (originalValue === 'invalid') {
+    return {
+      ok: false,
+      fieldErrors: { originalValueAmount: ['Not a valid amount'] },
+    };
+  }
+
   const row = await createDebt(user.id, {
     personId: parsed.data.personId,
     direction: parsed.data.direction,
     description: parsed.data.description ?? '',
     notes: parsed.data.notes,
     incurredOn: parsed.data.incurredOn,
+    originalValueMinor: originalValue?.minor ?? null,
+    originalValueCurrency: originalValue?.currency ?? null,
     lines,
   });
   if (!row) return { ok: false, error: 'Could not save the debt.' };

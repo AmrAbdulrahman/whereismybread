@@ -178,6 +178,22 @@ export function debtIsSettled(
   return balances.length > 0 && balances.every((b) => b.outstandingMinor <= 0);
 }
 
+export interface ValueDrift {
+  /** `currentMinor - originalMinor`, in the same (already-converted) currency. */
+  deltaMinor: number;
+  /** `delta / original`, or `null` when `originalMinor` is 0 (can't take a ratio). */
+  pct: number | null;
+}
+
+/**
+ * How a debt's value has drifted: what it was declared worth when lent vs. what
+ * it recalculates to today — both already converted to the same currency.
+ */
+export function valueDrift(originalMinor: number, currentMinor: number): ValueDrift {
+  const deltaMinor = currentMinor - originalMinor;
+  return { deltaMinor, pct: originalMinor > 0 ? deltaMinor / originalMinor : null };
+}
+
 export interface DebtDenominationTotals {
   denom: DebtDenomination;
   /** Outstanding amount others owe the user. */

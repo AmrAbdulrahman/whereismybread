@@ -33,6 +33,30 @@ const email = z
   .toLowerCase()
   .pipe(z.email('Enter a valid email address'));
 
+/** Like `amount`, but optional — blank stays `null` rather than failing. */
+const optionalAmount = z.preprocess(
+  blankToNull,
+  z
+    .string()
+    .trim()
+    .refine(
+      (v) => Number.isFinite(Number(v.replace(/[, ]/g, ''))),
+      'Not a number',
+    )
+    .refine((v) => Number(v.replace(/[, ]/g, '')) > 0, 'Must be more than zero')
+    .nullable()
+    .default(null),
+);
+
+/**
+ * What the whole debt was worth when lent — always money, optional. Shared by
+ * the create and edit-metadata forms.
+ */
+const originalValueShape = {
+  originalValueAmount: optionalAmount,
+  originalValueCurrency: z.string().trim().toUpperCase().length(3).default('EUR'),
+} as const;
+
 /** The "person" — name, email, optional photo. Shared by form + action. */
 export const personFormSchema = z.object({
   name: z.string().trim().min(1, 'Give them a name').max(80),
@@ -91,6 +115,7 @@ export const debtFormSchema = z.object({
   ),
   attachments: z.array(attachmentDraftSchema).max(20).default([]),
   lines: z.array(debtLineSchema).min(1, 'Add at least one row').max(20),
+  ...originalValueShape,
 });
 export type DebtFormValues = z.input<typeof debtFormSchema>;
 
@@ -104,6 +129,7 @@ export const debtMetaSchema = z.object({
     blankToNull,
     z.string().trim().max(1000).nullable().default(null),
   ),
+  ...originalValueShape,
 });
 export type DebtMetaValues = z.input<typeof debtMetaSchema>;
 

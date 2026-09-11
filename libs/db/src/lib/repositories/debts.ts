@@ -136,6 +136,9 @@ export interface DebtInput {
   notes: string | null;
   /** `YYYY-MM-DD` — when the debt was incurred. */
   incurredOn: string;
+  /** What the debt was worth when lent — the owner's own estimate, always money. */
+  originalValueMinor: number | null;
+  originalValueCurrency: string | null;
   /** The principal rows. `updateDebt` ignores this (edit rows via the line ops). */
   lines: DebtLineInput[];
 }
@@ -344,6 +347,8 @@ export async function createDebt(
         description: input.description.trim(),
         notes: input.notes,
         incurredOn: input.incurredOn,
+        originalValueMinor: input.originalValueMinor,
+        originalValueCurrency: input.originalValueCurrency,
       })
       .returning();
     const debt = rows[0];
@@ -365,7 +370,13 @@ export async function updateDebt(
   id: string,
   input: Pick<
     DebtInput,
-    'personId' | 'direction' | 'description' | 'notes' | 'incurredOn'
+    | 'personId'
+    | 'direction'
+    | 'description'
+    | 'notes'
+    | 'incurredOn'
+    | 'originalValueMinor'
+    | 'originalValueCurrency'
   >,
 ): Promise<Debt | null> {
   if (!(await ownsPerson(userId, input.personId))) return null;
@@ -377,6 +388,8 @@ export async function updateDebt(
       description: input.description.trim(),
       notes: input.notes,
       incurredOn: input.incurredOn,
+      originalValueMinor: input.originalValueMinor,
+      originalValueCurrency: input.originalValueCurrency,
       updatedAt: new Date(),
     })
     .where(and(eq(debts.id, id), eq(debts.userId, userId)))
