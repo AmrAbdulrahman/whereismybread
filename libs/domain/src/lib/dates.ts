@@ -77,11 +77,18 @@ export function endOfMonth(date: IsoDate): IsoDate {
  * clamped to the month's length. With no `existing` anchor it picks the
  * soonest upcoming month (this month if the day hasn't passed, else next);
  * with one, it keeps that anchor's month and only swaps the day.
+ *
+ * `startMonth` overrides that auto-pick for a brand-new series (ignored once
+ * `existing` is set): `'this'` anchors to `today`'s month regardless of
+ * whether `dayOfMonth` has already passed (a bank transaction's own date is
+ * passed as `today` here, so the series starts the month it happened),
+ * `'next'` forces the month after.
  */
 export function anchorForDayOfMonth(
   dayOfMonth: number,
   today: IsoDate,
   existing?: IsoDate | null,
+  startMonth?: 'this' | 'next',
 ): IsoDate {
   const clamp = (ym: string) =>
     Math.min(dayOfMonth, daysInMonth(`${ym}-01` as IsoDate));
@@ -90,8 +97,14 @@ export function anchorForDayOfMonth(
     const ym = existing.slice(0, 7);
     return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
   }
-  const todayDay = Number(today.slice(8, 10));
-  const base = dayOfMonth >= todayDay ? today : addMonths(today, 1);
+  const base =
+    startMonth === 'this'
+      ? today
+      : startMonth === 'next'
+        ? addMonths(today, 1)
+        : Number(dayOfMonth) >= Number(today.slice(8, 10))
+          ? today
+          : addMonths(today, 1);
   const ym = base.slice(0, 7);
   return `${ym}-${String(clamp(ym)).padStart(2, '0')}` as IsoDate;
 }

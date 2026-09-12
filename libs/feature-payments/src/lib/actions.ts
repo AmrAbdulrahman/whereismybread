@@ -208,9 +208,12 @@ export async function savePaymentAction(
     bankId: v.bankId,
     recipientMethodId: v.recipientMethodId,
     recurrence: v.recurrence,
-    // Recurring: start on the chosen day of the month (soonest upcoming for a
-    // new series; the existing series' month when editing — see below).
-    anchorDate: oneTime ? v.anchorDate : anchorForRecurrence(),
+    // Recurring: start on the chosen day of the month, keeping whatever month
+    // the form already anchored it to (soonest upcoming by default, but the
+    // form may have anchored a manually-created series to this/next month per
+    // the user's choice, or a bank-transaction-derived one to the
+    // transaction's month) — only the day gets re-clamped to the month length.
+    anchorDate: oneTime ? v.anchorDate : anchorForRecurrence(v.anchorDate),
     dayOfMonth: oneTime ? null : domDay,
     endsOn: oneTime ? null : v.endsOn,
     providerId: v.providerId,

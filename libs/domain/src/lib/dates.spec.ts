@@ -67,6 +67,18 @@ describe('dates', () => {
         '2026-03-15',
       );
     });
+
+    it('forces this month when startMonth is "this", even if the day passed', () => {
+      expect(anchorForDayOfMonth(5, '2026-09-12', null, 'this')).toBe(
+        '2026-09-05',
+      );
+    });
+
+    it('forces next month when startMonth is "next", even if the day is ahead', () => {
+      expect(anchorForDayOfMonth(20, '2026-09-05', null, 'next')).toBe(
+        '2026-10-20',
+      );
+    });
   });
 
   describe('anchorForAnnualDate', () => {

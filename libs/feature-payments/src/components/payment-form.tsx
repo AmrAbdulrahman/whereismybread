@@ -259,6 +259,34 @@ export function PaymentForm({
   const editingOccurrence = perUnit && !!occurrenceDate;
   const feeKind = watch('feeKind') ?? 'none';
 
+  const isNewPayment = !initial;
+  const dayNum = Number(dayOfMonth);
+  /**
+   * A brand-new, manually-created (not from a bank transaction) recurring
+   * payment whose chosen day-of-month has already gone by this month — the
+   * one case where "soonest upcoming" is ambiguous enough to ask about,
+   * rather than silently rolling to next month.
+   */
+  const dayAlreadyPassed =
+    isNewPayment &&
+    !prefill?.date &&
+    isRecurring &&
+    !isAnnual &&
+    Number.isInteger(dayNum) &&
+    dayNum >= 1 &&
+    dayNum <= 31 &&
+    dayNum < Number(today.slice(8, 10));
+
+  const [startMonthChoice, setStartMonthChoice] = useState<
+    'this' | 'next' | null
+  >(null);
+
+  // A different day (or leaving/re-entering the ambiguous case) invalidates
+  // any earlier this/next choice — never carry it over silently.
+  useEffect(() => {
+    setStartMonthChoice(null);
+  }, [dayOfMonth, isAnnual, isRecurring]);
+
   const mergeProviderTags = (names: string[]) => {
     if (names.length === 0) return;
     const current = (getValues('tags') ?? []) as string[];
@@ -282,6 +310,12 @@ export function PaymentForm({
       const month = Number(monthOfYear);
       if (!Number.isInteger(month) || month < 1 || month > 12) return;
       next = anchorForAnnualDate(day, month, today, initial?.anchorDate ?? null);
+    } else if (isNewPayment && prefill?.date) {
+      // From a bank transaction — the series starts the month the money
+      // actually moved, never "today".
+      next = anchorForDayOfMonth(day, prefill.date, null, 'this');
+    } else if (dayAlreadyPassed) {
+      next = anchorForDayOfMonth(day, today, null, startMonthChoice ?? 'next');
     } else {
       next = anchorForDayOfMonth(day, today, initial?.anchorDate ?? null);
     }
@@ -291,6 +325,10 @@ export function PaymentForm({
   }, [
     isRecurring,
     isAnnual,
+    isNewPayment,
+    prefill?.date,
+    dayAlreadyPassed,
+    startMonthChoice,
     dayOfMonth,
     monthOfYear,
     today,
@@ -694,6 +732,39 @@ export function PaymentForm({
           <p className="text-xs text-muted">
             It repeats on this day each period.
           </p>
+          {dayAlreadyPassed ? (
+            <div className="flex flex-col gap-1.5 rounded-md border border-line-strong bg-surface-2 px-3 py-2">
+              <p className="text-xs text-ink-soft">
+                Day {dayOfMonth} already passed this month — start the series
+              </p>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setStartMonthChoice('this')}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium',
+                    (startMonthChoice ?? 'next') === 'this'
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : 'border-line-strong text-muted hover:text-ink',
+                  )}
+                >
+                  This month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStartMonthChoice('next')}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium',
+                    (startMonthChoice ?? 'next') === 'next'
+                      ? 'border-accent bg-accent/15 text-accent'
+                      : 'border-line-strong text-muted hover:text-ink',
+                  )}
+                >
+                  Next month
+                </button>
+              </div>
+            </div>
+          ) : null}
         </Field>
       ) : null}
 
